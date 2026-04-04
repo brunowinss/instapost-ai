@@ -17,10 +17,17 @@ app.use(express.static(__dirname));
  * 📡 API Endpoints
  */
 
-app.get('/api/import-local', async (req, res) => {
+app.get('/api/verify-account', async (req, res) => {
+  const { id, token } = req.query;
+  if (!id || !token) return res.status(400).json({ error: 'ID e Token são obrigatórios.' });
+
   try {
-    await runAutoImporter();
-    res.json({ success: true, message: 'Processamento de pasta local concluído.' });
+    const baseUrl = token.startsWith('IGAA') ? 'https://graph.instagram.com/v21.0' : 'https://graph.facebook.com/v21.0';
+    const r = await fetch(`${baseUrl}/${id}?fields=username&access_token=${token}`);
+    const data = await r.json();
+
+    if (data.error) throw new Error(data.error.message);
+    res.json({ username: data.username });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

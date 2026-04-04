@@ -458,13 +458,12 @@ function setupUIEvents() {
     showLoading(true, 'CONECTANDO COM A META...');
     try {
       const { accountId, token } = result;
-      // Fetch username automatically to avoid manual typing
-      const baseUrl = token.startsWith('IGAA') ? 'https://graph.instagram.com/v21.0' : 'https://graph.facebook.com/v21.0';
-      const r = await fetch(`${baseUrl}/${accountId}?fields=username&access_token=${token}`);
+      // Fetch username via backend to avoid CORS issues
+      const r = await fetch(`${API_BASE}/verify-account?id=${accountId}&token=${token}`);
       const data = await r.json();
       
-      if (data.error) throw new Error(`Falha na Meta: ${data.error.message}`);
-      if (!data.username) throw new Error('Campo "username" não retornado pela API.');
+      if (data.error) throw new Error(`Falha na Meta: ${data.error}`);
+      if (!data.username) throw new Error('Campo "username" não encontrado.');
 
       showToast(`CONTA @${data.username} ENCONTRADA!`, 'info');
       await saveAccount(accountId, data.username, token);
