@@ -452,9 +452,9 @@ function setupUIEvents() {
     
     const container = modal.querySelector('#modal-inputs-container');
     container.innerHTML = `
-      <input type="text" id="node-id" class="input" placeholder="Instagram Business Account ID">
-      <input type="password" id="node-token" class="input" placeholder="User Access Token (Meta)">
-      <button id="node-search" class="modal-btn-search">🔍 BUSCAR CONTA</button>
+      <input type="text" id="node-id-v3" class="input" placeholder="Instagram Business Account ID">
+      <input type="password" id="node-token-v3" class="input" placeholder="User Access Token (Meta)">
+      <button id="node-search-v3" class="modal-btn-search">🔍 BUSCAR CONTA</button>
     `;
 
     const previewBox = document.getElementById('modal-account-preview');
@@ -470,9 +470,10 @@ function setupUIEvents() {
 
     let foundUser = null;
 
-    document.getElementById('node-search').onclick = async () => {
-        const id = document.getElementById('node-id').value;
-        const token = document.getElementById('node-token').value;
+    document.getElementById('node-search-v3').onclick = async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('node-id-v3').value;
+        const token = document.getElementById('node-token-v3').value;
         if(!id || !token) return showToast('Preencha os campos!', 'error');
 
         showLoading(true, 'BUSCANDO CONTA...');
@@ -496,8 +497,8 @@ function setupUIEvents() {
 
     btnConfirm.onclick = async () => {
         if(!foundUser) return;
-        const id = document.getElementById('node-id').value;
-        const token = document.getElementById('node-token').value;
+        const id = document.getElementById('node-id-v3').value;
+        const token = document.getElementById('node-token-v3').value;
         await saveAccount(id, foundUser, token);
         modal.style.display = 'none';
     };
