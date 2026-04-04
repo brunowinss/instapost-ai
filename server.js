@@ -21,15 +21,26 @@ app.get('/api/verify-account', async (req, res) => {
   const { id, token } = req.query;
   if (!id || !token) return res.status(400).json({ error: 'ID e Token são obrigatórios.' });
 
+  console.log(`[VERIFY] Buscando conta ID: ${id} na Meta...`);
+
   try {
     const baseUrl = token.startsWith('IGAA') ? 'https://graph.instagram.com/v21.0' : 'https://graph.facebook.com/v21.0';
     const r = await fetch(`${baseUrl}/${id}?fields=username&access_token=${token}`);
     const data = await r.json();
 
-    if (data.error) throw new Error(data.error.message);
+    if (data.error) {
+      console.error('[META ERROR]', data.error);
+      return res.status(400).json({ 
+        error: `Erro da Meta: ${data.error.message}`,
+        details: data.error
+      });
+    }
+
+    console.log(`[VERIFY SUCCESS] Conta @${data.username} validada.`);
     res.json({ username: data.username });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[SERVER ERROR]', err);
+    res.status(500).json({ error: `Erro interno no servidor: ${err.message}` });
   }
 });
 

@@ -445,66 +445,82 @@ async function publishNow(id) {
 }
 
 function setupUIEvents() {
-  document.getElementById('btn-add-account').onclick = async () => {
-    const modal = document.getElementById('custom-modal');
-    modal.querySelector('#modal-title span').innerText = 'CONECTAR NOVA CONTA';
-    modal.querySelector('#modal-msg').innerText = 'Insira o ID e o Token para buscar o perfil.';
-    
-    const container = modal.querySelector('#modal-inputs-container');
-    container.innerHTML = `
-      <input type="text" id="node-id-v3" class="input" placeholder="Instagram Business Account ID">
-      <input type="password" id="node-token-v3" class="input" placeholder="User Access Token (Meta)">
-      <button id="node-search-v3" class="modal-btn-search">🔍 BUSCAR CONTA</button>
-    `;
+  // Use a delegated listener for the fixed Modal v4
+  const addBtn = document.getElementById('btn-add-account');
+  if (addBtn) {
+    addBtn.onclick = async (e) => {
+      e.preventDefault();
+      e.stopImmediatePropagation();
 
-    const previewBox = document.getElementById('modal-account-preview');
-    const btnConfirm = document.getElementById('modal-confirm');
-    const btnCancel = document.getElementById('modal-cancel');
-    
-    previewBox.style.display = 'none';
-    btnConfirm.innerText = 'ADICIONAR CONTA';
-    btnConfirm.style.opacity = '0.5';
-    btnConfirm.disabled = true;
+      const modal = document.getElementById('custom-modal');
+      const container = modal.querySelector('#modal-inputs-container');
+      const title = modal.querySelector('#modal-title span');
+      const msg = modal.querySelector('#modal-msg');
+      const previewBox = document.getElementById('modal-account-preview');
+      const btnConfirm = document.getElementById('modal-confirm');
 
-    modal.style.display = 'flex';
+      title.innerText = 'CONECTAR CONTA BUSINESS';
+      msg.innerText = 'Insira o ID e o Token da Meta para validar.';
+      
+      container.innerHTML = `
+        <input type="text" id="node-id-v4" class="input" placeholder="ID da Conta Business (Numérico)">
+        <input type="password" id="node-token-v4" class="input" placeholder="User Access Token (EAAB...)">
+        <button id="node-search-v4" class="modal-btn-search" style="margin-top:10px;">🔍 BUSCAR CONTA NA META</button>
+      `;
 
-    let foundUser = null;
+      previewBox.style.display = 'none';
+      btnConfirm.innerText = 'CONECTAR';
+      btnConfirm.disabled = true;
+      btnConfirm.style.opacity = '0.5';
 
-    document.getElementById('node-search-v3').onclick = async (e) => {
-        e.preventDefault();
-        const id = document.getElementById('node-id-v3').value;
-        const token = document.getElementById('node-token-v3').value;
-        if(!id || !token) return showToast('Preencha os campos!', 'error');
+      modal.style.display = 'flex';
 
-        showLoading(true, 'BUSCANDO CONTA...');
-        try {
-            const r = await fetch(`${API_BASE}/verify-account?id=${id}&token=${token}`);
-            const data = await r.json();
-            if(data.error) throw new Error(data.error);
+      let validatedUsername = null;
 
-            foundUser = data.username;
-            document.getElementById('modal-preview-name').innerText = `@${foundUser}`;
-            previewBox.style.display = 'flex';
-            btnConfirm.disabled = false;
-            btnConfirm.style.opacity = '1';
-            showToast('CONTA ENCONTRADA!', 'success');
-        } catch(e) {
-            showToast(e.message, 'error');
-        } finally {
-            showLoading(false);
-        }
+      // Evento de busca v4
+      const searchBtn = document.getElementById('node-search-v4');
+      searchBtn.onclick = async (ev) => {
+          ev.preventDefault();
+          const id = document.getElementById('node-id-v4').value;
+          const token = document.getElementById('node-token-v4').value;
+
+          if(!id || !token) return showToast('Preencha os dados!', 'error');
+
+          showLoading(true, 'VALIDANDO CONTA...');
+          try {
+              const r = await fetch(`${API_BASE}/verify-account?id=${id}&token=${token}`);
+              const data = await r.json();
+
+              if(data.error) {
+                  const errMsg = data.details?.message || data.error;
+                  throw new Error(errMsg);
+              }
+
+              validatedUsername = data.username;
+              document.getElementById('modal-preview-name').innerText = `@${validatedUsername}`;
+              previewBox.style.display = 'flex';
+              btnConfirm.disabled = false;
+              btnConfirm.style.opacity = '1';
+              showToast('CONTA LOCALIZADA!', 'success');
+          } catch(err) {
+              showToast(err.message, 'error');
+              console.error('[Verify Error]', err);
+          } finally {
+              showLoading(false);
+          }
+      };
+
+      btnConfirm.onclick = async () => {
+          if(!validatedUsername) return;
+          const id = document.getElementById('node-id-v4').value;
+          const token = document.getElementById('node-token-v4').value;
+          await saveAccount(id, validatedUsername, token);
+          modal.style.display = 'none';
+      };
+
+      document.getElementById('modal-cancel').onclick = () => modal.style.display = 'none';
     };
-
-    btnConfirm.onclick = async () => {
-        if(!foundUser) return;
-        const id = document.getElementById('node-id-v3').value;
-        const token = document.getElementById('node-token-v3').value;
-        await saveAccount(id, foundUser, token);
-        modal.style.display = 'none';
-    };
-
-    btnCancel.onclick = () => modal.style.display = 'none';
-  };
+  }
 
   document.getElementById('btn-sync-local').onclick = async () => {
     showLoading(true, 'SINCRONIZANDO VÍDEOS...');
