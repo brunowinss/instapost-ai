@@ -270,6 +270,17 @@
         <!-- Dynamic inputs here -->
       </div>
       
+      <!-- Account Preview Card (Hidden by default) -->
+      <div id="modal-account-preview" class="modal-preview-box">
+         <div class="modal-avatar-preview">
+            <i class="fa-solid fa-user"></i>
+         </div>
+         <div>
+            <div style="font-weight:800; font-size:1rem;" id="modal-preview-name">@username</div>
+            <div style="font-size:0.75rem; color:var(--success); font-weight:700;">CONTA ENCONTRADA!</div>
+         </div>
+      </div>
+      
       <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1.2rem; margin-top:2rem;">
         <button class="btn btn-ghost" id="modal-cancel">CANCELAR</button>
         <button class="btn" id="modal-confirm" style="background:var(--purple-main);">CONFIRMAR</button>

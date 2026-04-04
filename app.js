@@ -69,7 +69,9 @@ function showCustomModal({ title, message, inputs }) {
 
     window.onkeydown = (e) => {
         if (e.key === 'Escape') btnCancel.onclick();
-        if (e.key === 'Enter') btnConfirm.onclick();
+        if (e.key === 'Enter') {
+            if (btnConfirm.style.display !== 'none') btnConfirm.onclick();
+        }
     };
   });
 }
@@ -444,34 +446,63 @@ async function publishNow(id) {
 
 function setupUIEvents() {
   document.getElementById('btn-add-account').onclick = async () => {
-    const result = await showCustomModal({
-      title: 'CONECTAR NOVA CONTA',
-      message: 'Insira o ID da conta e o Token de Acesso da Meta para sincronizar.',
-      inputs: [
-        { id: 'accountId', placeholder: 'Instagram Business Account ID', type: 'text' },
-        { id: 'token', placeholder: 'User Access Token (Meta)', type: 'password' }
-      ]
-    });
+    const modal = document.getElementById('custom-modal');
+    modal.querySelector('#modal-title span').innerText = 'CONECTAR NOVA CONTA';
+    modal.querySelector('#modal-msg').innerText = 'Insira o ID e o Token para buscar o perfil.';
     
-    if (!result || !result.accountId || !result.token) return;
+    const container = modal.querySelector('#modal-inputs-container');
+    container.innerHTML = `
+      <input type="text" id="node-id" class="input" placeholder="Instagram Business Account ID">
+      <input type="password" id="node-token" class="input" placeholder="User Access Token (Meta)">
+      <button id="node-search" class="modal-btn-search">🔍 BUSCAR CONTA</button>
+    `;
 
-    showLoading(true, 'CONECTANDO COM A META...');
-    try {
-      const { accountId, token } = result;
-      // Fetch username via backend to avoid CORS issues
-      const r = await fetch(`${API_BASE}/verify-account?id=${accountId}&token=${token}`);
-      const data = await r.json();
-      
-      if (data.error) throw new Error(`Falha na Meta: ${data.error}`);
-      if (!data.username) throw new Error('Campo "username" não encontrado.');
+    const previewBox = document.getElementById('modal-account-preview');
+    const btnConfirm = document.getElementById('modal-confirm');
+    const btnCancel = document.getElementById('modal-cancel');
+    
+    previewBox.style.display = 'none';
+    btnConfirm.innerText = 'ADICIONAR CONTA';
+    btnConfirm.style.opacity = '0.5';
+    btnConfirm.disabled = true;
 
-      showToast(`CONTA @${data.username} ENCONTRADA!`, 'info');
-      await saveAccount(accountId, data.username, token);
-    } catch (err) {
-      showToast(err.message, 'error');
-    } finally {
-      showLoading(false);
-    }
+    modal.style.display = 'flex';
+
+    let foundUser = null;
+
+    document.getElementById('node-search').onclick = async () => {
+        const id = document.getElementById('node-id').value;
+        const token = document.getElementById('node-token').value;
+        if(!id || !token) return showToast('Preencha os campos!', 'error');
+
+        showLoading(true, 'BUSCANDO CONTA...');
+        try {
+            const r = await fetch(`${API_BASE}/verify-account?id=${id}&token=${token}`);
+            const data = await r.json();
+            if(data.error) throw new Error(data.error);
+
+            foundUser = data.username;
+            document.getElementById('modal-preview-name').innerText = `@${foundUser}`;
+            previewBox.style.display = 'flex';
+            btnConfirm.disabled = false;
+            btnConfirm.style.opacity = '1';
+            showToast('CONTA ENCONTRADA!', 'success');
+        } catch(e) {
+            showToast(e.message, 'error');
+        } finally {
+            showLoading(false);
+        }
+    };
+
+    btnConfirm.onclick = async () => {
+        if(!foundUser) return;
+        const id = document.getElementById('node-id').value;
+        const token = document.getElementById('node-token').value;
+        await saveAccount(id, foundUser, token);
+        modal.style.display = 'none';
+    };
+
+    btnCancel.onclick = () => modal.style.display = 'none';
   };
 
   document.getElementById('btn-sync-local').onclick = async () => {
@@ -556,3 +587,4 @@ function renderSettings() {
   document.getElementById('cloudinary-name-input').value = STATE.globalConfig.cloudinaryName || '';
   document.getElementById('cloudinary-preset-input').value = STATE.globalConfig.cloudinaryPreset || '';
 }
+// Force deploy: 04/04/2026 18:04:07

@@ -518,3 +518,46 @@ body {
 #loading-overlay {
     z-index: 11000;
 }
+
+/* Modal Search & Preview */
+.modal-preview-box {
+    display: none;
+    margin-top: 1.5rem;
+    padding: 1.2rem;
+    background: rgba(255,255,255,0.05);
+    border-radius: 18px;
+    border: 1px solid var(--purple-main);
+    align-items: center;
+    gap: 15px;
+    animation: slideUp 0.3s ease;
+}
+
+.modal-avatar-preview {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: linear-gradient(45deg, var(--purple-main), var(--magenta));
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+}
+
+.modal-btn-search {
+    width: 100%;
+    background: rgba(139, 92, 246, 0.1);
+    border: 1px solid var(--purple-main);
+    color: var(--purple-main);
+    padding: 1rem;
+    border-radius: 14px;
+    font-weight: 800;
+    cursor: pointer;
+    margin-bottom: 1.5rem;
+    transition: var(--transition);
+}
+
+.modal-btn-search:hover {
+    background: var(--purple-main);
+    color: white;
+}
