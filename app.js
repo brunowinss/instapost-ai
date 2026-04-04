@@ -445,9 +445,62 @@ async function publishNow(id) {
 }
 
 function setupUIEvents() {
-  console.log('[LEGACY] setupUIEvents desativado em favor da V11_NUCLEAR e V20_EMERGENCY');
-  // Os eventos agora são controlados pelo script in-line no index.html 
-  // para garantir que nenhum cache bloqueie a execução.
+  console.log('[LEGACY] setupUIEvents restaurado para Configurações e Sincronização');
+
+  // 1. Vincular Salvamento de Configurações
+  const settingsForm = document.getElementById('settings-form');
+  if (settingsForm) {
+    settingsForm.onsubmit = async (e) => {
+      e.preventDefault();
+      const imgbbKey = document.getElementById('imgbb-key-input').value.trim();
+      const cloudinaryName = document.getElementById('cloudinary-name-input').value.trim();
+      const cloudinaryPreset = document.getElementById('cloudinary-preset-input').value.trim();
+
+      showLoading(true, 'SALVANDO CONFIGURAÇÕES...');
+      try {
+        const res = await fetch(`${API_BASE}/save-config`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imgbbKey, cloudinaryName, cloudinaryPreset })
+        });
+        if (!res.ok) throw new Error('Falha ao salvar configurações.');
+        showToast('CONFIGURAÇÕES SALVAS!', 'success');
+        await loadData();
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        showLoading(false);
+      }
+    };
+  }
+
+  // 2. Vincular Sincronização Local
+  const syncBtn = document.getElementById('btn-sync-local');
+  if (syncBtn) {
+    syncBtn.onclick = async () => {
+      showLoading(true, 'SINCRONIZANDO VÍDEOS...');
+      try {
+        const res = await fetch(`${API_BASE}/import-local`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erro na sincronização.');
+        showToast('PASTA SINCRONIZADA!', 'success');
+        await loadData();
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        showLoading(false);
+      }
+    };
+  }
+  
+  // 3. Vincular Preview de Legenda
+  const captionInput = document.getElementById('post-caption');
+  if (captionInput) {
+    captionInput.oninput = (e) => {
+      const preview = document.getElementById('preview-caption');
+      if (preview) preview.innerText = e.target.value || 'Sua legenda aparecerá aqui.';
+    };
+  }
 }
 
 async function saveAccount(accountId, username, accessToken) {

@@ -31,78 +31,80 @@ async function runAutoImporter() {
     secure: true
   });
 
-  // 2. Scan Folder
+  // 2. Scan for Subfolders (One for each Account Username)
   if (!fs.existsSync(VIDEOS_DIR)) fs.mkdirSync(VIDEOS_DIR);
-  const files = fs.readdirSync(VIDEOS_DIR).filter(f => f.endsWith('.mp4') || f.endsWith('.mov'));
+  const subfolders = fs.readdirSync(VIDEOS_DIR).filter(f => fs.statSync(path.join(VIDEOS_DIR, f)).isDirectory());
   
-  if (files.length === 0) {
-    console.log('📂 No videos found in folder.');
+  if (subfolders.length === 0) {
+    console.log('📂 No account subfolders found in vídeos_para_postar.');
     return;
   }
 
-  // 3. Get All Connected Accounts
-  const allAccounts = await db.all('SELECT "accountId" FROM accounts');
-  if (allAccounts.length === 0) {
-    console.error('❌ No Instagram accounts connected!');
-    return;
-  }
-  console.log(`👥 Found ${allAccounts.length} accounts for rotation.`);
-
-  // 4. Get Latest Global Schedule to start from
+  // 3. Get Latest Global Schedule to start from (to avoid overlap)
   let lastScheduledDate = await db.get('SELECT "scheduledAt" FROM posts WHERE "status" = \'pending\' ORDER BY "scheduledAt" DESC LIMIT 1');
   let currentBasis = lastScheduledDate ? new Date(lastScheduledDate.scheduledAt) : new Date();
 
-  // 5. Process files with rotation
-  let accountIndex = 0;
-  for (const file of files) {
-    const filePath = path.join(VIDEOS_DIR, file);
+  // 4. Process each subfolder
+  for (const folderName of subfolders) {
+    const folderPath = path.join(VIDEOS_DIR, folderName);
     
-    // Check if already imported
-    const exists = await db.get('SELECT id FROM posts WHERE "sourceFile" = ?', [file]);
-    if (exists) continue;
+    // Find account by username matching folder name
+    const account = await db.get('SELECT "accountId", "username" FROM accounts WHERE "username" = ?', [folderName]);
+    if (!account) {
+      console.warn(`⚠️ Folder "${folderName}" ignored. No connected account with this username.`);
+      continue;
+    }
 
-    console.log(`🎬 Processing: ${file}`);
+    console.log(`📂 Processing niche for @${account.username}...`);
     
-    try {
-      // a) Upload to Cloudinary
-      const result = await cloudinary.uploader.upload(filePath, {
-        resource_type: 'video',
-        upload_preset: config.cloudinaryPreset
-      });
+    const files = fs.readdirSync(folderPath).filter(f => f.endsWith('.mp4') || f.endsWith('.mov'));
+    
+    for (const file of files) {
+      const filePath = path.join(folderPath, file);
       
-      const videoUrl = result.secure_url;
+      // Check if already imported
+      const exists = await db.get('SELECT id FROM posts WHERE "sourceFile" = ? AND "accountId" = ?', [file, account.accountId]);
+      if (exists) continue;
+
+      console.log(`🎬 Processing: ${file} for @${account.username}`);
       
-      // b) Calculate Next Slot (Sequential)
-      const scheduledAt = await calculateNextSlotFromDate(currentBasis);
-      currentBasis = new Date(scheduledAt); // Update basis for next file in loop
+      try {
+        // a) Upload to Cloudinary
+        const result = await cloudinary.uploader.upload(filePath, {
+          resource_type: 'video',
+          upload_preset: config.cloudinaryPreset
+        });
+        
+        const videoUrl = result.secure_url;
+        
+        // b) Calculate Next Slot (Sequential)
+        const scheduledAt = await calculateNextSlotFromDate(currentBasis);
+        currentBasis = new Date(scheduledAt); // Update basis for next file
 
-      // c) Pick Account (Rotation)
-      const targetAccount = allAccounts[accountIndex % allAccounts.length];
-      accountIndex++;
+        // c) Save to DB
+        const postId = `auto_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+        const params = [
+          postId,
+          account.accountId,
+          'REELS',
+          videoUrl,
+          file.replace(/\.[^/.]+$/, "").replace(/_/g, " "), // Clean filename for caption
+          scheduledAt.toISOString(),
+          'pending',
+          '', // mediaId
+          '', // publishedAt
+          new Date().toISOString(),
+          file
+        ];
 
-      // d) Save to DB
-      const postId = `auto_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-      const params = [
-        postId,
-        targetAccount.accountId,
-        'REELS',
-        videoUrl,
-        file.replace(/\.[^/.]+$/, "").replace(/_/g, " "), // Clean filename for caption
-        scheduledAt.toISOString(),
-        'pending',
-        '', // mediaId
-        '', // publishedAt
-        new Date().toISOString(),
-        file
-      ];
+        await db.run(`INSERT INTO posts ("id", "accountId", "mediaType", "imageUrl", "caption", "scheduledAt", "status", "mediaId", "publishedAt", "createdAt", "sourceFile") 
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, params);
+        
+        console.log(`✅ Scheduled: ${file} at ${scheduledAt.toLocaleString()}`);
 
-      await db.run(`INSERT INTO posts ("id", "accountId", "mediaType", "imageUrl", "caption", "scheduledAt", "status", "mediaId", "publishedAt", "createdAt", "sourceFile") 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, params);
-      
-      console.log(`✅ Scheduled: ${file} for @${targetAccount.accountId} at ${scheduledAt.toLocaleString()}`);
-
-    } catch (err) {
-      console.error(`❌ Error importing ${file}:`, err.message);
+      } catch (err) {
+        console.error(`❌ Error importing ${file}:`, err.message);
+      }
     }
   }
 }
@@ -115,7 +117,6 @@ async function calculateNextSlotFromDate(baseDate) {
   let nextDate = new Date(baseDate);
   let found = false;
 
-  // If baseDate is "now", we must ensure we don't schedule in the past
   const minimumLeadTime = new Date(Date.now() + 30 * 60000); // 30 mins from now
 
   while (!found) {
