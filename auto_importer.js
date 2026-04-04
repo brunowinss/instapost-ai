@@ -40,14 +40,20 @@ async function runAutoImporter() {
     return;
   }
 
-  // 3. Get Active Account
-  const account = await db.get('SELECT "accountId" FROM accounts LIMIT 1');
-  if (!account) {
-    console.error('❌ No Instagram account connected!');
+  // 3. Get All Connected Accounts
+  const allAccounts = await db.all('SELECT "accountId" FROM accounts');
+  if (allAccounts.length === 0) {
+    console.error('❌ No Instagram accounts connected!');
     return;
   }
+  console.log(`👥 Found ${allAccounts.length} accounts for rotation.`);
 
-  // 4. Process files
+  // 4. Get Latest Global Schedule to start from
+  let lastScheduledDate = await db.get('SELECT "scheduledAt" FROM posts WHERE "status" = \'pending\' ORDER BY "scheduledAt" DESC LIMIT 1');
+  let currentBasis = lastScheduledDate ? new Date(lastScheduledDate.scheduledAt) : new Date();
+
+  // 5. Process files with rotation
+  let accountIndex = 0;
   for (const file of files) {
     const filePath = path.join(VIDEOS_DIR, file);
     
@@ -59,7 +65,6 @@ async function runAutoImporter() {
     
     try {
       // a) Upload to Cloudinary
-      // node-fetch is used in server.js, but here we use cloudinary sdk for ease
       const result = await cloudinary.uploader.upload(filePath, {
         resource_type: 'video',
         upload_preset: config.cloudinaryPreset
@@ -67,14 +72,19 @@ async function runAutoImporter() {
       
       const videoUrl = result.secure_url;
       
-      // b) Calculate Next Slot
-      const scheduledAt = await calculateNextSlot(db);
-      
-      // c) Save to DB
+      // b) Calculate Next Slot (Sequential)
+      const scheduledAt = await calculateNextSlotFromDate(currentBasis);
+      currentBasis = new Date(scheduledAt); // Update basis for next file in loop
+
+      // c) Pick Account (Rotation)
+      const targetAccount = allAccounts[accountIndex % allAccounts.length];
+      accountIndex++;
+
+      // d) Save to DB
       const postId = `auto_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
       const params = [
         postId,
-        account.accountId,
+        targetAccount.accountId,
         'REELS',
         videoUrl,
         file.replace(/\.[^/.]+$/, "").replace(/_/g, " "), // Clean filename for caption
@@ -89,7 +99,7 @@ async function runAutoImporter() {
       await db.run(`INSERT INTO posts ("id", "accountId", "mediaType", "imageUrl", "caption", "scheduledAt", "status", "mediaId", "publishedAt", "createdAt", "sourceFile") 
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, params);
       
-      console.log(`✅ Scheduled: ${file} at ${scheduledAt.toLocaleString()}`);
+      console.log(`✅ Scheduled: ${file} for @${targetAccount.accountId} at ${scheduledAt.toLocaleString()}`);
 
     } catch (err) {
       console.error(`❌ Error importing ${file}:`, err.message);
@@ -98,29 +108,22 @@ async function runAutoImporter() {
 }
 
 /**
- * Finds the next available time slot (10h, 15h, 20h).
+ * Finds the next available time slot (10h, 15h, 20h) after a specific date.
  */
-async function calculateNextSlot(db) {
-  // Get latest scheduled post
-  const lastPost = await db.get('SELECT "scheduledAt" FROM posts WHERE "status" = \'pending\' ORDER BY "scheduledAt" DESC LIMIT 1');
-  
-  let baseDate = new Date();
-  if (lastPost) {
-    baseDate = new Date(lastPost.scheduledAt);
-  }
-
-  // Find next slot
+async function calculateNextSlotFromDate(baseDate) {
+  const SLOTS = [10, 15, 20];
   let nextDate = new Date(baseDate);
   let found = false;
 
+  // If baseDate is "now", we must ensure we don't schedule in the past
+  const minimumLeadTime = new Date(Date.now() + 30 * 60000); // 30 mins from now
+
   while (!found) {
-    // Check slots for the current nextDate
     for (const hour of SLOTS) {
       const slotTime = new Date(nextDate);
       slotTime.setHours(hour, 0, 0, 0);
       
-      // Slot must be at least 30 mins in the future
-      if (slotTime > new Date(baseDate) && slotTime > new Date(Date.now() + 30 * 60000)) {
+      if (slotTime > baseDate && slotTime > minimumLeadTime) {
         nextDate = slotTime;
         found = true;
         break;
@@ -128,7 +131,6 @@ async function calculateNextSlot(db) {
     }
     
     if (!found) {
-      // Move to next day
       nextDate.setDate(nextDate.getDate() + 1);
       nextDate.setHours(0, 0, 0, 0);
     }

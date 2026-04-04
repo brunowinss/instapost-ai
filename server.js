@@ -260,11 +260,21 @@ initDB().then(async () => {
   app.listen(PORT, async () => {
     console.log(`🚀 InstaScheduler Engine online on port ${PORT}`);
     
-    // Auto-import on startup
-    try {
-      await runAutoImporter();
-    } catch (e) {
-      console.error('Initial auto-import failed:', e.message);
-    }
+    // Auto-import on startup and every 5 minutes
+    let isImporting = false;
+    const autoImport = async () => {
+      if (isImporting) return;
+      isImporting = true;
+      try {
+        await runAutoImporter();
+      } catch (e) {
+        console.error('Auto-import periodic failure:', e.message);
+      } finally {
+        isImporting = false;
+      }
+    };
+
+    autoImport(); // Run once at start
+    setInterval(autoImport, 300000); // Run every 5 mins
   });
 });
