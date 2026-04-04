@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>InstaScheduler AI — Gestão de Elite</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Animated Background Orbs -->
+  <div class="bg-orbs">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+  </div>
+
+  <!-- Sidebar Navigation -->
+  <aside class="sidebar">
+    <a href="/" class="logo-container">
+      <div class="logo-icon">IA</div>
+      <span class="logo-text">InstaScheduler</span>
+    </a>
+    
+    <nav class="nav-links">
+      <a href="#" class="nav-item active" data-section="dashboard">
+        <i class="fa-solid fa-house"></i>
+        <span>Dashboard</span>
+      </a>
+      <a href="#" class="nav-item" data-section="new-post">
+        <i class="fa-solid fa-circle-plus"></i>
+        <span>Novo Post</span>
+      </a>
+      <a href="#" class="nav-item" data-section="schedule">
+        <i class="fa-solid fa-calendar-days"></i>
+        <span>Agendados</span>
+      </a>
+      <a href="#" class="nav-item" data-section="settings">
+        <i class="fa-solid fa-gear"></i>
+        <span>Configurações</span>
+      </a>
+    </nav>
+  </aside>
+
+  <!-- Main Content Area -->
+  <main class="main-wrapper">
+    <header class="header">
+      <div class="header-left">
+        <h1 id="page-title">Dashboard</h1>
+        <p id="page-subtitle" style="color:var(--text-dim); font-size:0.95rem;">Bem-vindo ao seu centro de comando.</p>
+      </div>
+      
+      <div class="header-right">
+        <div class="account-badge">
+          <div class="status-dot" id="auth-status"></div>
+          <span id="active-account-name">Aguardando login...</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- CONTENT SECTIONS -->
+
+    <section id="section-dashboard" class="section active">
+      <div class="dashboard-grid">
+        <div class="card">
+          <h3 class="card-title"><i class="fa-solid fa-paper-plane" style="color:var(--purple-main)"></i> Total Postado</h3>
+          <div class="stat-value" id="stat-total">0</div>
+          <p style="font-size:0.85rem; color:var(--text-dim);">Publicações enviadas com sucesso</p>
+        </div>
+        <div class="card">
+          <h3 class="card-title"><i class="fa-solid fa-clock" style="color:var(--magenta)"></i> Agendados</h3>
+          <div class="stat-value" id="stat-scheduled">0</div>
+          <p style="font-size:0.85rem; color:var(--text-dim);">Aguardando horário de disparo</p>
+        </div>
+        <div class="card" style="display:flex; flex-direction:column; justify-content:space-between;">
+          <h3 class="card-title"><i class="fa-solid fa-bolt" style="color:var(--neon-blue)"></i> Próximo Post</h3>
+          <div style="font-size:1.2rem; font-weight:700; margin-top:0.5rem;" id="stat-next">Sem agendamentos</div>
+          <div style="margin-top:1rem; padding:0.5rem 1rem; background:rgba(14,165,233,0.1); border-radius:12px; font-size:0.8rem; color:var(--neon-blue); border:1px solid rgba(14,165,233,0.2); width:fit-content;">
+            Agendador Ativo
+          </div>
+        </div>
+      </div>
+      
+      <div class="card" style="margin-top:2.5rem;">
+        <h3 class="card-title"><i class="fa-solid fa-list-ul"></i> Atividade Recente</h3>
+        <div id="recent-activity-list" style="display:flex; flex-direction:column; gap:12px; padding:1.5rem 0;">
+           <p style="text-align:center; color:var(--text-dim);">Nenhuma atividade encontrada no sistema.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- NEW POST SECTION -->
+    <section id="section-new-post" class="section">
+      <div class="dashboard-grid" style="grid-template-columns: 1fr 420px;">
+        <div class="card">
+          <form id="post-form">
+            <div style="margin-bottom:2rem;">
+              <span class="label">O QUE VOCÊ VAI POSTAR?</span>
+              <div style="display:flex; gap:12px; margin-top:0.8rem;">
+                <button type="button" class="btn btn-sm btn-media active" data-type="IMAGE">📸 Photo Post</button>
+                <button type="button" class="btn btn-sm btn-ghost btn-media" data-type="REELS">🎬 Reels / Video</button>
+              </div>
+            </div>
+            
+            <div style="margin-bottom:2rem;">
+              <div class="dropzone" id="dropzone">
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+                <p style="font-weight:700; font-size:1.1rem;">Clique para selecionar mídia</p>
+                <p style="font-size:0.85rem; color:var(--text-dim); margin-top:5px;">JPG, PNG ou MP4 (max 50MB)</p>
+                <input type="file" id="file-input" hidden>
+                <div id="file-preview-container" style="display:none; margin-top:1.5rem;">
+                   <img id="file-preview" style="max-height:220px; border-radius:16px; border:1px solid var(--glass-border);">
+                </div>
+              </div>
+            </div>
+
+            <div style="margin-bottom:2rem;">
+              <label class="label">CONTEÚDO DA LEGENDA</label>
+              <textarea class="textarea" rows="5" id="post-caption" placeholder="O que você quer dizer para o mundo hoje?"></textarea>
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1.5rem; margin-bottom:2rem;">
+              <div>
+                <label class="label">DATA DO DISPARO</label>
+                <input type="date" class="input" id="post-date">
+              </div>
+              <div>
+                <label class="label">HORÁRIO EXATO</label>
+                <input type="time" class="input" id="post-time">
+              </div>
+            </div>
+
+            <button type="submit" class="btn" style="width:100%; padding:1.2rem;">
+              <i class="fa-solid fa-calendar-check"></i> AGENDAR PUBLICAÇÃO
+            </button>
+          </form>
+        </div>
+
+        <div class="card" style="padding:0; overflow:hidden; border-radius:28px;">
+           <div style="padding:1.2rem; border-bottom:1px solid var(--glass-border); font-weight:800; font-family:'Outfit';">PREVIEW DO FEED</div>
+           <div id="instagram-preview" style="background:#000; min-height:550px; padding:1.2rem;">
+              <div style="display:flex; align-items:center; gap:12px; margin-bottom:1.2rem;">
+                  <div style="width:36px; height:36px; border-radius:50%; background:linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);"></div>
+                  <div style="font-size:0.9rem; font-weight:800;">instalovers_ai</div>
+              </div>
+              <div id="preview-image-box" style="width:100%; aspect-ratio:1/1; background:var(--glass-bg); border-radius:12px; display:flex; align-items:center; justify-content:center; color:var(--text-dim); text-align:center; padding:2rem; font-size:0.9rem;">
+                 Aguardando mídia...
+              </div>
+              <div id="preview-caption" style="margin-top:1.2rem; font-size:0.9rem; line-height:1.5; color:#fff;">Sua legenda aparecerá aqui. Use hashtags para crescer!</div>
+           </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCHEDULE SECTION -->
+    <section id="section-schedule" class="section">
+       <div class="card">
+         <h3 class="card-title"><i class="fa-solid fa-clock"></i> Fila de Publicação</h3>
+         <div id="scheduled-posts-container" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap:2rem; margin-top:1.5rem;">
+            <!-- Render via JS -->
+         </div>
+       </div>
+    </section>
+
+    <!-- SETTINGS SECTION -->
+    <section id="section-settings" class="section">
+       <div class="dashboard-grid">
+         <div class="card">
+           <h3 class="card-title"><i class="fa-solid fa-user-gear" style="color:var(--purple-main)"></i> Contas Instagram</h3>
+           <div id="accounts-list-settings" style="display:flex; flex-direction:column; gap:14px; margin-bottom:2rem;">
+              <!-- Render via JS -->
+           </div>
+           <button class="btn" style="width:100%; border-radius:14px;" id="btn-add-account">
+             <i class="fa-solid fa-plus"></i> Conectar Nova Conta
+           </button>
+         </div>
+
+         <div class="card">
+           <h3 class="card-title"><i class="fa-solid fa-key" style="color:var(--magenta)"></i> Integrações (API Keys)</h3>
+           <form id="settings-form">
+              <div style="margin-bottom:1.5rem;">
+                <label class="label">IMGBB API KEY (Imagens)</label>
+                <input type="password" class="input" id="imgbb-key-input" placeholder="Seu token ImgBB">
+              </div>
+              <div style="margin-bottom:1.5rem;">
+                <label class="label">CLOUDINARY CLOUD NAME (Vídeos)</label>
+                <input type="text" class="input" id="cloudinary-name-input" placeholder="Cloud Name">
+              </div>
+              <div style="margin-bottom:1.5rem;">
+                <label class="label">UPLOAD PRESET (Cloudinary)</label>
+                <input type="text" class="input" id="cloudinary-preset-input" placeholder="Upload Preset">
+              </div>
+              <button type="submit" class="btn btn-ghost" style="width:100%; border-radius:14px;">Salvar chaves de acesso</button>
+           </form>
+         </div>
+       </div>
+    </section>
+
+  </main>
+
+  <div id="toast-container"></div>
+
+  <!-- Fullscreen Loading Overlay -->
+  <div id="loading-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(5,5,8,0.92); backdrop-filter:blur(15px); z-index:9000; align-items:center; justify-content:center; flex-direction:column;">
+    <div style="width:50px; height:50px; border:4px solid var(--purple-main); border-top-color:transparent; border-radius:50%; animation: orbit 0.8s linear infinite;"></div>
+    <span style="margin-top:1.5rem; font-weight:800; font-family:'Outfit'; font-size:1.1rem; letter-spacing:1px; color:white;">SINCRONIZANDO COM INSTAGRAM...</span>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
