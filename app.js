@@ -445,14 +445,15 @@ async function publishNow(id) {
 }
 
 function setupUIEvents() {
-  // Use a delegated listener for the fixed Modal v10
-  console.log('[V10] setupUIEvents inicializado');
-  const addBtn = document.getElementById('btn-add-account');
+  // Use a delegated listener for the fixed Modal v11
+  console.log('[V11] Inicializando listeners...');
+  
+  const addBtn = document.getElementById('btn-add-account-v11');
   if (addBtn) {
     addBtn.onclick = async (e) => {
       e.preventDefault();
       e.stopImmediatePropagation();
-      console.log('[V10] Botão Adicionar clicado');
+      console.log('[V11] Clique detectado no botão de conta');
 
       const modal = document.getElementById('custom-modal');
       const container = modal.querySelector('#modal-inputs-container');
@@ -461,13 +462,13 @@ function setupUIEvents() {
       const previewBox = document.getElementById('modal-account-preview');
       const btnConfirm = document.getElementById('modal-confirm');
 
-      title.innerText = 'CONECTAR CONTA (V10)';
-      msg.innerText = 'Insira o ID e o Token da Meta.';
+      title.innerText = 'CONECTAR CONTA (V11)';
+      msg.innerText = 'Use o ID Business e o Token da Meta.';
       
       container.innerHTML = `
-        <input type="text" id="node-id-v10" class="input" placeholder="ID Numérico">
-        <input type="password" id="node-token-v10" class="input" placeholder="Token Meta">
-        <button id="node-search-v10" class="modal-btn-search" style="margin-top:10px;">🔍 TESTAR CONEXÃO V10</button>
+        <input type="text" id="node-id-v11" class="input" placeholder="Instagram Business ID">
+        <input type="password" id="node-token-v11" class="input" placeholder="Access Token">
+        <button id="node-search-v11" class="modal-btn-search" style="margin-top:10px;">🔍 BUSCAR CONTA (V11)</button>
       `;
 
       previewBox.style.display = 'none';
@@ -479,23 +480,21 @@ function setupUIEvents() {
 
       let validatedUsername = null;
 
-      document.getElementById('node-search-v10').onclick = async (ev) => {
+      document.getElementById('node-search-v11').onclick = async (ev) => {
           ev.preventDefault();
-          const id = document.getElementById('node-id-v10').value.trim();
-          const token = document.getElementById('node-token-v10').value.trim();
+          ev.stopImmediatePropagation();
+          
+          const id = document.getElementById('node-id-v11').value.trim();
+          const token = document.getElementById('node-token-v11').value.trim();
 
-          console.log('[V10] Iniciando busca...', { id });
           if(!id || !token) return showToast('Preencha os campos!', 'error');
 
-          showLoading(true, 'VALIDANDO NA META (V10)...');
+          showLoading(true, 'ANALISANDO META (V11)...');
           try {
               const url = `${API_BASE}/verify-account?id=${encodeURIComponent(id)}&token=${encodeURIComponent(token)}`;
-              console.log('[V10] Fetch URL:', url);
-              
               const r = await fetch(url);
-              console.log('[V10] Resposta recebida:', r.status);
-              
               const data = await r.json();
+
               if(data.error) throw new Error(data.error);
 
               validatedUsername = data.username;
@@ -504,9 +503,7 @@ function setupUIEvents() {
               btnConfirm.disabled = false;
               btnConfirm.style.opacity = '1';
               showToast('CONTA LOCALIZADA!', 'success');
-              console.log('[V10] Sucesso:', validatedUsername);
           } catch(err) {
-              console.error('[V10] Erro na busca:', err);
               showToast(err.message, 'error');
           } finally {
               showLoading(false);
@@ -515,8 +512,8 @@ function setupUIEvents() {
 
       btnConfirm.onclick = async () => {
           if(!validatedUsername) return;
-          const id = document.getElementById('node-id-v10').value;
-          const token = document.getElementById('node-token-v10').value;
+          const id = document.getElementById('node-id-v11').value;
+          const token = document.getElementById('node-token-v11').value;
           await saveAccount(id, validatedUsername, token);
           modal.style.display = 'none';
       };
