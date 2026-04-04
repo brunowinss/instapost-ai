@@ -3,37 +3,39 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>InstaScheduler AI — Gestão de Elite</title>
+  <title>InstaScheduler AI — Gestão Profissional</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="stylesheet" href="style.css">
-  <style>
-    /* V20 Emergency Styles */
-    .v20-loading { cursor: wait !important; opacity: 0.7; pointer-events: none; }
-    #v20-search-btn { background: #00f2fe !important; color: #000 !important; font-weight: 800 !important; }
-  </style>
 </head>
 <body>
 
-  <!-- Animated Background Orbs -->
+  <!-- Animated Background -->
   <div class="bg-orbs">
     <div class="orb orb-1"></div>
     <div class="orb orb-2"></div>
     <div class="orb orb-3"></div>
   </div>
 
-  <!-- Sidebar Navigation -->
+  <!-- Loading Overlay -->
+  <div id="loading-overlay" class="modal-overlay" style="display:none; z-index:11000;">
+    <div style="text-align:center;">
+      <div class="spinner"></div>
+      <span style="font-weight:800; font-size:1.1rem; margin-top:1.5rem; display:block;">AGUARDE...</span>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
   <aside class="sidebar">
     <a href="/" class="logo-container">
       <div class="logo-icon">IA</div>
       <span class="logo-text">InstaScheduler</span>
     </a>
-    
     <nav class="nav-links">
       <a href="#" class="nav-item active" data-section="dashboard">
-        <i class="fa-solid fa-house"></i>
+        <i class="fa-solid fa-chart-pie"></i>
         <span>Dashboard</span>
       </a>
       <a href="#" class="nav-item" data-section="new-post">
@@ -42,177 +44,250 @@
       </a>
       <a href="#" class="nav-item" data-section="schedule">
         <i class="fa-solid fa-calendar-days"></i>
-        <span>Agendados</span>
+        <span>Calendário</span>
       </a>
       <a href="#" class="nav-item" data-section="settings">
-        <i class="fa-solid fa-gear"></i>
+        <i class="fa-solid fa-sliders"></i>
         <span>Configurações</span>
       </a>
     </nav>
+    <div style="margin-top:auto; padding:1rem; border-radius:16px; background:rgba(139,92,246,0.08); border:1px solid rgba(139,92,246,0.15);">
+      <div style="font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; margin-bottom:6px;">Motor</div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <div class="status-dot" style="width:8px; height:8px;"></div>
+        <span style="font-size:0.8rem; font-weight:700; color:var(--success);">CRON ATIVO</span>
+      </div>
+    </div>
   </aside>
 
-  <!-- Main Content Area -->
+  <!-- Main -->
   <main class="main-wrapper">
     <header class="header">
       <div class="header-left">
         <h1 id="page-title">Dashboard</h1>
-        <p id="page-subtitle" style="color:var(--text-dim); font-size:0.95rem;">Bem-vindo ao seu centro de comando.</p>
+        <p id="page-subtitle" style="color:var(--text-dim); font-size:0.95rem;">Visão geral do seu sistema de publicação.</p>
       </div>
-      
       <div class="header-right">
-        <button class="btn btn-ghost" style="padding: 0.7rem 1.4rem; border-radius:100px; font-size:0.8rem;" id="btn-sync-local">
-          <i class="fa-solid fa-folder-tree"></i> SINCRONIZAR PASTA
+        <button class="btn btn-ghost btn-pill" id="btn-sync-local">
+          <i class="fa-solid fa-arrows-rotate"></i> Sincronizar
         </button>
         <div class="account-badge">
           <div class="status-dot" id="auth-status"></div>
-          <span id="active-account-name">Aguardando login...</span>
+          <span id="active-account-name">Carregando...</span>
         </div>
       </div>
     </header>
 
-    <!-- CONTENT SECTIONS -->
-
+    <!-- ═══════════════ DASHBOARD ═══════════════ -->
     <section id="section-dashboard" class="section active">
       <div class="dashboard-grid">
-        <div class="card">
-          <div class="card-title">
-            <i class="fa-solid fa-paper-plane"></i>
-            <span>ENTREGAS TOTAIS</span>
-          </div>
+        <!-- Stat: Total Posts -->
+        <div class="card stat-card">
+          <div class="card-title"><i class="fa-solid fa-paper-plane"></i><span>ENTREGAS</span></div>
           <div class="stat-value" id="stat-total">0</div>
-          <p style="color:var(--text-dim); font-size:0.85rem; font-weight:600;">Posts publicados com sucesso</p>
+          <p class="stat-desc">Posts publicados com sucesso</p>
+          <div class="progress-bar"><div class="progress-fill" id="progress-total" style="width:0%"></div></div>
         </div>
-
-        <div class="card">
-          <div class="card-title">
-            <i class="fa-solid fa-clock"></i>
-            <span>AGENDADOS</span>
-          </div>
+        <!-- Stat: Scheduled -->
+        <div class="card stat-card">
+          <div class="card-title"><i class="fa-solid fa-clock" style="color:var(--neon-blue);"></i><span>AGENDADOS</span></div>
           <div class="stat-value" id="stat-scheduled">0</div>
-          <p style="color:var(--text-dim); font-size:0.85rem; font-weight:600;" id="stat-next-label">Próximo: --:--</p>
+          <p class="stat-desc" id="stat-next-label">Próximo: --:--</p>
+          <div class="progress-bar"><div class="progress-fill" id="progress-scheduled" style="width:0%; background:var(--neon-blue);"></div></div>
         </div>
+        <!-- Stat: Accounts -->
+        <div class="card stat-card">
+          <div class="card-title"><i class="fa-solid fa-users" style="color:var(--magenta);"></i><span>CONTAS ATIVAS</span></div>
+          <div class="stat-value" id="stat-accounts">0</div>
+          <p class="stat-desc">Perfis conectados ao sistema</p>
+          <div class="progress-bar"><div class="progress-fill" style="width:100%; background:var(--magenta);"></div></div>
+        </div>
+      </div>
 
+      <!-- Activity & Weekly Summary -->
+      <div class="dashboard-grid" style="grid-template-columns: 1fr 380px; margin-top:2.5rem;">
         <div class="card">
-          <div class="card-title">
-            <i class="fa-solid fa-robot" style="color:var(--success)"></i>
-            <span>STATUS DO ROBÔ</span>
+          <div class="card-title"><i class="fa-solid fa-bolt-lightning"></i><span>ATIVIDADE RECENTE</span></div>
+          <div id="recent-activity-list" style="margin-top:0.5rem;">
+            <p style="text-align:center; padding:2.5rem; color:var(--text-dim); font-size:0.9rem;">Aguardando primeira atividade...</p>
           </div>
-          <div style="display:flex; align-items:center; gap:15px; margin: 1rem 0;">
-            <div class="status-dot"></div>
-            <span style="font-size:1.5rem; font-weight:800; color:var(--success);">ONLINE</span>
+        </div>
+        <div class="card">
+          <div class="card-title"><i class="fa-solid fa-chart-line" style="color:var(--magenta);"></i><span>META SEMANAL</span></div>
+          <div style="text-align:center; padding:1.5rem 0;">
+            <div style="font-size:3.5rem; font-weight:800; background:linear-gradient(135deg,#fff 30%,#64748b);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">0/7</div>
+            <p style="color:var(--text-dim); font-size:0.85rem; margin-top:0.5rem;">Publicações esta semana</p>
+          </div>
+          <div class="progress-bar" style="height:10px;"><div class="progress-fill" style="width:5%; background:var(--magenta);"></div></div>
+          <button class="btn btn-ghost" style="width:100%; margin-top:1.5rem; font-size:0.8rem;" onclick="switchSection('new-post')">
+            <i class="fa-solid fa-plus"></i> CRIAR PUBLICAÇÃO
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════ NEW POST ═══════════════ -->
+    <section id="section-new-post" class="section">
+      <div class="dashboard-grid" style="grid-template-columns: 1fr 420px;">
+        <div class="card">
+          <form id="post-form">
+            <!-- Account Selector -->
+            <div class="form-group">
+              <label class="label"><i class="fa-solid fa-user-circle"></i> POSTAR NA CONTA</label>
+              <select id="post-account-select" class="input" style="cursor:pointer;">
+                <option>Carregando contas...</option>
+              </select>
+            </div>
+            <!-- Media Type -->
+            <div class="form-group">
+              <label class="label"><i class="fa-solid fa-photo-film"></i> TIPO DE MÍDIA</label>
+              <div style="display:flex; gap:12px;">
+                <button type="button" class="btn btn-sm btn-media active" data-type="IMAGE">📸 Foto</button>
+                <button type="button" class="btn btn-sm btn-ghost btn-media" data-type="REELS">🎬 Reels</button>
+              </div>
+            </div>
+            <!-- Dropzone -->
+            <div class="form-group">
+              <div class="dropzone" id="dropzone">
+                <i class="fa-solid fa-cloud-arrow-up" style="font-size:2.5rem; color:var(--purple-main); margin-bottom:0.5rem;"></i>
+                <p style="font-weight:700;">Arraste ou clique para enviar</p>
+                <p style="font-size:0.8rem; color:var(--text-dim);">JPG, PNG ou MP4 (max 50MB)</p>
+                <input type="file" id="file-input" hidden>
+                <div id="file-preview-container" style="display:none; margin-top:1rem;">
+                  <img id="file-preview" style="max-height:180px; border-radius:14px; border:1px solid var(--glass-border);">
+                </div>
+              </div>
+            </div>
+            <!-- Caption -->
+            <div class="form-group">
+              <label class="label"><i class="fa-solid fa-pen-fancy"></i> LEGENDA</label>
+              <textarea class="textarea" rows="4" id="post-caption" placeholder="Escreva sua legenda aqui... Use #hashtags para mais alcance!"></textarea>
+            </div>
+            <!-- Date & Time -->
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.2rem;" class="form-group">
+              <div>
+                <label class="label"><i class="fa-solid fa-calendar"></i> DATA</label>
+                <input type="date" class="input" id="post-date">
+              </div>
+              <div>
+                <label class="label"><i class="fa-solid fa-clock"></i> HORÁRIO</label>
+                <input type="time" class="input" id="post-time">
+              </div>
+            </div>
+            <button type="submit" class="btn" style="width:100%; padding:1.3rem; font-size:1rem;">
+              <i class="fa-solid fa-calendar-check"></i> AGENDAR PUBLICAÇÃO
+            </button>
+          </form>
+        </div>
+        <!-- Instagram Preview -->
+        <div class="card" style="padding:0; overflow:hidden;">
+          <div style="padding:1.2rem 1.5rem; border-bottom:1px solid var(--glass-border); font-weight:800; font-size:0.85rem; text-transform:uppercase; letter-spacing:1px; color:var(--text-dim);">
+            <i class="fa-brands fa-instagram" style="color:var(--magenta); margin-right:8px;"></i> Preview do Feed
+          </div>
+          <div id="instagram-preview" style="background:#0a0a0a; min-height:480px; padding:1.2rem;">
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:1rem;">
+              <div style="width:32px; height:32px; border-radius:50%; background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);"></div>
+              <div style="font-size:0.85rem; font-weight:800;" id="preview-username">seu_perfil</div>
+            </div>
+            <div id="preview-image-box" style="width:100%; aspect-ratio:1/1; background:rgba(255,255,255,0.03); border-radius:12px; display:flex; align-items:center; justify-content:center; color:var(--text-dim); font-size:0.9rem;">
+              Aguardando mídia...
+            </div>
+            <div id="preview-caption" style="margin-top:1rem; font-size:0.85rem; line-height:1.6; color:rgba(255,255,255,0.8);">Sua legenda aparecerá aqui...</div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- NEW POST SECTION -->
-    <section id="section-new-post" class="section">
-       <div class="card">
-         <form id="post-form">
-           <div style="margin-bottom:1.2rem;">
-             <label class="label" style="display:block; margin-bottom:0.5rem; font-size:0.75rem; text-transform:uppercase; letter-spacing:1px; color:var(--text-dim);">POSTAR NA CONTA:</label>
-             <select id="post-account-select" class="input" style="width:100%; cursor:pointer;">
-               <option>Carregando contas...</option>
-             </select>
-           </div>
-            <div class="dropzone" id="dropzone">
-             <i class="fa-solid fa-cloud-arrow-up"></i>
-             <p>Clique para selecionar mídia</p>
-             <input type="file" id="file-input" hidden>
-             <div id="file-preview-container" style="display:none; margin-top:1rem;">
-                <img id="file-preview" style="max-height:200px; border-radius:12px;">
-             </div>
-           </div>
-           <textarea class="textarea" rows="4" id="post-caption" placeholder="Legenda do post..."></textarea>
-           <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem; margin-top:1rem;">
-             <input type="date" class="input" id="post-date">
-             <input type="time" class="input" id="post-time">
-           </div>
-           <button type="submit" class="btn" style="width:100%; margin-top:1.5rem;">AGENDAR PUBLICAÇÃO</button>
-         </form>
-       </div>
-    </section>
-
-    <!-- SCHEDULE SECTION -->
+    <!-- ═══════════════ CALENDAR ═══════════════ -->
     <section id="section-schedule" class="section">
-       <div class="card">
-         <h3 class="card-title">Fila de Publicação</h3>
-         <div id="scheduled-posts-container" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap:1.5rem; margin-top:1.5rem;"></div>
-       </div>
+      <div class="card" style="margin-bottom:2rem;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-calendar-days"></i><span>CALENDÁRIO DE PUBLICAÇÕES</span></div>
+          <div style="display:flex; gap:8px;">
+            <button class="btn btn-ghost btn-pill btn-sm" id="cal-prev"><i class="fa-solid fa-chevron-left"></i></button>
+            <span id="cal-month-label" style="font-weight:700; font-size:0.95rem; padding:0.5rem 1rem; min-width:160px; text-align:center;"></span>
+            <button class="btn btn-ghost btn-pill btn-sm" id="cal-next"><i class="fa-solid fa-chevron-right"></i></button>
+          </div>
+        </div>
+        <div id="calendar-grid" style="margin-top:1.5rem;"></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-list-check"></i><span>FILA DE AGENDAMENTOS</span></div>
+        <div id="scheduled-posts-container" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:1.5rem; margin-top:1rem;"></div>
+      </div>
     </section>
 
-    <!-- SETTINGS SECTION -->
+    <!-- ═══════════════ SETTINGS ═══════════════ -->
     <section id="section-settings" class="section">
-       <div class="dashboard-grid">
-         <div class="card">
-           <h3 class="card-title"><i class="fa-solid fa-user-gear"></i> Contas Instagram</h3>
-           <div id="accounts-list-settings" style="display:flex; flex-direction:column; gap:12px; margin-bottom:1.5rem;"></div>
-           
-           <!-- V20 EMERGENCY BUTTON -->
-           <button class="btn" style="width:100%; background:var(--purple-main); border:2px solid #fff;" id="SUPER-BTN-V20">
-             <i class="fa-solid fa-bolt"></i> CONECTAR CONTA (V20 ATIVA)
-           </button>
-         </div>
-
-         <div class="card">
-           <h3 class="card-title"><i class="fa-solid fa-key"></i> Configurações API</h3>
-           <form id="settings-form">
-              <input type="password" class="input" id="imgbb-key-input" placeholder="ImgBB Key" style="margin-bottom:1rem;">
-              <input type="text" class="input" id="cloudinary-name-input" placeholder="Cloudinary Name" style="margin-bottom:1rem;">
-              <input type="text" class="input" id="cloudinary-preset-input" placeholder="Upload Preset" style="margin-bottom:1rem;">
-              <button type="submit" class="btn btn-ghost" style="width:100%;">Salvar Configurações</button>
-           </form>
-         </div>
-       </div>
+      <div class="dashboard-grid" style="grid-template-columns:1fr 1fr;">
+        <!-- Accounts Card -->
+        <div class="card">
+          <h3 class="card-title"><i class="fa-solid fa-user-gear" style="color:var(--purple-main);"></i> Contas Conectadas</h3>
+          <div id="accounts-list-settings" style="display:flex; flex-direction:column; gap:12px; margin-bottom:1.5rem;"></div>
+          <button class="btn" style="width:100%;" id="SUPER-BTN-V20">
+            <i class="fa-solid fa-plus"></i> Conectar Nova Conta
+          </button>
+        </div>
+        <!-- API Keys Card -->
+        <div class="card">
+          <h3 class="card-title"><i class="fa-solid fa-key" style="color:var(--magenta);"></i> Integrações (API)</h3>
+          <form id="settings-form">
+            <div class="form-group">
+              <label class="label">IMGBB API KEY</label>
+              <input type="password" class="input" id="imgbb-key-input" placeholder="Chave para upload de imagens">
+            </div>
+            <div class="form-group">
+              <label class="label">CLOUDINARY CLOUD NAME</label>
+              <input type="text" class="input" id="cloudinary-name-input" placeholder="Cloud Name para vídeos">
+            </div>
+            <div class="form-group">
+              <label class="label">UPLOAD PRESET (CLOUDINARY)</label>
+              <input type="text" class="input" id="cloudinary-preset-input" placeholder="Preset de upload não-assinado">
+            </div>
+            <button type="submit" class="btn" style="width:100%;"><i class="fa-solid fa-floppy-disk"></i> Salvar Configurações</button>
+          </form>
+        </div>
+      </div>
     </section>
 
   </main>
 
   <div id="toast-container"></div>
 
-  <!-- Custom Elite Modal -->
+  <!-- Modal -->
   <div id="custom-modal" class="modal-overlay" style="display:none;">
     <div class="modal-content card">
       <div class="card-title" id="modal-title">
         <i class="fa-solid fa-circle-info"></i>
-        <span>LOGIN V20</span>
+        <span>CONEXÃO BUSINESS</span>
       </div>
-      <p id="modal-msg" style="color:var(--text-dim); margin-bottom:1rem;"></p>
-      
-      <div id="modal-inputs-container">
-        <!-- Dynamic -->
-      </div>
-      
+      <p id="modal-msg" style="color:var(--text-dim); margin-bottom:1.2rem; line-height:1.6;"></p>
+      <div id="modal-inputs-container"></div>
       <div id="modal-account-preview" class="modal-preview-box" style="display:none;">
-         <div class="modal-avatar-preview"><i class="fa-solid fa-user"></i></div>
-         <div>
-            <div style="font-weight:800;" id="modal-preview-name">@username</div>
-            <div style="font-size:0.7rem; color:var(--success);">CONTA ENCONTRADA</div>
-         </div>
+        <div class="modal-avatar-preview"><i class="fa-solid fa-user"></i></div>
+        <div>
+          <div style="font-weight:800;" id="modal-preview-name">@username</div>
+          <div style="font-size:0.7rem; color:var(--success); font-weight:700;">CONTA ENCONTRADA</div>
+        </div>
       </div>
-      
-      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem; margin-top:1.5rem;">
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-top:1.5rem;">
         <button class="btn btn-ghost" id="modal-cancel">CANCELAR</button>
         <button class="btn" id="modal-confirm" disabled style="opacity:0.5;">CONECTAR</button>
       </div>
     </div>
   </div>
 
-  <script src="app.js?v=30"></script>
+  <script src="app.js?v=50"></script>
 
-  <!-- V20 EMERGENCY SCRIPT (INLINE TO BYPASS CACHE) -->
+  <!-- Inline Login Logic -->
   <script>
     (function() {
-      console.log('--- V20 EMERGENCY LOGIC LOADED ---');
-
       const btnAdd = document.getElementById('SUPER-BTN-V20');
       if (!btnAdd) return;
 
       btnAdd.onclick = function(e) {
         e.preventDefault();
         e.stopImmediatePropagation();
-        
-        console.log('V20 Clique detectado!');
 
         const modal = document.getElementById('custom-modal');
         const container = document.getElementById('modal-inputs-container');
@@ -221,13 +296,13 @@
         const previewBox = document.getElementById('modal-account-preview');
         const btnConfirm = document.getElementById('modal-confirm');
 
-        title.innerText = 'CONEXÃO BUSINESS V20';
-        msg.innerText = 'Insira o ID Numérico da Meta e o Token EAAB.';
+        title.innerText = 'CONEXÃO BUSINESS';
+        msg.innerText = 'Insira o ID Numérico do Instagram Business e o Access Token da Meta.';
         
         container.innerHTML = `
-          <input type="text" id="v20-id" class="input" placeholder="ID da Conta Business" style="margin-bottom:10px;">
-          <input type="password" id="v20-token" class="input" placeholder="Access Token (EAAB...)" style="margin-bottom:10px;">
-          <button id="v20-search-btn" class="btn" style="width:100%; border:1px solid #fff;">🔍 BUSCAR NA META AGORA</button>
+          <input type="text" id="v20-id" class="input" placeholder="Instagram Business ID" style="margin-bottom:10px;">
+          <input type="password" id="v20-token" class="input" placeholder="Access Token (IGAA... ou EAAB...)" style="margin-bottom:10px;">
+          <button id="v20-search-btn" class="btn" style="width:100%; background:var(--neon-blue); color:#000;">🔍 BUSCAR CONTA</button>
         `;
 
         previewBox.style.display = 'none';
@@ -241,36 +316,24 @@
           ev.preventDefault();
           const id = document.getElementById('v20-id').value.trim();
           const token = document.getElementById('v20-token').value.trim();
+          if (!id || !token) { alert('Preencha os dois campos.'); return; }
 
-          if (!id || !token) {
-            alert('Por favor, preencha o ID e o Token.');
-            return;
-          }
-
-          this.innerText = '⏳ VALIDANDO...';
-          this.classList.add('v20-loading');
-
+          this.innerText = '⏳ Validando...';
           try {
-            console.log('Iniciando fetch v20 para ID:', id);
             const r = await fetch('/api/verify-account?id=' + encodeURIComponent(id) + '&token=' + encodeURIComponent(token));
             const data = await r.json();
-
-            if (data.error) {
-              alert('ERRO META: ' + (data.details?.message || data.error));
-              return;
-            }
+            if (data.error) { alert('Erro: ' + (data.details?.message || data.error)); return; }
 
             validUser = data.username;
             document.getElementById('modal-preview-name').innerText = '@' + validUser;
             previewBox.style.display = 'flex';
             btnConfirm.disabled = false;
             btnConfirm.style.opacity = '1';
-            this.innerText = '✅ CONTA LOCALIZADA!';
+            this.innerText = '✅ Conta Localizada!';
           } catch (err) {
-            alert('ERRO DE CONEXÃO: ' + err.message);
+            alert('Erro de conexão: ' + err.message);
           } finally {
-            this.classList.remove('v20-loading');
-            if (!validUser) this.innerText = '🔍 BUSCAR NA META AGORA';
+            if (!validUser) this.innerText = '🔍 BUSCAR CONTA';
           }
         };
 
@@ -278,21 +341,15 @@
           if (!validUser) return;
           const id = document.getElementById('v20-id').value.trim();
           const token = document.getElementById('v20-token').value.trim();
-          
-          this.innerText = 'SALVANDO...';
+          this.innerText = 'Salvando...';
           try {
             const res = await fetch('/api/save-account', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ accountId: id, username: validUser, accessToken: token })
             });
-            if (res.ok) {
-              modal.style.display = 'none';
-              location.reload(); // Recarrega para mostrar a conta na lista
-            }
-          } catch (e) {
-            alert('Erro ao salvar: ' + e.message);
-          }
+            if (res.ok) { modal.style.display = 'none'; location.reload(); }
+          } catch (e) { alert('Erro: ' + e.message); }
         };
 
         document.getElementById('modal-cancel').onclick = () => { modal.style.display = 'none'; };

@@ -206,7 +206,6 @@ function renderDashboard() {
   const successCount = STATE.history.filter(h => h.status === 'success').length;
   const scheduledCount = STATE.scheduledPosts.length;
   
-  // Weekly Goal Calculation (last 7 days)
   const now = new Date();
   const lastWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const weeklyCount = STATE.history.filter(h => h.status === 'success' && new Date(h.publishedAt) >= lastWeek).length;
@@ -215,19 +214,12 @@ function renderDashboard() {
 
   document.getElementById('stat-total').innerText = successCount;
   document.getElementById('stat-scheduled').innerText = scheduledCount;
+  document.getElementById('stat-accounts').innerText = STATE.accounts.length;
   
-  // Update progress bars
-  document.getElementById('progress-total').style.width = `${Math.min(successCount * 5, 100)}%`;
-  document.getElementById('progress-scheduled').style.width = `${Math.min(scheduledCount * 10, 100)}%`;
-
-  // Update Weekly Goal UI
-  const goalCard = document.querySelector('#section-dashboard .card:last-child');
-  if (goalCard) {
-    const goalText = goalCard.querySelector('div[style*="font-size:3rem"]');
-    if (goalText) goalText.innerText = `${weeklyCount}/${weeklyGoal}`;
-    const goalFill = goalCard.querySelector('.progress-fill');
-    if (goalFill) goalFill.style.width = `${weeklyPercent}%`;
-  }
+  const ptEl = document.getElementById('progress-total');
+  if (ptEl) ptEl.style.width = `${Math.min(successCount * 5, 100)}%`;
+  const psEl = document.getElementById('progress-scheduled');
+  if (psEl) psEl.style.width = `${Math.min(scheduledCount * 10, 100)}%`;
 
   const next = STATE.scheduledPosts[0];
   if (next) {
@@ -237,52 +229,130 @@ function renderDashboard() {
     document.getElementById('stat-next-label').innerText = 'Sem agendamentos';
   }
     
-  // Render activity list with thumbnails
+  // Activity list
   const list = document.getElementById('recent-activity-list');
-  if (STATE.history.length === 0) {
-    list.innerHTML = '<p style="text-align:center; padding:3rem; color:var(--text-dim);">Silêncio total por aqui...</p>';
+  if (!list) return;
+  if (STATE.history.length === 0 && STATE.scheduledPosts.length === 0) {
+    list.innerHTML = '<p style="text-align:center; padding:2.5rem; color:var(--text-dim); font-size:0.9rem;">Aguardando primeira atividade...</p>';
     return;
   }
   
-  list.innerHTML = STATE.history.slice(0, 5).map(h => `
+  const allPosts = [...STATE.scheduledPosts, ...STATE.history].slice(0, 6);
+  list.innerHTML = allPosts.map(h => {
+    const acc = STATE.accounts.find(a => a.accountId === h.accountId);
+    const accName = acc ? `@${acc.username}` : h.accountId;
+    const dateStr = h.publishedAt ? new Date(h.publishedAt).toLocaleString('pt-BR') : new Date(h.scheduledAt).toLocaleString('pt-BR');
+    const statusColor = h.status === 'success' ? 'var(--success)' : h.status === 'pending' ? 'var(--warning)' : 'var(--error)';
+    const statusBg = h.status === 'success' ? 'rgba(16,185,129,0.1)' : h.status === 'pending' ? 'rgba(245,158,11,0.1)' : 'rgba(239,68,68,0.1)';
+    return `
     <div class="activity-item">
-      <img src="${h.imageUrl || 'https://via.placeholder.com/60'}" class="activity-thumb" onerror="this.src='https://cdn-icons-png.flaticon.com/512/174/174855.png'">
-      <div class="activity-info">
-        <div style="font-weight:700; font-size:0.95rem; margin-bottom:4px;">${h.caption ? h.caption.substring(0, 35) + '...' : 'Publicação sem legenda'}</div>
-        <div style="font-size:0.75rem; color:var(--text-dim); display:flex; align-items:center; gap:6px;">
-          <i class="fa-solid fa-calendar-day"></i> ${new Date(h.publishedAt).toLocaleString()}
-        </div>
+      <div style="width:46px; height:46px; border-radius:12px; background:rgba(139,92,246,0.1); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+        <i class="fa-solid ${h.mediaType === 'REELS' ? 'fa-film' : 'fa-image'}" style="color:var(--purple-main);"></i>
       </div>
-      <span class="activity-status" style="background:${h.status === 'success' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)'}; color:${h.status === 'success' ? 'var(--success)' : 'var(--error)'}; border:1px solid currentColor;">${h.status}</span>
-    </div>
-  `).join('');
+      <div style="flex:1; min-width:0;">
+        <div style="font-weight:700; font-size:0.85rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${h.caption || 'Sem legenda'}</div>
+        <div style="font-size:0.72rem; color:var(--text-dim); margin-top:2px;">${accName} • ${dateStr}</div>
+      </div>
+      <span style="font-size:0.6rem; font-weight:800; text-transform:uppercase; padding:3px 8px; border-radius:6px; background:${statusBg}; color:${statusColor}; border:1px solid ${statusColor}; letter-spacing:0.5px;">${h.status}</span>
+    </div>`;
+  }).join('');
 }
 
+// ── Calendar State ──
+let calendarDate = new Date();
+
 function renderScheduleGrid() {
+  renderCalendar();
+  renderScheduleCards();
+  
+  // Calendar navigation
+  const prevBtn = document.getElementById('cal-prev');
+  const nextBtn = document.getElementById('cal-next');
+  if (prevBtn) prevBtn.onclick = () => { calendarDate.setMonth(calendarDate.getMonth() - 1); renderCalendar(); };
+  if (nextBtn) nextBtn.onclick = () => { calendarDate.setMonth(calendarDate.getMonth() + 1); renderCalendar(); };
+}
+
+function renderCalendar() {
+  const grid = document.getElementById('calendar-grid');
+  const label = document.getElementById('cal-month-label');
+  if (!grid || !label) return;
+
+  const year = calendarDate.getFullYear();
+  const month = calendarDate.getMonth();
+  const months = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  label.innerText = `${months[month]} ${year}`;
+
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const today = new Date();
+
+  // Get dates with scheduled posts
+  const postDates = new Set();
+  STATE.scheduledPosts.forEach(p => {
+    const d = new Date(p.scheduledAt);
+    if (d.getMonth() === month && d.getFullYear() === year) {
+      postDates.add(d.getDate());
+    }
+  });
+
+  let html = '<div class="cal-header">';
+  ['DOM','SEG','TER','QUA','QUI','SEX','SÁB'].forEach(d => html += `<div class="cal-header-cell">${d}</div>`);
+  html += '</div><div class="cal-grid">';
+
+  // Empty cells before first day
+  for (let i = 0; i < firstDay; i++) html += '<div class="cal-day empty"></div>';
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const isToday = today.getDate() === day && today.getMonth() === month && today.getFullYear() === year;
+    const hasPosts = postDates.has(day);
+    const classes = ['cal-day'];
+    if (isToday) classes.push('today');
+    if (hasPosts) classes.push('has-posts');
+    html += `<div class="${classes.join(' ')}">${day}</div>`;
+  }
+
+  html += '</div>';
+  grid.innerHTML = html;
+}
+
+function renderScheduleCards() {
   const container = document.getElementById('scheduled-posts-container');
+  if (!container) return;
+  
   if (STATE.scheduledPosts.length === 0) {
-    container.innerHTML = '<div style="grid-column: 1/-1; text-align:center; padding:4rem; color:var(--text-dim);"><i class="fa-solid fa-calendar-xmark" style="font-size:3rem; margin-bottom:1rem; opacity:0.3;"></i><p>Nada agendado para o futuro.</p></div>';
+    container.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:3rem; color:var(--text-dim);"><i class="fa-solid fa-calendar-xmark" style="font-size:2.5rem; margin-bottom:1rem; opacity:0.3; display:block;"></i>Nenhum agendamento pendente.</div>';
     return;
   }
   
-  container.innerHTML = STATE.scheduledPosts.map(p => `
-    <div class="card" style="padding:0; overflow:hidden;">
-      <div style="height:200px; overflow:hidden; position:relative;">
-        <img src="${p.imageUrl}" style="width:100%; height:100%; object-fit:cover;">
-        <div style="position:absolute; top:10px; right:10px; padding:4px 10px; border-radius:8px; background:rgba(0,0,0,0.6); backdrop-filter:blur(5px); font-size:0.7rem; font-weight:700;">${p.mediaType}</div>
+  container.innerHTML = STATE.scheduledPosts.map(p => {
+    const acc = STATE.accounts.find(a => a.accountId === p.accountId);
+    const accName = acc ? `@${acc.username}` : p.accountId;
+    const date = new Date(p.scheduledAt);
+    const dateStr = date.toLocaleDateString('pt-BR', { day:'2-digit', month:'short' });
+    const timeStr = date.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+    
+    return `
+    <div class="sched-card">
+      <div class="sched-card-header">
+        <span class="sched-account"><i class="fa-brands fa-instagram"></i> ${accName}</span>
+        <span class="sched-badge pending">${p.status}</span>
       </div>
-      <div style="padding:1.5rem;">
-        <p style="font-size:0.9rem; margin-bottom:1rem; height:45px; overflow:hidden;">${p.caption}</p>
-        <div style="display:flex; align-items:center; gap:8px; font-size:0.8rem; font-weight:600; color:var(--purple-main); margin-bottom:1.5rem;">
-          <i class="fa-solid fa-clock"></i> ${new Date(p.scheduledAt).toLocaleString()}
+      <div style="margin-bottom:0.8rem;">
+        ${p.imageUrl ? `<div style="width:100%; height:140px; border-radius:10px; overflow:hidden; margin-bottom:0.8rem;"><img src="${p.imageUrl}" style="width:100%; height:100%; object-fit:cover;" onerror="this.parentElement.style.display='none'"><video src="${p.imageUrl}" style="width:100%; height:100%; object-fit:cover; display:none;" onerror=""></video></div>` : ''}
+        <p style="font-size:0.85rem; line-height:1.5; color:rgba(255,255,255,0.8); max-height:3.2em; overflow:hidden;">${p.caption || 'Sem legenda'}</p>
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center; padding-top:0.8rem; border-top:1px solid var(--glass-border);">
+        <div style="font-size:0.78rem; color:var(--text-dim); display:flex; align-items:center; gap:6px;">
+          <i class="fa-solid fa-calendar"></i> ${dateStr} às ${timeStr}
         </div>
-        <button class="btn btn-ghost" style="width:100%; font-size:0.85rem;" onclick="publishNow('${p.id}')">
-          <i class="fa-solid fa-paper-plane"></i> POSTAR AGORA
+        <button class="btn btn-sm btn-ghost" onclick="publishNow('${p.id}')" style="font-size:0.7rem; padding:0.5rem 0.8rem;">
+          <i class="fa-solid fa-paper-plane"></i> Publicar
         </button>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
+
 
 function setupForms() {
   // File Upload Handling

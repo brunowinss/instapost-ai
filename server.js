@@ -247,6 +247,18 @@ async function cron() {
 setInterval(cron, 60000);
 
 /**
+ * 📁 Manual Import Trigger
+ */
+app.get('/api/import-local', async (req, res) => {
+  try {
+    await runAutoImporter();
+    res.json({ success: true, message: 'Importação concluída.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
  * 🌐 SPA Routing
  */
 
