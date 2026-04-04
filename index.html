@@ -9,6 +9,11 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="stylesheet" href="style.css">
+  <style>
+    /* V20 Emergency Styles */
+    .v20-loading { cursor: wait !important; opacity: 0.7; pointer-events: none; }
+    #v20-search-btn { background: #00f2fe !important; color: #000 !important; font-weight: 800 !important; }
+  </style>
 </head>
 <body>
 
@@ -69,7 +74,6 @@
 
     <section id="section-dashboard" class="section active">
       <div class="dashboard-grid">
-        <!-- STAT 1: TOTAL SUCCESS -->
         <div class="card">
           <div class="card-title">
             <i class="fa-solid fa-paper-plane"></i>
@@ -77,12 +81,8 @@
           </div>
           <div class="stat-value" id="stat-total">0</div>
           <p style="color:var(--text-dim); font-size:0.85rem; font-weight:600;">Posts publicados com sucesso</p>
-          <div class="progress-bar">
-            <div class="progress-fill" id="progress-total" style="width: 0%"></div>
-          </div>
         </div>
 
-        <!-- STAT 2: SCHEDULED RADAR -->
         <div class="card">
           <div class="card-title">
             <i class="fa-solid fa-clock"></i>
@@ -90,57 +90,16 @@
           </div>
           <div class="stat-value" id="stat-scheduled">0</div>
           <p style="color:var(--text-dim); font-size:0.85rem; font-weight:600;" id="stat-next-label">Próximo: --:--</p>
-          <div class="progress-bar">
-            <div class="progress-fill" id="progress-scheduled" style="width: 0%; background:var(--neon-blue);"></div>
-          </div>
         </div>
 
-        <!-- STAT 3: SCHEDULER STATUS -->
-        <div class="card" style="border-color: rgba(16,185,129,0.2);">
+        <div class="card">
           <div class="card-title">
             <i class="fa-solid fa-robot" style="color:var(--success)"></i>
             <span>STATUS DO ROBÔ</span>
           </div>
           <div style="display:flex; align-items:center; gap:15px; margin: 1rem 0;">
             <div class="status-dot"></div>
-            <span style="font-size:1.5rem; font-weight:800; color:var(--success); letter-spacing:-1px;">ONLINE</span>
-          </div>
-          <p style="color:var(--text-dim); font-size:0.85rem; font-weight:600;">Sincronizado a cada 60s</p>
-          <div style="margin-top:1.5rem; padding:12px; background:rgba(255,255,255,0.03); border-radius:12px; border:1px solid var(--glass-border); font-size:0.75rem; font-family:monospace; color:var(--text-dim);">
-            CRON_ID: scheduler_active_v1
-          </div>
-        </div>
-      </div>
-      
-      <div style="display:grid; grid-template-columns: 1fr 400px; gap:2.5rem; margin-top:2.5rem;">
-        <!-- RECENT ACTIVITY -->
-        <div class="card">
-          <div class="card-title">
-            <i class="fa-solid fa-bolt-lightning"></i>
-            <span>ATIVIDADE DE ELITE</span>
-          </div>
-          <div id="recent-activity-list" style="margin-top:1rem;">
-             <p style="text-align:center; padding:3rem; color:var(--text-dim);">Aguardando primeira atividade...</p>
-          </div>
-        </div>
-
-        <!-- WEEKLY GOAL -->
-        <div class="card">
-          <div class="card-title">
-            <i class="fa-solid fa-chart-line"></i>
-            <span>META SEMANAL</span>
-          </div>
-          <div style="text-align:center; padding:1rem 0;">
-             <div style="font-size:3rem; font-weight:800; color:white;">0/7</div>
-             <p style="color:var(--text-dim); font-size:0.85rem;">Publicações esta semana</p>
-          </div>
-          <div class="progress-bar" style="height:12px;">
-            <div class="progress-fill" style="width: 5%; background:var(--magenta);"></div>
-          </div>
-          <div style="margin-top:2rem;">
-            <button class="btn btn-ghost" style="width:100%; font-size:0.8rem;" onclick="switchSection('new-post')">
-              <i class="fa-solid fa-plus"></i> BATER META AGORA
-            </button>
+            <span style="font-size:1.5rem; font-weight:800; color:var(--success);">ONLINE</span>
           </div>
         </div>
       </div>
@@ -148,74 +107,31 @@
 
     <!-- NEW POST SECTION -->
     <section id="section-new-post" class="section">
-      <div class="dashboard-grid" style="grid-template-columns: 1fr 420px;">
-        <div class="card">
-          <form id="post-form">
-            <div style="margin-bottom:2rem;">
-              <span class="label">O QUE VOCÊ VAI POSTAR?</span>
-              <div style="display:flex; gap:12px; margin-top:0.8rem;">
-                <button type="button" class="btn btn-sm btn-media active" data-type="IMAGE">📸 Photo Post</button>
-                <button type="button" class="btn btn-sm btn-ghost btn-media" data-type="REELS">🎬 Reels / Video</button>
-              </div>
-            </div>
-            
-            <div style="margin-bottom:2rem;">
-              <div class="dropzone" id="dropzone">
-                <i class="fa-solid fa-cloud-arrow-up"></i>
-                <p style="font-weight:700; font-size:1.1rem;">Clique para selecionar mídia</p>
-                <p style="font-size:0.85rem; color:var(--text-dim); margin-top:5px;">JPG, PNG ou MP4 (max 50MB)</p>
-                <input type="file" id="file-input" hidden>
-                <div id="file-preview-container" style="display:none; margin-top:1.5rem;">
-                   <img id="file-preview" style="max-height:220px; border-radius:16px; border:1px solid var(--glass-border);">
-                </div>
-              </div>
-            </div>
-
-            <div style="margin-bottom:2rem;">
-              <label class="label">CONTEÚDO DA LEGENDA</label>
-              <textarea class="textarea" rows="5" id="post-caption" placeholder="O que você quer dizer para o mundo hoje?"></textarea>
-            </div>
-
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1.5rem; margin-bottom:2rem;">
-              <div>
-                <label class="label">DATA DO DISPARO</label>
-                <input type="date" class="input" id="post-date">
-              </div>
-              <div>
-                <label class="label">HORÁRIO EXATO</label>
-                <input type="time" class="input" id="post-time">
-              </div>
-            </div>
-
-            <button type="submit" class="btn" style="width:100%; padding:1.2rem;">
-              <i class="fa-solid fa-calendar-check"></i> AGENDAR PUBLICAÇÃO
-            </button>
-          </form>
-        </div>
-
-        <div class="card" style="padding:0; overflow:hidden; border-radius:28px;">
-           <div style="padding:1.2rem; border-bottom:1px solid var(--glass-border); font-weight:800; font-family:'Outfit';">PREVIEW DO FEED</div>
-           <div id="instagram-preview" style="background:#000; min-height:550px; padding:1.2rem;">
-              <div style="display:flex; align-items:center; gap:12px; margin-bottom:1.2rem;">
-                  <div style="width:36px; height:36px; border-radius:50%; background:linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);"></div>
-                  <div style="font-size:0.9rem; font-weight:800;">instalovers_ai</div>
-              </div>
-              <div id="preview-image-box" style="width:100%; aspect-ratio:1/1; background:var(--glass-bg); border-radius:12px; display:flex; align-items:center; justify-content:center; color:var(--text-dim); text-align:center; padding:2rem; font-size:0.9rem;">
-                 Aguardando mídia...
-              </div>
-              <div id="preview-caption" style="margin-top:1.2rem; font-size:0.9rem; line-height:1.5; color:#fff;">Sua legenda aparecerá aqui. Use hashtags para crescer!</div>
+       <div class="card">
+         <form id="post-form">
+           <div class="dropzone" id="dropzone">
+             <i class="fa-solid fa-cloud-arrow-up"></i>
+             <p>Clique para selecionar mídia</p>
+             <input type="file" id="file-input" hidden>
+             <div id="file-preview-container" style="display:none; margin-top:1rem;">
+                <img id="file-preview" style="max-height:200px; border-radius:12px;">
+             </div>
            </div>
-        </div>
-      </div>
+           <textarea class="textarea" rows="4" id="post-caption" placeholder="Legenda do post..."></textarea>
+           <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem; margin-top:1rem;">
+             <input type="date" class="input" id="post-date">
+             <input type="time" class="input" id="post-time">
+           </div>
+           <button type="submit" class="btn" style="width:100%; margin-top:1.5rem;">AGENDAR PUBLICAÇÃO</button>
+         </form>
+       </div>
     </section>
 
     <!-- SCHEDULE SECTION -->
     <section id="section-schedule" class="section">
        <div class="card">
-         <h3 class="card-title"><i class="fa-solid fa-clock"></i> Fila de Publicação</h3>
-         <div id="scheduled-posts-container" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap:2rem; margin-top:1.5rem;">
-            <!-- Render via JS -->
-         </div>
+         <h3 class="card-title">Fila de Publicação</h3>
+         <div id="scheduled-posts-container" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap:1.5rem; margin-top:1.5rem;"></div>
        </div>
     </section>
 
@@ -223,31 +139,22 @@
     <section id="section-settings" class="section">
        <div class="dashboard-grid">
          <div class="card">
-           <h3 class="card-title"><i class="fa-solid fa-user-gear" style="color:var(--purple-main)"></i> Contas Instagram</h3>
-           <div id="accounts-list-settings" style="display:flex; flex-direction:column; gap:14px; margin-bottom:2rem;">
-              <!-- Render via JS -->
-           </div>
-           <button class="btn" style="width:100%; border-radius:14px;" id="btn-add-account-v11">
-             <i class="fa-solid fa-plus"></i> Conectar Nova Conta (V11)
+           <h3 class="card-title"><i class="fa-solid fa-user-gear"></i> Contas Instagram</h3>
+           <div id="accounts-list-settings" style="display:flex; flex-direction:column; gap:12px; margin-bottom:1.5rem;"></div>
+           
+           <!-- V20 EMERGENCY BUTTON -->
+           <button class="btn" style="width:100%; background:var(--purple-main); border:2px solid #fff;" id="SUPER-BTN-V20">
+             <i class="fa-solid fa-bolt"></i> CONECTAR CONTA (V20 ATIVA)
            </button>
          </div>
 
          <div class="card">
-           <h3 class="card-title"><i class="fa-solid fa-key" style="color:var(--magenta)"></i> Integrações (API Keys)</h3>
+           <h3 class="card-title"><i class="fa-solid fa-key"></i> Configurações API</h3>
            <form id="settings-form">
-              <div style="margin-bottom:1.5rem;">
-                <label class="label">IMGBB API KEY (Imagens)</label>
-                <input type="password" class="input" id="imgbb-key-input" placeholder="Seu token ImgBB">
-              </div>
-              <div style="margin-bottom:1.5rem;">
-                <label class="label">CLOUDINARY CLOUD NAME (Vídeos)</label>
-                <input type="text" class="input" id="cloudinary-name-input" placeholder="Cloud Name">
-              </div>
-              <div style="margin-bottom:1.5rem;">
-                <label class="label">UPLOAD PRESET (Cloudinary)</label>
-                <input type="text" class="input" id="cloudinary-preset-input" placeholder="Upload Preset">
-              </div>
-              <button type="submit" class="btn btn-ghost" style="width:100%; border-radius:14px;">Salvar chaves de acesso</button>
+              <input type="password" class="input" id="imgbb-key-input" placeholder="ImgBB Key" style="margin-bottom:1rem;">
+              <input type="text" class="input" id="cloudinary-name-input" placeholder="Cloudinary Name" style="margin-bottom:1rem;">
+              <input type="text" class="input" id="cloudinary-preset-input" placeholder="Upload Preset" style="margin-bottom:1rem;">
+              <button type="submit" class="btn btn-ghost" style="width:100%;">Salvar Configurações</button>
            </form>
          </div>
        </div>
@@ -261,33 +168,130 @@
   <div id="custom-modal" class="modal-overlay" style="display:none;">
     <div class="modal-content card">
       <div class="card-title" id="modal-title">
-        <i class="fa-solid fa-circle-question"></i>
-        <span>ENTRADA DE DADOS</span>
+        <i class="fa-solid fa-circle-info"></i>
+        <span>LOGIN V20</span>
       </div>
-      <p id="modal-msg" style="color:var(--text-dim); margin-bottom:1.5rem; line-height:1.6;"></p>
+      <p id="modal-msg" style="color:var(--text-dim); margin-bottom:1rem;"></p>
       
       <div id="modal-inputs-container">
-        <!-- Dynamic inputs here -->
+        <!-- Dynamic -->
       </div>
       
-      <!-- Account Preview Card (Hidden by default) -->
-      <div id="modal-account-preview" class="modal-preview-box">
-         <div class="modal-avatar-preview">
-            <i class="fa-solid fa-user"></i>
-         </div>
+      <div id="modal-account-preview" class="modal-preview-box" style="display:none;">
+         <div class="modal-avatar-preview"><i class="fa-solid fa-user"></i></div>
          <div>
-            <div style="font-weight:800; font-size:1rem;" id="modal-preview-name">@username</div>
-            <div style="font-size:0.75rem; color:var(--success); font-weight:700;">CONTA ENCONTRADA!</div>
+            <div style="font-weight:800;" id="modal-preview-name">@username</div>
+            <div style="font-size:0.7rem; color:var(--success);">CONTA ENCONTRADA</div>
          </div>
       </div>
       
-      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1.2rem; margin-top:2rem;">
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem; margin-top:1.5rem;">
         <button class="btn btn-ghost" id="modal-cancel">CANCELAR</button>
-        <button class="btn" id="modal-confirm" style="background:var(--purple-main);">CONFIRMAR</button>
+        <button class="btn" id="modal-confirm" disabled style="opacity:0.5;">CONECTAR</button>
       </div>
     </div>
   </div>
 
-  <script src="app.js?v=11"></script>
+  <script src="app.js?v=20"></script>
+
+  <!-- V20 EMERGENCY SCRIPT (INLINE TO BYPASS CACHE) -->
+  <script>
+    (function() {
+      console.log('--- V20 EMERGENCY LOGIC LOADED ---');
+
+      const btnAdd = document.getElementById('SUPER-BTN-V20');
+      if (!btnAdd) return;
+
+      btnAdd.onclick = function(e) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        
+        console.log('V20 Clique detectado!');
+
+        const modal = document.getElementById('custom-modal');
+        const container = document.getElementById('modal-inputs-container');
+        const title = document.querySelector('#modal-title span');
+        const msg = document.getElementById('modal-msg');
+        const previewBox = document.getElementById('modal-account-preview');
+        const btnConfirm = document.getElementById('modal-confirm');
+
+        title.innerText = 'CONEXÃO BUSINESS V20';
+        msg.innerText = 'Insira o ID Numérico da Meta e o Token EAAB.';
+        
+        container.innerHTML = `
+          <input type="text" id="v20-id" class="input" placeholder="ID da Conta Business" style="margin-bottom:10px;">
+          <input type="password" id="v20-token" class="input" placeholder="Access Token (EAAB...)" style="margin-bottom:10px;">
+          <button id="v20-search-btn" class="btn" style="width:100%; border:1px solid #fff;">🔍 BUSCAR NA META AGORA</button>
+        `;
+
+        previewBox.style.display = 'none';
+        btnConfirm.disabled = true;
+        btnConfirm.style.opacity = '0.5';
+        modal.style.display = 'flex';
+
+        let validUser = null;
+
+        document.getElementById('v20-search-btn').onclick = async function(ev) {
+          ev.preventDefault();
+          const id = document.getElementById('v20-id').value.trim();
+          const token = document.getElementById('v20-token').value.trim();
+
+          if (!id || !token) {
+            alert('Por favor, preencha o ID e o Token.');
+            return;
+          }
+
+          this.innerText = '⏳ VALIDANDO...';
+          this.classList.add('v20-loading');
+
+          try {
+            console.log('Iniciando fetch v20 para ID:', id);
+            const r = await fetch('/api/verify-account?id=' + encodeURIComponent(id) + '&token=' + encodeURIComponent(token));
+            const data = await r.json();
+
+            if (data.error) {
+              alert('ERRO META: ' + (data.details?.message || data.error));
+              return;
+            }
+
+            validUser = data.username;
+            document.getElementById('modal-preview-name').innerText = '@' + validUser;
+            previewBox.style.display = 'flex';
+            btnConfirm.disabled = false;
+            btnConfirm.style.opacity = '1';
+            this.innerText = '✅ CONTA LOCALIZADA!';
+          } catch (err) {
+            alert('ERRO DE CONEXÃO: ' + err.message);
+          } finally {
+            this.classList.remove('v20-loading');
+            if (!validUser) this.innerText = '🔍 BUSCAR NA META AGORA';
+          }
+        };
+
+        btnConfirm.onclick = async function() {
+          if (!validUser) return;
+          const id = document.getElementById('v20-id').value.trim();
+          const token = document.getElementById('v20-token').value.trim();
+          
+          this.innerText = 'SALVANDO...';
+          try {
+            const res = await fetch('/api/save-account', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ accountId: id, username: validUser, accessToken: token })
+            });
+            if (res.ok) {
+              modal.style.display = 'none';
+              location.reload(); // Recarrega para mostrar a conta na lista
+            }
+          } catch (e) {
+            alert('Erro ao salvar: ' + e.message);
+          }
+        };
+
+        document.getElementById('modal-cancel').onclick = () => { modal.style.display = 'none'; };
+      };
+    })();
+  </script>
 </body>
 </html>
