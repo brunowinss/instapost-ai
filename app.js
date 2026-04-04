@@ -445,12 +445,14 @@ async function publishNow(id) {
 }
 
 function setupUIEvents() {
-  // Use a delegated listener for the fixed Modal v4
+  // Use a delegated listener for the fixed Modal v10
+  console.log('[V10] setupUIEvents inicializado');
   const addBtn = document.getElementById('btn-add-account');
   if (addBtn) {
     addBtn.onclick = async (e) => {
       e.preventDefault();
       e.stopImmediatePropagation();
+      console.log('[V10] Botão Adicionar clicado');
 
       const modal = document.getElementById('custom-modal');
       const container = modal.querySelector('#modal-inputs-container');
@@ -459,13 +461,13 @@ function setupUIEvents() {
       const previewBox = document.getElementById('modal-account-preview');
       const btnConfirm = document.getElementById('modal-confirm');
 
-      title.innerText = 'CONECTAR CONTA BUSINESS';
-      msg.innerText = 'Insira o ID e o Token da Meta para validar.';
+      title.innerText = 'CONECTAR CONTA (V10)';
+      msg.innerText = 'Insira o ID e o Token da Meta.';
       
       container.innerHTML = `
-        <input type="text" id="node-id-v4" class="input" placeholder="ID da Conta Business (Numérico)">
-        <input type="password" id="node-token-v4" class="input" placeholder="User Access Token (EAAB...)">
-        <button id="node-search-v4" class="modal-btn-search" style="margin-top:10px;">🔍 BUSCAR CONTA NA META</button>
+        <input type="text" id="node-id-v10" class="input" placeholder="ID Numérico">
+        <input type="password" id="node-token-v10" class="input" placeholder="Token Meta">
+        <button id="node-search-v10" class="modal-btn-search" style="margin-top:10px;">🔍 TESTAR CONEXÃO V10</button>
       `;
 
       previewBox.style.display = 'none';
@@ -477,24 +479,24 @@ function setupUIEvents() {
 
       let validatedUsername = null;
 
-      // Evento de busca v4
-      const searchBtn = document.getElementById('node-search-v4');
-      searchBtn.onclick = async (ev) => {
+      document.getElementById('node-search-v10').onclick = async (ev) => {
           ev.preventDefault();
-          const id = document.getElementById('node-id-v4').value;
-          const token = document.getElementById('node-token-v4').value;
+          const id = document.getElementById('node-id-v10').value.trim();
+          const token = document.getElementById('node-token-v10').value.trim();
 
-          if(!id || !token) return showToast('Preencha os dados!', 'error');
+          console.log('[V10] Iniciando busca...', { id });
+          if(!id || !token) return showToast('Preencha os campos!', 'error');
 
-          showLoading(true, 'VALIDANDO CONTA...');
+          showLoading(true, 'VALIDANDO NA META (V10)...');
           try {
-              const r = await fetch(`${API_BASE}/verify-account?id=${id}&token=${token}`);
+              const url = `${API_BASE}/verify-account?id=${encodeURIComponent(id)}&token=${encodeURIComponent(token)}`;
+              console.log('[V10] Fetch URL:', url);
+              
+              const r = await fetch(url);
+              console.log('[V10] Resposta recebida:', r.status);
+              
               const data = await r.json();
-
-              if(data.error) {
-                  const errMsg = data.details?.message || data.error;
-                  throw new Error(errMsg);
-              }
+              if(data.error) throw new Error(data.error);
 
               validatedUsername = data.username;
               document.getElementById('modal-preview-name').innerText = `@${validatedUsername}`;
@@ -502,9 +504,10 @@ function setupUIEvents() {
               btnConfirm.disabled = false;
               btnConfirm.style.opacity = '1';
               showToast('CONTA LOCALIZADA!', 'success');
+              console.log('[V10] Sucesso:', validatedUsername);
           } catch(err) {
+              console.error('[V10] Erro na busca:', err);
               showToast(err.message, 'error');
-              console.error('[Verify Error]', err);
           } finally {
               showLoading(false);
           }
@@ -512,8 +515,8 @@ function setupUIEvents() {
 
       btnConfirm.onclick = async () => {
           if(!validatedUsername) return;
-          const id = document.getElementById('node-id-v4').value;
-          const token = document.getElementById('node-token-v4').value;
+          const id = document.getElementById('node-id-v10').value;
+          const token = document.getElementById('node-token-v10').value;
           await saveAccount(id, validatedUsername, token);
           modal.style.display = 'none';
       };
