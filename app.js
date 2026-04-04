@@ -354,28 +354,103 @@ function renderScheduleCards() {
 }
 
 
+function autoFillNextSlot() {
+  const SLOTS = [10, 15, 20];
+  const dateInput = document.getElementById('post-date');
+  const timeInput = document.getElementById('post-time');
+  if (!dateInput || !timeInput) return;
+
+  // Find the latest scheduled post
+  let baseDate = new Date();
+  if (STATE.scheduledPosts.length > 0) {
+    const sorted = [...STATE.scheduledPosts].sort((a, b) => new Date(b.scheduledAt) - new Date(a.scheduledAt));
+    const lastDate = new Date(sorted[0].scheduledAt);
+    if (lastDate > baseDate) baseDate = lastDate;
+  }
+
+  // Find the next available slot after baseDate
+  const minTime = new Date(Date.now() + 30 * 60000); // At least 30 mins from now
+  let nextDate = new Date(baseDate);
+  let found = false;
+
+  for (let attempts = 0; attempts < 30 && !found; attempts++) {
+    for (const hour of SLOTS) {
+      const slot = new Date(nextDate);
+      slot.setHours(hour, 0, 0, 0);
+      if (slot > baseDate && slot > minTime) {
+        nextDate = slot;
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      nextDate.setDate(nextDate.getDate() + 1);
+      nextDate.setHours(0, 0, 0, 0);
+    }
+  }
+
+  // Fill the inputs
+  const yyyy = nextDate.getFullYear();
+  const mm = String(nextDate.getMonth() + 1).padStart(2, '0');
+  const dd = String(nextDate.getDate()).padStart(2, '0');
+  const hh = String(nextDate.getHours()).padStart(2, '0');
+  const min = String(nextDate.getMinutes()).padStart(2, '0');
+
+  dateInput.value = `${yyyy}-${mm}-${dd}`;
+  timeInput.value = `${hh}:${min}`;
+}
+
 function setupForms() {
   // File Upload Handling
   const fileInput = document.getElementById('file-input');
   const dropzone = document.getElementById('dropzone');
   
   dropzone.onclick = () => fileInput.click();
+
+  // Auto-fill date/time with next available slot
+  autoFillNextSlot();
   
   fileInput.onchange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     
-    showLoading(true, 'ENVIANDO MÍDIA...');
+    // Auto-detect media type from file
+    const isVideo = file.type.startsWith('video/');
+    const type = isVideo ? 'REELS' : 'IMAGE';
+    
+    // Auto-switch the type buttons
+    document.querySelectorAll('.btn-media').forEach(b => {
+      b.classList.remove('active');
+      b.classList.add('btn-ghost');
+    });
+    const activeBtn = document.querySelector(`.btn-media[data-type="${type}"]`);
+    if (activeBtn) { activeBtn.classList.add('active'); activeBtn.classList.remove('btn-ghost'); }
+
+    // Show local preview immediately (before upload)
+    const localUrl = URL.createObjectURL(file);
+    const box = document.getElementById('preview-image-box');
+    const previewContainer = document.getElementById('file-preview-container');
+    if (isVideo) {
+      box.innerHTML = `<video src="${localUrl}" autoplay muted loop playsinline style="width:100%;height:100%;object-fit:cover;border-radius:12px;"></video>`;
+      if (previewContainer) previewContainer.style.display = 'none';
+    } else {
+      box.innerHTML = `<img src="${localUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:12px;">`;
+      const preview = document.getElementById('file-preview');
+      if (preview) { preview.src = localUrl; }
+      if (previewContainer) previewContainer.style.display = 'block';
+    }
+
+    // Upload to cloud
+    showLoading(true, isVideo ? 'ENVIANDO VÍDEO...' : 'ENVIANDO IMAGEM...');
     
     try {
-      const type = document.querySelector('.btn-media.active').dataset.type;
       let url;
       
       if (type === 'IMAGE') {
-        if (!STATE.globalConfig.imgbbKey) throw new Error('API Key do ImgBB faltando!');
+        if (!STATE.globalConfig.imgbbKey) throw new Error('API Key do ImgBB faltando! Vá em Configurações.');
         url = await uploadToImgbb(file);
       } else {
-        if (!STATE.globalConfig.cloudinaryPreset) throw new Error('Cloudinary Preset faltando!');
+        if (!STATE.globalConfig.cloudinaryPreset) throw new Error('Cloudinary Preset faltando! Vá em Configurações.');
         url = await uploadToCloudinary(file);
       }
       
