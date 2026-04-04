@@ -136,6 +136,7 @@ async function loadData() {
     }
     
     updateHeaderUI();
+    populateAccountSelector();
     renderActiveSection();
   } catch (err) {
     console.error('Sync Error:', err);
@@ -186,6 +187,18 @@ function updateHeaderUI() {
     authStatus.style.background = 'var(--error)';
     authStatus.style.boxShadow = '0 0 10px var(--error)';
     accountName.innerText = 'Login Pendente';
+  }
+}
+
+function populateAccountSelector() {
+  const sel = document.getElementById('post-account-select');
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = STATE.accounts.map(a => 
+    `<option value="${a.accountId}" ${a.accountId === prev ? 'selected' : ''}>@${a.username}</option>`
+  ).join('');
+  if (!prev && STATE.accounts.length > 0) {
+    STATE.activeAccountId = STATE.accounts[0].accountId;
   }
 }
 
@@ -326,7 +339,7 @@ function setupForms() {
     
     const post = {
       id: `post_${Date.now()}`,
-      accountId: STATE.activeAccountId,
+      accountId: document.getElementById('post-account-select').value || STATE.activeAccountId,
       mediaType: document.querySelector('.btn-media.active').dataset.type,
       imageUrl: STATE.uploadedUrl,
       caption: document.getElementById('post-caption').value,

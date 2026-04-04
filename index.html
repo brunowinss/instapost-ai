@@ -109,7 +109,13 @@
     <section id="section-new-post" class="section">
        <div class="card">
          <form id="post-form">
-           <div class="dropzone" id="dropzone">
+           <div style="margin-bottom:1.2rem;">
+             <label class="label" style="display:block; margin-bottom:0.5rem; font-size:0.75rem; text-transform:uppercase; letter-spacing:1px; color:var(--text-dim);">POSTAR NA CONTA:</label>
+             <select id="post-account-select" class="input" style="width:100%; cursor:pointer;">
+               <option>Carregando contas...</option>
+             </select>
+           </div>
+            <div class="dropzone" id="dropzone">
              <i class="fa-solid fa-cloud-arrow-up"></i>
              <p>Clique para selecionar mídia</p>
              <input type="file" id="file-input" hidden>
@@ -192,7 +198,7 @@
     </div>
   </div>
 
-  <script src="app.js?v=20"></script>
+  <script src="app.js?v=30"></script>
 
   <!-- V20 EMERGENCY SCRIPT (INLINE TO BYPASS CACHE) -->
   <script>
