@@ -58,6 +58,31 @@ app.post('/api/save-account', async (req, res) => {
   }
 });
 
+app.post('/api/save-config', async (req, res) => {
+  const { imgbbKey, cloudinaryName, cloudinaryPreset } = req.body;
+  const db = await getDB();
+  const isPostgres = !!process.env.DATABASE_URL;
+  
+  try {
+    const configs = [
+      { key: 'imgbbKey', value: JSON.stringify(imgbbKey) },
+      { key: 'cloudinaryName', value: JSON.stringify(cloudinaryName) },
+      { key: 'cloudinaryPreset', value: JSON.stringify(cloudinaryPreset) }
+    ];
+
+    for (const config of configs) {
+      if (isPostgres) {
+        await db.run('INSERT INTO global_config ("key", "value") VALUES (?, ?) ON CONFLICT ("key") DO UPDATE SET "value"=EXCLUDED."value"', [config.key, config.value]);
+      } else {
+        await db.run('INSERT OR REPLACE INTO global_config ("key", "value") VALUES (?, ?)', [config.key, config.value]);
+      }
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/save-post', async (req, res) => {
   const post = req.body;
   const db = await getDB();

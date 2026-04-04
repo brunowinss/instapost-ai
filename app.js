@@ -88,7 +88,30 @@ function renderActiveSection() {
   const n = STATE.activeSection;
   if (n === 'dashboard') renderDashboard();
   if (n === 'schedule') renderScheduleGrid();
-  if (n === 'settings') renderSettings();
+  if (n === 'settings') {
+    renderSettings();
+    renderSettingsAccounts();
+  }
+}
+
+function renderSettingsAccounts() {
+  const list = document.getElementById('accounts-list-settings');
+  if (!list) return;
+  
+  if (STATE.accounts.length === 0) {
+    list.innerHTML = '<p style="color:var(--text-dim); font-size:0.85rem;">Nenhuma conta conectada.</p>';
+    return;
+  }
+  
+  list.innerHTML = STATE.accounts.map(acc => `
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:1rem; background:rgba(255,255,255,0.03); border-radius:14px; border:1px solid var(--glass-border);">
+      <div style="display:flex; align-items:center; gap:12px;">
+        <div style="width:32px; height:32px; border-radius:50%; background:linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);"></div>
+        <div style="font-weight:700; font-size:0.9rem;">@${acc.username}</div>
+      </div>
+      <span style="font-size:0.65rem; padding:4px 8px; border-radius:6px; background:rgba(16,185,129,0.1); color:var(--success); border:1px solid currentColor; font-weight:800;">ATIVO</span>
+    </div>
+  `).join('');
 }
 
 function updateHeaderUI() {
@@ -109,31 +132,57 @@ function updateHeaderUI() {
 }
 
 function renderDashboard() {
-  document.getElementById('stat-total').innerText = STATE.history.filter(h => h.status === 'success').length;
-  document.getElementById('stat-scheduled').innerText = STATE.scheduledPosts.length;
+  const successCount = STATE.history.filter(h => h.status === 'success').length;
+  const scheduledCount = STATE.scheduledPosts.length;
   
+  // Weekly Goal Calculation (last 7 days)
+  const now = new Date();
+  const lastWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const weeklyCount = STATE.history.filter(h => h.status === 'success' && new Date(h.publishedAt) >= lastWeek).length;
+  const weeklyGoal = 7;
+  const weeklyPercent = Math.min((weeklyCount / weeklyGoal) * 100, 100);
+
+  document.getElementById('stat-total').innerText = successCount;
+  document.getElementById('stat-scheduled').innerText = scheduledCount;
+  
+  // Update progress bars
+  document.getElementById('progress-total').style.width = `${Math.min(successCount * 5, 100)}%`;
+  document.getElementById('progress-scheduled').style.width = `${Math.min(scheduledCount * 10, 100)}%`;
+
+  // Update Weekly Goal UI
+  const goalCard = document.querySelector('#section-dashboard .card:last-child');
+  if (goalCard) {
+    const goalText = goalCard.querySelector('div[style*="font-size:3rem"]');
+    if (goalText) goalText.innerText = `${weeklyCount}/${weeklyGoal}`;
+    const goalFill = goalCard.querySelector('.progress-fill');
+    if (goalFill) goalFill.style.width = `${weeklyPercent}%`;
+  }
+
   const next = STATE.scheduledPosts[0];
-  document.getElementById('stat-next').innerText = next 
-    ? new Date(next.scheduledAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
-    : 'Sem agendamentos';
+  if (next) {
+    const date = new Date(next.scheduledAt);
+    document.getElementById('stat-next-label').innerText = `Próximo: ${date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+  } else {
+    document.getElementById('stat-next-label').innerText = 'Sem agendamentos';
+  }
     
-  // Render activity list
+  // Render activity list with thumbnails
   const list = document.getElementById('recent-activity-list');
   if (STATE.history.length === 0) {
-    list.innerHTML = '<p style="text-align:center; color:var(--text-dim);">Silêncio total por aqui...</p>';
+    list.innerHTML = '<p style="text-align:center; padding:3rem; color:var(--text-dim);">Silêncio total por aqui...</p>';
     return;
   }
   
   list.innerHTML = STATE.history.slice(0, 5).map(h => `
-    <div style="display:flex; justify-content:space-between; align-items:center; padding:1.2rem; background:rgba(255,255,255,0.03); border-radius:16px; border:1px solid var(--glass-border);">
-      <div style="display:flex; align-items:center; gap:12px;">
-        <i class="fa-solid ${h.status === 'success' ? 'fa-circle-check' : 'fa-circle-xmark'}" style="color: ${h.status === 'success' ? 'var(--success)' : 'var(--error)'}"></i>
-        <div>
-          <div style="font-weight:700; font-size:0.9rem;">${h.caption ? h.caption.substring(0, 40) + '...' : 'Publicação sem legenda'}</div>
-          <div style="font-size:0.75rem; color:var(--text-dim);">${new Date(h.publishedAt).toLocaleString()}</div>
+    <div class="activity-item">
+      <img src="${h.imageUrl || 'https://via.placeholder.com/60'}" class="activity-thumb" onerror="this.src='https://cdn-icons-png.flaticon.com/512/174/174855.png'">
+      <div class="activity-info">
+        <div style="font-weight:700; font-size:0.95rem; margin-bottom:4px;">${h.caption ? h.caption.substring(0, 35) + '...' : 'Publicação sem legenda'}</div>
+        <div style="font-size:0.75rem; color:var(--text-dim); display:flex; align-items:center; gap:6px;">
+          <i class="fa-solid fa-calendar-day"></i> ${new Date(h.publishedAt).toLocaleString()}
         </div>
       </div>
-      <span style="font-size:0.7rem; font-weight:800; text-transform:uppercase; padding:4px 8px; border-radius:6px; background:${h.status === 'success' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)'}; color:${h.status === 'success' ? 'var(--success)' : 'var(--error)'}; border:1px solid currentColor;">${h.status}</span>
+      <span class="activity-status" style="background:${h.status === 'success' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)'}; color:${h.status === 'success' ? 'var(--success)' : 'var(--error)'}; border:1px solid currentColor;">${h.status}</span>
     </div>
   `).join('');
 }
@@ -255,10 +304,22 @@ function setupForms() {
     };
     
     showLoading(true, 'SALVANDO...');
-    // Real usage would update global_config table
-    STATE.globalConfig = config;
-    showToast('CONFIGURAÇÕES SALVAS!', 'success');
-    showLoading(false);
+    try {
+      const res = await fetch(`${API_BASE}/save-config`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config)
+      });
+      
+      if (!res.ok) throw new Error('Falha ao salvar no banco de dados.');
+      
+      STATE.globalConfig = config;
+      showToast('CONFIGURAÇÕES SALVAS!', 'success');
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      showLoading(false);
+    }
   };
 }
 

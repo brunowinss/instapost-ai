@@ -66,29 +66,79 @@
 
     <section id="section-dashboard" class="section active">
       <div class="dashboard-grid">
+        <!-- STAT 1: TOTAL SUCCESS -->
         <div class="card">
-          <h3 class="card-title"><i class="fa-solid fa-paper-plane" style="color:var(--purple-main)"></i> Total Postado</h3>
+          <div class="card-title">
+            <i class="fa-solid fa-paper-plane"></i>
+            <span>ENTREGAS TOTAIS</span>
+          </div>
           <div class="stat-value" id="stat-total">0</div>
-          <p style="font-size:0.85rem; color:var(--text-dim);">Publicações enviadas com sucesso</p>
+          <p style="color:var(--text-dim); font-size:0.85rem; font-weight:600;">Posts publicados com sucesso</p>
+          <div class="progress-bar">
+            <div class="progress-fill" id="progress-total" style="width: 0%"></div>
+          </div>
         </div>
+
+        <!-- STAT 2: SCHEDULED RADAR -->
         <div class="card">
-          <h3 class="card-title"><i class="fa-solid fa-clock" style="color:var(--magenta)"></i> Agendados</h3>
+          <div class="card-title">
+            <i class="fa-solid fa-clock"></i>
+            <span>AGENDADOS</span>
+          </div>
           <div class="stat-value" id="stat-scheduled">0</div>
-          <p style="font-size:0.85rem; color:var(--text-dim);">Aguardando horário de disparo</p>
+          <p style="color:var(--text-dim); font-size:0.85rem; font-weight:600;" id="stat-next-label">Próximo: --:--</p>
+          <div class="progress-bar">
+            <div class="progress-fill" id="progress-scheduled" style="width: 0%; background:var(--neon-blue);"></div>
+          </div>
         </div>
-        <div class="card" style="display:flex; flex-direction:column; justify-content:space-between;">
-          <h3 class="card-title"><i class="fa-solid fa-bolt" style="color:var(--neon-blue)"></i> Próximo Post</h3>
-          <div style="font-size:1.2rem; font-weight:700; margin-top:0.5rem;" id="stat-next">Sem agendamentos</div>
-          <div style="margin-top:1rem; padding:0.5rem 1rem; background:rgba(14,165,233,0.1); border-radius:12px; font-size:0.8rem; color:var(--neon-blue); border:1px solid rgba(14,165,233,0.2); width:fit-content;">
-            Agendador Ativo
+
+        <!-- STAT 3: SCHEDULER STATUS -->
+        <div class="card" style="border-color: rgba(16,185,129,0.2);">
+          <div class="card-title">
+            <i class="fa-solid fa-robot" style="color:var(--success)"></i>
+            <span>STATUS DO ROBÔ</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:15px; margin: 1rem 0;">
+            <div class="status-dot"></div>
+            <span style="font-size:1.5rem; font-weight:800; color:var(--success); letter-spacing:-1px;">ONLINE</span>
+          </div>
+          <p style="color:var(--text-dim); font-size:0.85rem; font-weight:600;">Sincronizado a cada 60s</p>
+          <div style="margin-top:1.5rem; padding:12px; background:rgba(255,255,255,0.03); border-radius:12px; border:1px solid var(--glass-border); font-size:0.75rem; font-family:monospace; color:var(--text-dim);">
+            CRON_ID: scheduler_active_v1
           </div>
         </div>
       </div>
       
-      <div class="card" style="margin-top:2.5rem;">
-        <h3 class="card-title"><i class="fa-solid fa-list-ul"></i> Atividade Recente</h3>
-        <div id="recent-activity-list" style="display:flex; flex-direction:column; gap:12px; padding:1.5rem 0;">
-           <p style="text-align:center; color:var(--text-dim);">Nenhuma atividade encontrada no sistema.</p>
+      <div style="display:grid; grid-template-columns: 1fr 400px; gap:2.5rem; margin-top:2.5rem;">
+        <!-- RECENT ACTIVITY -->
+        <div class="card">
+          <div class="card-title">
+            <i class="fa-solid fa-bolt-lightning"></i>
+            <span>ATIVIDADE DE ELITE</span>
+          </div>
+          <div id="recent-activity-list" style="margin-top:1rem;">
+             <p style="text-align:center; padding:3rem; color:var(--text-dim);">Aguardando primeira atividade...</p>
+          </div>
+        </div>
+
+        <!-- WEEKLY GOAL -->
+        <div class="card">
+          <div class="card-title">
+            <i class="fa-solid fa-chart-line"></i>
+            <span>META SEMANAL</span>
+          </div>
+          <div style="text-align:center; padding:1rem 0;">
+             <div style="font-size:3rem; font-weight:800; color:white;">0/7</div>
+             <p style="color:var(--text-dim); font-size:0.85rem;">Publicações esta semana</p>
+          </div>
+          <div class="progress-bar" style="height:12px;">
+            <div class="progress-fill" style="width: 5%; background:var(--magenta);"></div>
+          </div>
+          <div style="margin-top:2rem;">
+            <button class="btn btn-ghost" style="width:100%; font-size:0.8rem;" onclick="switchSection('new-post')">
+              <i class="fa-solid fa-plus"></i> BATER META AGORA
+            </button>
+          </div>
         </div>
       </div>
     </section>
