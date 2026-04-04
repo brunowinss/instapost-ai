@@ -429,71 +429,72 @@ function autoFillNextSlot() {
   timeInput.value = `${hh}:${min}`;
 }
 
+function calculateNextSlot(lastDate) {
+  const SLOTS = [10, 15, 20];
+  const minTime = new Date(Date.now() + 30 * 60000);
+  let baseDate = lastDate ? new Date(lastDate) : new Date();
+  let nextDate = new Date(baseDate);
+
+  for (let attempts = 0; attempts < 60; attempts++) {
+    for (const hour of SLOTS) {
+      const slot = new Date(nextDate);
+      slot.setHours(hour, 0, 0, 0);
+      if (slot > baseDate && slot > minTime) {
+        return slot;
+      }
+    }
+    nextDate.setDate(nextDate.getDate() + 1);
+    nextDate.setHours(0, 0, 0, 0);
+  }
+  return new Date(Date.now() + 3600000);
+}
+
 function setupForms() {
-  // File Upload Handling
   const fileInput = document.getElementById('file-input');
   const dropzone = document.getElementById('dropzone');
   
+  fileInput.setAttribute('multiple', 'true');
+  fileInput.setAttribute('accept', 'image/*,video/*');
+  
   dropzone.onclick = () => fileInput.click();
-
-  // Auto-fill date/time with next available slot
   autoFillNextSlot();
   
-  fileInput.onchange = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+  STATE.queuedFiles = [];
+  
+  fileInput.onchange = (e) => {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
     
-    // Auto-detect media type from file
-    const isVideo = file.type.startsWith('video/');
+    STATE.queuedFiles = files;
+    
+    const first = files[0];
+    const isVideo = first.type.startsWith('video/');
     const type = isVideo ? 'REELS' : 'IMAGE';
     
-    // Auto-switch the type buttons
-    document.querySelectorAll('.btn-media').forEach(b => {
-      b.classList.remove('active');
-      b.classList.add('btn-ghost');
-    });
+    document.querySelectorAll('.btn-media').forEach(b => { b.classList.remove('active'); b.classList.add('btn-ghost'); });
     const activeBtn = document.querySelector(`.btn-media[data-type="${type}"]`);
     if (activeBtn) { activeBtn.classList.add('active'); activeBtn.classList.remove('btn-ghost'); }
 
-    // Show local preview immediately (before upload)
-    const localUrl = URL.createObjectURL(file);
+    const localUrl = URL.createObjectURL(first);
     const box = document.getElementById('preview-image-box');
-    const previewContainer = document.getElementById('file-preview-container');
     if (isVideo) {
       box.innerHTML = `<video src="${localUrl}" autoplay muted loop playsinline style="width:100%;height:100%;object-fit:cover;border-radius:12px;"></video>`;
-      if (previewContainer) previewContainer.style.display = 'none';
     } else {
       box.innerHTML = `<img src="${localUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:12px;">`;
-      const preview = document.getElementById('file-preview');
-      if (preview) { preview.src = localUrl; }
-      if (previewContainer) previewContainer.style.display = 'block';
     }
-
-    // Upload to cloud
-    showLoading(true, isVideo ? 'ENVIANDO VÍDEO...' : 'ENVIANDO IMAGEM...');
     
-    try {
-      let url;
-      
-      if (type === 'IMAGE') {
-        if (!STATE.globalConfig.imgbbKey) throw new Error('API Key do ImgBB faltando! Vá em Configurações.');
-        url = await uploadToImgbb(file);
-      } else {
-        if (!STATE.globalConfig.cloudinaryPreset) throw new Error('Cloudinary Preset faltando! Vá em Configurações.');
-        url = await uploadToCloudinary(file);
-      }
-      
-      STATE.uploadedUrl = url;
-      updatePreview(url, type);
-      showToast('UPLOAD CONCLUÍDO!', 'success');
-    } catch (err) {
-      showToast(err.message, 'error');
-    } finally {
-      showLoading(false);
+    const submitBtn = document.querySelector('#post-form button[type="submit"]');
+    if (files.length > 1) {
+      submitBtn.innerHTML = `<i class="fa-solid fa-bolt"></i> AGENDAR ${files.length} PUBLICAÇÕES`;
+      const preview = document.getElementById('preview-caption');
+      if (preview) preview.innerHTML = `<strong>${files.length} arquivos:</strong><br>${files.map(f => '• ' + f.name).join('<br>')}`;
+    } else {
+      submitBtn.innerHTML = `<i class="fa-solid fa-calendar-check"></i> AGENDAR PUBLICAÇÃO`;
     }
+    
+    showToast(`${files.length} arquivo(s) selecionado(s)`, 'success');
   };
 
-  // Type Selector
   document.querySelectorAll('.btn-media').forEach(btn => {
     btn.onclick = () => {
       document.querySelectorAll('.btn-media').forEach(b => b.classList.remove('active', 'btn-ghost'));
@@ -502,44 +503,79 @@ function setupForms() {
     };
   });
 
-  // Post Submission
   document.getElementById('post-form').onsubmit = async (e) => {
     e.preventDefault();
-    if (!STATE.uploadedUrl) return showToast('Selecione uma imagem primeiro!', 'warning');
     
-    const date = document.getElementById('post-date').value;
-    const time = document.getElementById('post-time').value;
-    if (!date || !time) return showToast('Defina a data e hora!', 'warning');
+    const files = STATE.queuedFiles || [];
+    if (!files.length) return showToast('Selecione pelo menos um arquivo!', 'warning');
     
-    const post = {
-      id: `post_${Date.now()}`,
-      accountId: document.getElementById('post-account-select').value || STATE.activeAccountId,
-      mediaType: document.querySelector('.btn-media.active').dataset.type,
-      imageUrl: STATE.uploadedUrl,
-      caption: document.getElementById('post-caption').value,
-      scheduledAt: new Date(`${date}T${time}`).toISOString()
-    };
+    const accountId = document.getElementById('post-account-select').value || STATE.activeAccountId;
+    if (!accountId) return showToast('Selecione uma conta!', 'warning');
     
-    showLoading(true, 'AGENDANDO...');
-    try {
-      const res = await fetch(`${API_BASE}/save-post`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(post)
-      });
-      if (!res.ok) throw new Error('Erro ao salvar no servidor.');
+    const caption = document.getElementById('post-caption').value;
+    
+    showLoading(true, `PROCESSANDO 0/${files.length}...`);
+    
+    let successCount = 0;
+    let lastScheduledDate = null;
+    
+    const accountPosts = STATE.scheduledPosts.filter(p => p.accountId === accountId);
+    if (accountPosts.length > 0) {
+      const sorted = [...accountPosts].sort((a, b) => new Date(b.scheduledAt) - new Date(a.scheduledAt));
+      lastScheduledDate = new Date(sorted[0].scheduledAt);
+    }
+    
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const isVideo = file.type.startsWith('video/');
+      const type = isVideo ? 'REELS' : 'IMAGE';
       
-      showToast('AGENDAMENTO REALIZADO!', 'success');
+      const loadingText = document.querySelector('#loading-overlay span');
+      if (loadingText) loadingText.innerText = `ENVIANDO ${i + 1}/${files.length}...`;
+      
+      try {
+        let url;
+        if (type === 'IMAGE') {
+          url = await uploadToImgbb(file);
+        } else {
+          url = await uploadToCloudinary(file);
+        }
+        
+        const nextSlot = calculateNextSlot(lastScheduledDate);
+        lastScheduledDate = nextSlot;
+        
+        const post = {
+          id: `post_${Date.now()}_${i}`,
+          accountId,
+          mediaType: type,
+          imageUrl: url,
+          caption: caption || file.name.replace(/\.[^/.]+$/, ''),
+          scheduledAt: nextSlot.toISOString()
+        };
+        
+        const res = await fetch(`${API_BASE}/save-post`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(post)
+        });
+        
+        if (res.ok) successCount++;
+      } catch (err) {
+        showToast(`Erro: ${file.name} - ${err.message}`, 'error');
+      }
+    }
+    
+    showLoading(false);
+    STATE.queuedFiles = [];
+    fileInput.value = '';
+    
+    if (successCount > 0) {
+      showToast(`${successCount} publicação(ões) agendada(s)!`, 'success');
       switchSection('schedule');
       await loadData();
-    } catch (err) {
-      showToast(err.message, 'error');
-    } finally {
-      showLoading(false);
     }
   };
 
-  // Settings Save
   document.getElementById('settings-form').onsubmit = async (e) => {
     e.preventDefault();
     const config = {
@@ -556,7 +592,7 @@ function setupForms() {
         body: JSON.stringify(config)
       });
       
-      if (!res.ok) throw new Error('Falha ao salvar no banco de dados.');
+      if (!res.ok) throw new Error('Falha ao salvar.');
       
       STATE.globalConfig = config;
       showToast('CONFIGURAÇÕES SALVAS!', 'success');
@@ -567,6 +603,7 @@ function setupForms() {
     }
   };
 }
+
 
 async function uploadToImgbb(file) {
   const fd = new FormData();
