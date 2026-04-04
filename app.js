@@ -18,6 +18,62 @@ const STATE = {
 
 const API_BASE = '/api';
 
+/**
+ * 🎨 Custom Elite Modal Logic (Replaces window.prompt)
+ */
+function showCustomModal({ title, message, inputs }) {
+  return new Promise((resolve) => {
+    const modal = document.getElementById('custom-modal');
+    const titleEl = modal.querySelector('#modal-title span');
+    const msgEl = modal.querySelector('#modal-msg');
+    const container = modal.querySelector('#modal-inputs-container');
+    const btnConfirm = modal.querySelector('#modal-confirm');
+    const btnCancel = modal.querySelector('#modal-cancel');
+
+    titleEl.innerText = title || 'ENTRADA DE DADOS';
+    msgEl.innerText = message || '';
+    container.innerHTML = '';
+
+    inputs.forEach(inp => {
+      const input = document.createElement('input');
+      input.id = `modal-inp-${inp.id}`;
+      input.placeholder = inp.placeholder || '';
+      input.type = inp.type || 'text';
+      input.className = 'input';
+      container.appendChild(input);
+    });
+
+    modal.style.display = 'flex';
+    container.querySelector('input').focus();
+
+    const cleanup = () => {
+      modal.style.display = 'none';
+      btnConfirm.onclick = null;
+      btnCancel.onclick = null;
+      window.onkeydown = null;
+    };
+
+    btnConfirm.onclick = () => {
+      const results = {};
+      inputs.forEach(inp => {
+        results[inp.id] = document.getElementById(`modal-inp-${inp.id}`).value;
+      });
+      cleanup();
+      resolve(results);
+    };
+
+    btnCancel.onclick = () => {
+      cleanup();
+      resolve(null);
+    };
+
+    window.onkeydown = (e) => {
+        if (e.key === 'Escape') btnCancel.onclick();
+        if (e.key === 'Enter') btnConfirm.onclick();
+    };
+  });
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   setupNavigation();
   setupForms();
@@ -388,23 +444,30 @@ async function publishNow(id) {
 
 function setupUIEvents() {
   document.getElementById('btn-add-account').onclick = async () => {
-    const id = prompt('Instagram Business Account ID (veja no Painel Meta):');
-    const token = prompt('User Access Token (Gerar Token na Meta):');
+    const result = await showCustomModal({
+      title: 'CONECTAR NOVA CONTA',
+      message: 'Insira o ID da conta e o Token de Acesso da Meta para sincronizar.',
+      inputs: [
+        { id: 'accountId', placeholder: 'Instagram Business Account ID', type: 'text' },
+        { id: 'token', placeholder: 'User Access Token (Meta)', type: 'password' }
+      ]
+    });
     
-    if (!id || !token) return;
+    if (!result || !result.accountId || !result.token) return;
 
     showLoading(true, 'CONECTANDO COM A META...');
     try {
+      const { accountId, token } = result;
       // Fetch username automatically to avoid manual typing
       const baseUrl = token.startsWith('IGAA') ? 'https://graph.instagram.com/v21.0' : 'https://graph.facebook.com/v21.0';
-      const r = await fetch(`${baseUrl}/${id}?fields=username&access_token=${token}`);
+      const r = await fetch(`${baseUrl}/${accountId}?fields=username&access_token=${token}`);
       const data = await r.json();
       
       if (data.error) throw new Error(`Falha na Meta: ${data.error.message}`);
       if (!data.username) throw new Error('Campo "username" não retornado pela API.');
 
       showToast(`CONTA @${data.username} ENCONTRADA!`, 'info');
-      await saveAccount(id, data.username, token);
+      await saveAccount(accountId, data.username, token);
     } catch (err) {
       showToast(err.message, 'error');
     } finally {
