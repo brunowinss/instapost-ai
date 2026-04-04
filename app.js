@@ -6,6 +6,7 @@ const STATE = {
   activeSection: 'dashboard',
   accounts: [],
   activeAccountId: '',
+  filterAccountId: '', // '' = all accounts
   globalConfig: {
     imgbbKey: '',
     cloudinaryName: '',
@@ -261,11 +262,36 @@ function renderDashboard() {
 // ── Calendar State ──
 let calendarDate = new Date();
 
+function getFilteredPosts() {
+  if (!STATE.filterAccountId) return STATE.scheduledPosts;
+  return STATE.scheduledPosts.filter(p => p.accountId === STATE.filterAccountId);
+}
+
+function renderAccountFilterTabs() {
+  const container = document.getElementById('account-filter-tabs');
+  if (!container) return;
+  
+  let html = `<button class="btn btn-sm ${!STATE.filterAccountId ? '' : 'btn-ghost'}" onclick="setAccountFilter('')" style="border-radius:100px; font-size:0.75rem; padding:0.5rem 1rem;">Todas</button>`;
+  STATE.accounts.forEach(a => {
+    const isActive = STATE.filterAccountId === a.accountId;
+    const count = STATE.scheduledPosts.filter(p => p.accountId === a.accountId).length;
+    html += `<button class="btn btn-sm ${isActive ? '' : 'btn-ghost'}" onclick="setAccountFilter('${a.accountId}')" style="border-radius:100px; font-size:0.75rem; padding:0.5rem 1rem;">@${a.username} <span style='opacity:0.6; margin-left:4px;'>(${count})</span></button>`;
+  });
+  container.innerHTML = html;
+}
+
+function setAccountFilter(accountId) {
+  STATE.filterAccountId = accountId;
+  renderAccountFilterTabs();
+  renderCalendar();
+  renderScheduleCards();
+}
+
 function renderScheduleGrid() {
+  renderAccountFilterTabs();
   renderCalendar();
   renderScheduleCards();
   
-  // Calendar navigation
   const prevBtn = document.getElementById('cal-prev');
   const nextBtn = document.getElementById('cal-next');
   if (prevBtn) prevBtn.onclick = () => { calendarDate.setMonth(calendarDate.getMonth() - 1); renderCalendar(); };
@@ -286,9 +312,10 @@ function renderCalendar() {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const today = new Date();
 
-  // Get dates with scheduled posts
+  // Get dates with scheduled posts (filtered by account)
+  const filteredPosts = getFilteredPosts();
   const postDates = new Set();
-  STATE.scheduledPosts.forEach(p => {
+  filteredPosts.forEach(p => {
     const d = new Date(p.scheduledAt);
     if (d.getMonth() === month && d.getFullYear() === year) {
       postDates.add(d.getDate());
@@ -319,12 +346,14 @@ function renderScheduleCards() {
   const container = document.getElementById('scheduled-posts-container');
   if (!container) return;
   
-  if (STATE.scheduledPosts.length === 0) {
-    container.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:3rem; color:var(--text-dim);"><i class="fa-solid fa-calendar-xmark" style="font-size:2.5rem; margin-bottom:1rem; opacity:0.3; display:block;"></i>Nenhum agendamento pendente.</div>';
+  const posts = getFilteredPosts();
+  
+  if (posts.length === 0) {
+    container.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:3rem; color:var(--text-dim);"><i class="fa-solid fa-calendar-xmark" style="font-size:2.5rem; margin-bottom:1rem; opacity:0.3; display:block;"></i>Nenhum agendamento para esta conta.</div>';
     return;
   }
   
-  container.innerHTML = STATE.scheduledPosts.map(p => {
+  container.innerHTML = posts.map(p => {
     const acc = STATE.accounts.find(a => a.accountId === p.accountId);
     const accName = acc ? `@${acc.username}` : p.accountId;
     const date = new Date(p.scheduledAt);

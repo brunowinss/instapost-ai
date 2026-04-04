@@ -200,6 +200,14 @@
 
     <!-- ═══════════════ CALENDAR ═══════════════ -->
     <section id="section-schedule" class="section">
+      <!-- Account Filter Tabs -->
+      <div class="card" style="padding:1.2rem 2rem; margin-bottom:1.5rem;">
+        <div style="display:flex; align-items:center; gap:10px; overflow-x:auto;">
+          <span style="font-size:0.72rem; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; white-space:nowrap;">FILTRAR CONTA:</span>
+          <div id="account-filter-tabs" style="display:flex; gap:8px;"></div>
+        </div>
+      </div>
+      <!-- Calendar -->
       <div class="card" style="margin-bottom:2rem;">
         <div style="display:flex; justify-content:space-between; align-items:center;">
           <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-calendar-days"></i><span>CALENDÁRIO DE PUBLICAÇÕES</span></div>
@@ -211,6 +219,7 @@
         </div>
         <div id="calendar-grid" style="margin-top:1.5rem;"></div>
       </div>
+      <!-- Posts List -->
       <div class="card">
         <div class="card-title"><i class="fa-solid fa-list-check"></i><span>FILA DE AGENDAMENTOS</span></div>
         <div id="scheduled-posts-container" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:1.5rem; margin-top:1rem;"></div>
