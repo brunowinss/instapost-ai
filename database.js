@@ -71,7 +71,8 @@ async function initDB() {
       "status" TEXT DEFAULT 'pending',
       "mediaId" TEXT,
       "publishedAt" TEXT,
-      "createdAt" TEXT
+      "createdAt" TEXT,
+      "sourceFile" TEXT
     );
   `);
 

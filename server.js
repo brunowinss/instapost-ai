@@ -3,6 +3,7 @@ const cors = require('cors');
 const path = require('path');
 const fetch = require('node-fetch');
 const { getDB, initDB } = require('./database');
+const { runAutoImporter } = require('./auto_importer');
 require('dotenv').config();
 
 const app = express();
@@ -15,6 +16,15 @@ app.use(express.static(__dirname));
 /**
  * 📡 API Endpoints
  */
+
+app.get('/api/import-local', async (req, res) => {
+  try {
+    await runAutoImporter();
+    res.json({ success: true, message: 'Processamento de pasta local concluído.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 app.get('/api/data', async (req, res) => {
   try {
@@ -228,8 +238,15 @@ app.get('/*splat', (req, res) => {
 });
 
 // Initialization
-initDB().then(() => {
-  app.listen(PORT, () => {
+initDB().then(async () => {
+  app.listen(PORT, async () => {
     console.log(`🚀 InstaScheduler Engine online on port ${PORT}`);
+    
+    // Auto-import on startup
+    try {
+      await runAutoImporter();
+    } catch (e) {
+      console.error('Initial auto-import failed:', e.message);
+    }
   });
 });

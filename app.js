@@ -387,11 +387,45 @@ async function publishNow(id) {
 }
 
 function setupUIEvents() {
-  document.getElementById('btn-add-account').onclick = () => {
-    const id = prompt('Instagram Business Account ID:');
-    const user = prompt('Username:');
-    const token = prompt('User Access Token:');
-    if (id && user && token) saveAccount(id, user, token);
+  document.getElementById('btn-add-account').onclick = async () => {
+    const id = prompt('Instagram Business Account ID (veja no Painel Meta):');
+    const token = prompt('User Access Token (Gerar Token na Meta):');
+    
+    if (!id || !token) return;
+
+    showLoading(true, 'CONECTANDO COM A META...');
+    try {
+      // Fetch username automatically to avoid manual typing
+      const baseUrl = token.startsWith('IGAA') ? 'https://graph.instagram.com/v21.0' : 'https://graph.facebook.com/v21.0';
+      const r = await fetch(`${baseUrl}/${id}?fields=username&access_token=${token}`);
+      const data = await r.json();
+      
+      if (data.error) throw new Error(`Falha na Meta: ${data.error.message}`);
+      if (!data.username) throw new Error('Campo "username" não retornado pela API.');
+
+      showToast(`CONTA @${data.username} ENCONTRADA!`, 'info');
+      await saveAccount(id, data.username, token);
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      showLoading(false);
+    }
+  };
+
+  document.getElementById('btn-sync-local').onclick = async () => {
+    showLoading(true, 'SINCRONIZANDO VÍDEOS...');
+    try {
+      const res = await fetch(`${API_BASE}/import-local`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro na sincronização.');
+      
+      showToast('PASTA SINCRONIZADA!', 'success');
+      await loadData();
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      showLoading(false);
+    }
   };
   
   document.getElementById('post-caption').oninput = (e) => {
