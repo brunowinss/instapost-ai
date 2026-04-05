@@ -14,7 +14,8 @@ const STATE = {
   },
   scheduledPosts: [],
   history: [],
-  uploadedUrl: ''
+  uploadedUrl: '',
+  scheduleMode: 'auto'
 };
 
 const API_BASE = '/api';
@@ -145,6 +146,18 @@ function initApp() {
 function logout() {
   localStorage.removeItem('insta_auth_token');
   location.reload();
+}
+
+function setScheduleMode(mode) {
+  STATE.scheduleMode = mode;
+  document.querySelectorAll('.schedule-mode').forEach(b => {
+    b.classList.remove('active');
+    b.classList.add('btn-ghost');
+  });
+  document.querySelector(`.schedule-mode[data-mode="${mode}"]`).classList.add('active');
+  document.querySelector(`.schedule-mode[data-mode="${mode}"]`).classList.remove('btn-ghost');
+  document.getElementById('schedule-auto').style.display = mode === 'auto' ? 'block' : 'none';
+  document.getElementById('schedule-manual').style.display = mode === 'manual' ? 'block' : 'none';
 }
 
 function setupNavigation() {
@@ -588,23 +601,35 @@ function setupForms() {
     
     let successCount = 0;
     let lastScheduledDate = null;
+    let manualDateTime = null;
     
-    // Use the start date from the form as the base
-    const startDateInput = document.getElementById('post-date').value;
-    if (startDateInput) {
-      const startDate = new Date(startDateInput + 'T00:00:00');
-      // Set to just before first slot so calculateNextSlot picks 10:00
-      startDate.setHours(0, 0, 0, 0);
-      lastScheduledDate = startDate;
-    }
-    
-    // If there are already posts scheduled AFTER the start date for this account, continue from the latest
-    const accountPosts = STATE.scheduledPosts.filter(p => p.accountId === accountId);
-    if (accountPosts.length > 0) {
-      const sorted = [...accountPosts].sort((a, b) => new Date(b.scheduledAt) - new Date(a.scheduledAt));
-      const latestExisting = new Date(sorted[0].scheduledAt);
-      if (!lastScheduledDate || latestExisting > lastScheduledDate) {
-        lastScheduledDate = latestExisting;
+    if (STATE.scheduleMode === 'manual') {
+      // Manual mode: use specific date + time
+      const dateVal = document.getElementById('post-date-manual').value;
+      const timeVal = document.getElementById('post-time-manual').value;
+      if (!dateVal || !timeVal) return showToast('Selecione data e horário!', 'warning') || showLoading(false);
+      manualDateTime = new Date(`${dateVal}T${timeVal}:00`);
+      if (manualDateTime <= new Date()) {
+        // Allow past time but warn
+        showToast('Atenção: horário já passou, post será publicado em breve.', 'warning');
+      }
+    } else {
+      // Auto mode: use start date + auto slots
+      const startDateInput = document.getElementById('post-date').value;
+      if (startDateInput) {
+        const startDate = new Date(startDateInput + 'T00:00:00');
+        startDate.setHours(0, 0, 0, 0);
+        lastScheduledDate = startDate;
+      }
+      
+      // Continue from latest existing post for this account
+      const accountPosts = STATE.scheduledPosts.filter(p => p.accountId === accountId);
+      if (accountPosts.length > 0) {
+        const sorted = [...accountPosts].sort((a, b) => new Date(b.scheduledAt) - new Date(a.scheduledAt));
+        const latestExisting = new Date(sorted[0].scheduledAt);
+        if (!lastScheduledDate || latestExisting > lastScheduledDate) {
+          lastScheduledDate = latestExisting;
+        }
       }
     }
     
@@ -624,8 +649,16 @@ function setupForms() {
           url = await uploadToCloudinary(file);
         }
         
-        const nextSlot = calculateNextSlot(lastScheduledDate);
-        lastScheduledDate = nextSlot;
+        let scheduledAt;
+        if (STATE.scheduleMode === 'manual') {
+          // Manual: all files at the same date+time (or offset by 1 min each)
+          scheduledAt = new Date(manualDateTime.getTime() + (i * 60000));
+        } else {
+          // Auto: distribute across slots
+          const nextSlot = calculateNextSlot(lastScheduledDate);
+          lastScheduledDate = nextSlot;
+          scheduledAt = nextSlot;
+        }
         
         const post = {
           id: `post_${Date.now()}_${i}`,
@@ -633,7 +666,7 @@ function setupForms() {
           mediaType: type,
           imageUrl: url,
           caption: caption || '',
-          scheduledAt: nextSlot.toISOString()
+          scheduledAt: scheduledAt.toISOString()
         };
         
         const res = await fetch(`${API_BASE}/save-post`, {
