@@ -44,6 +44,30 @@ app.get('/api/verify-account', async (req, res) => {
   }
 });
 
+// Login
+app.post('/api/login', async (req, res) => {
+  const { username, password } = req.body;
+  const db = await getDB();
+  
+  try {
+    const userRow = await db.get('SELECT value FROM global_config WHERE key = \'loginUser\'');
+    const passRow = await db.get('SELECT value FROM global_config WHERE key = \'loginPass\'');
+    
+    // Default credentials if none set
+    const savedUser = userRow ? JSON.parse(userRow.value) : (process.env.LOGIN_USER || 'admin');
+    const savedPass = passRow ? JSON.parse(passRow.value) : (process.env.LOGIN_PASS || 'admin123');
+    
+    if (username === savedUser && password === savedPass) {
+      const token = Buffer.from(`${username}:${Date.now()}`).toString('base64');
+      res.json({ success: true, token });
+    } else {
+      res.status(401).json({ error: 'Usuário ou senha incorretos.' });
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/data', async (req, res) => {
   try {
     const db = await getDB();
@@ -92,7 +116,7 @@ app.post('/api/save-config', async (req, res) => {
   
   try {
     // Accept any config keys that are sent
-    const allowedKeys = ['imgbbKey', 'cloudinaryName', 'cloudinaryPreset', 'telegramToken', 'telegramChatId'];
+    const allowedKeys = ['imgbbKey', 'cloudinaryName', 'cloudinaryPreset', 'telegramToken', 'telegramChatId', 'loginUser', 'loginPass'];
     const configs = [];
     for (const key of allowedKeys) {
       if (req.body[key] !== undefined) {

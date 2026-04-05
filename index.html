@@ -27,6 +27,39 @@
     </div>
   </div>
 
+  <!-- Login Screen -->
+  <div id="login-screen" style="position:fixed; inset:0; z-index:10000; display:flex; align-items:center; justify-content:center; background:var(--bg-dark);">
+    <div class="bg-orbs">
+      <div class="orb orb-1"></div>
+      <div class="orb orb-2"></div>
+      <div class="orb orb-3"></div>
+    </div>
+    <div class="card" style="max-width:420px; width:90%; padding:3rem; text-align:center; position:relative; z-index:2;">
+      <div style="margin-bottom:2rem;">
+        <div style="width:70px; height:70px; border-radius:20px; background:linear-gradient(135deg, var(--purple-main), var(--magenta)); display:flex; align-items:center; justify-content:center; margin:0 auto 1.2rem; font-size:1.8rem; box-shadow:0 8px 32px rgba(168,85,247,0.4);">
+          <i class="fa-solid fa-calendar-check"></i>
+        </div>
+        <h1 style="font-size:1.5rem; font-weight:900; margin:0; background:linear-gradient(135deg, var(--purple-main), var(--magenta)); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;">InstaScheduler AI</h1>
+        <p style="font-size:0.8rem; color:var(--text-dim); margin-top:0.4rem;">Gestão Elite de Conteúdo</p>
+      </div>
+      <form id="login-form" style="text-align:left;">
+        <div class="form-group">
+          <label class="label"><i class="fa-solid fa-user"></i> USUÁRIO</label>
+          <input type="text" class="input" id="login-user" placeholder="Digite seu usuário" autocomplete="username" required>
+        </div>
+        <div class="form-group">
+          <label class="label"><i class="fa-solid fa-lock"></i> SENHA</label>
+          <input type="password" class="input" id="login-pass" placeholder="Digite sua senha" autocomplete="current-password" required>
+        </div>
+        <p id="login-error" style="color:var(--error); font-size:0.8rem; font-weight:700; display:none; margin-bottom:1rem; text-align:center;"></p>
+        <button type="submit" class="btn" style="width:100%; padding:1.2rem; font-size:1rem;">
+          <i class="fa-solid fa-right-to-bracket"></i> ENTRAR
+        </button>
+      </form>
+      <p style="font-size:0.65rem; color:var(--text-dim); margin-top:1.5rem;">Acesso protegido • Sessão segura</p>
+    </div>
+  </div>
+
   <!-- Sidebar -->
   <aside class="sidebar">
     <a href="/" class="logo-container">
@@ -58,6 +91,9 @@
         <span style="font-size:0.8rem; font-weight:700; color:var(--success);">CRON ATIVO</span>
       </div>
     </div>
+    <button onclick="logout()" style="margin-top:12px; width:100%; padding:0.7rem; font-size:0.75rem; font-weight:700; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.2); border-radius:12px; color:#ef4444; cursor:pointer; transition:all 0.3s; letter-spacing:1px;">
+      <i class="fa-solid fa-right-from-bracket"></i> SAIR
+    </button>
   </aside>
 
   <!-- Main -->

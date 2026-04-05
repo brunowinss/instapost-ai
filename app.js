@@ -78,14 +78,74 @@ function showCustomModal({ title, message, inputs }) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // Check if already logged in
+  const token = localStorage.getItem('insta_auth_token');
+  const loginScreen = document.getElementById('login-screen');
+  
+  if (token) {
+    // Already logged in - hide login, show dashboard
+    loginScreen.style.display = 'none';
+    initApp();
+  } else {
+    // Show login screen
+    loginScreen.style.display = 'flex';
+  }
+  
+  // Login form handler
+  document.getElementById('login-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const user = document.getElementById('login-user').value;
+    const pass = document.getElementById('login-pass').value;
+    const errorEl = document.getElementById('login-error');
+    
+    const btn = e.target.querySelector('button[type="submit"]');
+    btn.innerHTML = '<div class="spinner" style="width:20px;height:20px;border-width:2px;margin:0 auto;"></div>';
+    btn.disabled = true;
+    
+    try {
+      const res = await fetch(`${API_BASE}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: user, password: pass })
+      });
+      
+      const data = await res.json();
+      
+      if (res.ok && data.token) {
+        localStorage.setItem('insta_auth_token', data.token);
+        loginScreen.style.opacity = '0';
+        loginScreen.style.transition = 'opacity 0.5s ease';
+        setTimeout(() => {
+          loginScreen.style.display = 'none';
+          initApp();
+        }, 500);
+      } else {
+        errorEl.innerText = data.error || 'Credenciais inválidas.';
+        errorEl.style.display = 'block';
+        btn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> ENTRAR';
+        btn.disabled = false;
+      }
+    } catch (err) {
+      errorEl.innerText = 'Erro de conexão com o servidor.';
+      errorEl.style.display = 'block';
+      btn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> ENTRAR';
+      btn.disabled = false;
+    }
+  };
+});
+
+function initApp() {
   setupNavigation();
   setupForms();
   setupUIEvents();
-  await loadData();
-  
-  // Real-time synchronization
+  loadData();
   setInterval(loadData, 30000);
-});
+}
+
+function logout() {
+  localStorage.removeItem('insta_auth_token');
+  location.reload();
+}
 
 function setupNavigation() {
   document.querySelectorAll('.nav-item').forEach(item => {
