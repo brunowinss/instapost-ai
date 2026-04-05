@@ -87,16 +87,18 @@ app.post('/api/save-account', async (req, res) => {
 });
 
 app.post('/api/save-config', async (req, res) => {
-  const { imgbbKey, cloudinaryName, cloudinaryPreset } = req.body;
   const db = await getDB();
   const isPostgres = !!process.env.DATABASE_URL;
   
   try {
-    const configs = [
-      { key: 'imgbbKey', value: JSON.stringify(imgbbKey) },
-      { key: 'cloudinaryName', value: JSON.stringify(cloudinaryName) },
-      { key: 'cloudinaryPreset', value: JSON.stringify(cloudinaryPreset) }
-    ];
+    // Accept any config keys that are sent
+    const allowedKeys = ['imgbbKey', 'cloudinaryName', 'cloudinaryPreset', 'telegramToken', 'telegramChatId'];
+    const configs = [];
+    for (const key of allowedKeys) {
+      if (req.body[key] !== undefined) {
+        configs.push({ key, value: JSON.stringify(req.body[key]) });
+      }
+    }
 
     for (const config of configs) {
       if (isPostgres) {
@@ -220,6 +222,38 @@ async function publishToInstagram(post) {
  * ⏰ Scheduler Runner
  */
 
+async function sendTelegramNotification(post, status, errorMsg) {
+  try {
+    const db = await getDB();
+    const tokenRow = await db.get('SELECT value FROM config WHERE key = \'telegramToken\'');
+    const chatRow = await db.get('SELECT value FROM config WHERE key = \'telegramChatId\'');
+    if (!tokenRow || !chatRow) return;
+    
+    const token = JSON.parse(tokenRow.value);
+    const chatId = JSON.parse(chatRow.value);
+    if (!token || !chatId) return;
+
+    const acc = await db.get('SELECT username FROM accounts WHERE "accountId" = ?', [post.accountId]);
+    const accName = acc ? `@${acc.username}` : post.accountId;
+    const time = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+    
+    let text;
+    if (status === 'success') {
+      text = `✅ *Post Publicado!*\n\n📱 Conta: ${accName}\n📝 Legenda: ${post.caption || '(sem legenda)'}\n🕐 Horário: ${time}\n\n_InstaScheduler AI_`;
+    } else {
+      text = `❌ *Erro ao Publicar*\n\n📱 Conta: ${accName}\n📝 Legenda: ${post.caption || '(sem legenda)'}\n🕐 Horário: ${time}\n⚠️ Erro: ${errorMsg}\n\n_InstaScheduler AI_`;
+    }
+
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'Markdown' })
+    });
+  } catch (e) {
+    console.error('Telegram notification error:', e.message);
+  }
+}
+
 async function cron() {
   try {
     const now = new Date();
@@ -232,9 +266,11 @@ async function cron() {
           const mediaId = await publishToInstagram(post);
           await db.run('UPDATE posts SET "status" = \'success\', "mediaId" = ?, "publishedAt" = ? WHERE "id" = ?', [mediaId, new Date().toISOString(), post.id]);
           console.log(`✅ Posted: ${post.id}`);
+          await sendTelegramNotification(post, 'success');
         } catch (e) {
           console.error(`❌ Fail: ${post.id}`, e.message);
           await db.run('UPDATE posts SET "status" = \'error\', "publishedAt" = ? WHERE "id" = ?', [new Date().toISOString(), post.id]);
+          await sendTelegramNotification(post, 'error', e.message);
         }
       }
     }
