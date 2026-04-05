@@ -225,8 +225,8 @@ async function publishToInstagram(post) {
 async function sendTelegramNotification(post, status, errorMsg) {
   try {
     const db = await getDB();
-    const tokenRow = await db.get('SELECT value FROM config WHERE key = \'telegramToken\'');
-    const chatRow = await db.get('SELECT value FROM config WHERE key = \'telegramChatId\'');
+    const tokenRow = await db.get('SELECT value FROM global_config WHERE key = \'telegramToken\'');
+    const chatRow = await db.get('SELECT value FROM global_config WHERE key = \'telegramChatId\'');
     if (!tokenRow || !chatRow) return;
     
     const token = JSON.parse(tokenRow.value);
