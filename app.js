@@ -562,7 +562,7 @@ function setupForms() {
           accountId,
           mediaType: type,
           imageUrl: url,
-          caption: caption || file.name.replace(/\.[^/.]+$/, ''),
+          caption: caption || '',
           scheduledAt: nextSlot.toISOString()
         };
         
