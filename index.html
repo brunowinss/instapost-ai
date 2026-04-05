@@ -163,16 +163,16 @@
               <label class="label"><i class="fa-solid fa-pen-fancy"></i> LEGENDA</label>
               <textarea class="textarea" rows="4" id="post-caption" placeholder="Escreva sua legenda aqui... Use #hashtags para mais alcance!"></textarea>
             </div>
-            <!-- Date & Time -->
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.2rem;" class="form-group">
-              <div>
-                <label class="label"><i class="fa-solid fa-calendar"></i> DATA</label>
-                <input type="date" class="input" id="post-date">
-              </div>
-              <div>
-                <label class="label"><i class="fa-solid fa-clock"></i> HORÁRIO</label>
-                <input type="time" class="input" id="post-time">
-              </div>
+            <!-- Start Date -->
+            <div class="form-group">
+              <label class="label"><i class="fa-solid fa-calendar-star"></i> DATA DE INÍCIO</label>
+              <input type="date" class="input" id="post-date">
+              <p style="font-size:0.75rem; color:var(--text-dim); margin-top:0.5rem; line-height:1.5;">
+                <i class="fa-solid fa-info-circle" style="color:var(--purple-main);"></i>
+                Os horários são preenchidos automaticamente: <strong>10h</strong>, <strong>15h</strong> e <strong>20h</strong>. 
+                Se enviar 5 vídeos a partir de hoje, eles serão distribuídos nos próximos dias.
+              </p>
+              <input type="hidden" id="post-time" value="10:00">
             </div>
             <button type="submit" class="btn" style="width:100%; padding:1.3rem; font-size:1rem;">
               <i class="fa-solid fa-calendar-check"></i> AGENDAR PUBLICAÇÃO

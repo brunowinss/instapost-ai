@@ -519,10 +519,23 @@ function setupForms() {
     let successCount = 0;
     let lastScheduledDate = null;
     
+    // Use the start date from the form as the base
+    const startDateInput = document.getElementById('post-date').value;
+    if (startDateInput) {
+      const startDate = new Date(startDateInput + 'T00:00:00');
+      // Set to just before first slot so calculateNextSlot picks 10:00
+      startDate.setHours(0, 0, 0, 0);
+      lastScheduledDate = startDate;
+    }
+    
+    // If there are already posts scheduled AFTER the start date for this account, continue from the latest
     const accountPosts = STATE.scheduledPosts.filter(p => p.accountId === accountId);
     if (accountPosts.length > 0) {
       const sorted = [...accountPosts].sort((a, b) => new Date(b.scheduledAt) - new Date(a.scheduledAt));
-      lastScheduledDate = new Date(sorted[0].scheduledAt);
+      const latestExisting = new Date(sorted[0].scheduledAt);
+      if (!lastScheduledDate || latestExisting > lastScheduledDate) {
+        lastScheduledDate = latestExisting;
+      }
     }
     
     for (let i = 0; i < files.length; i++) {
