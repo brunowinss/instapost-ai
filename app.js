@@ -251,7 +251,9 @@ function renderSettingsAccounts() {
   list.innerHTML = STATE.accounts.map(acc => `
     <div style="display:flex; align-items:center; justify-content:space-between; padding:1rem; background:rgba(255,255,255,0.03); border-radius:14px; border:1px solid var(--glass-border); margin-bottom:0.8rem;">
       <div style="display:flex; align-items:center; gap:12px;">
-        <div style="width:36px; height:36px; border-radius:50%; background:linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888); display:flex; align-items:center; justify-content:center; color:white;"><i class="fa-brands fa-instagram"></i></div>
+        <div style="width:36px; height:36px; border-radius:50%; background:linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888); display:flex; align-items:center; justify-content:center; color:white; overflow:hidden;">
+          ${acc.profilePictureUrl ? `<img src="${acc.profilePictureUrl}" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fa-brands fa-instagram"></i>'}
+        </div>
         <div>
           <div style="font-weight:700; font-size:0.95rem;">@${acc.username}</div>
           <div style="font-size:0.7rem; color:var(--text-dim);">ID: ${acc.accountId}</div>
@@ -270,6 +272,8 @@ function renderSettingsAccounts() {
 function updateHeaderUI() {
   const authStatus = document.getElementById('auth-status');
   const accountName = document.getElementById('active-account-name');
+  const previewName = document.getElementById('preview-username');
+  const previewAvatar = document.getElementById('preview-user-avatar');
   
   const activeAcc = STATE.accounts.find(a => a.accountId === STATE.activeAccountId);
   
@@ -277,14 +281,26 @@ function updateHeaderUI() {
     authStatus.style.background = 'var(--success)';
     authStatus.style.boxShadow = '0 0 10px var(--success)';
     accountName.innerText = `@${activeAcc.username}`;
-    const previewName = document.getElementById('preview-username');
+    
     if (previewName) previewName.innerText = `@${activeAcc.username}`;
+    if (previewAvatar) {
+      if (activeAcc.profilePictureUrl) {
+        previewAvatar.innerHTML = `<img src="${activeAcc.profilePictureUrl}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+        previewAvatar.style.background = 'none';
+      } else {
+        previewAvatar.innerHTML = '';
+        previewAvatar.style.background = 'linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)';
+      }
+    }
   } else {
     authStatus.style.background = 'var(--error)';
     authStatus.style.boxShadow = '0 0 10px var(--error)';
     accountName.innerText = 'Login Pendente';
-    const previewName = document.getElementById('preview-username');
     if (previewName) previewName.innerText = '@seu_perfil';
+    if (previewAvatar) {
+        previewAvatar.innerHTML = '';
+        previewAvatar.style.background = 'linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)';
+    }
   }
 }
 
@@ -295,8 +311,15 @@ function populateAccountSelector() {
   sel.innerHTML = STATE.accounts.map(a => 
     `<option value="${a.accountId}" ${a.accountId === prev ? 'selected' : ''}>@${a.username}</option>`
   ).join('');
+  
+  sel.onchange = () => {
+    STATE.activeAccountId = sel.value;
+    updateHeaderUI();
+  };
+
   if (!prev && STATE.accounts.length > 0) {
     STATE.activeAccountId = STATE.accounts[0].accountId;
+    updateHeaderUI();
   }
 }
 
@@ -1074,13 +1097,13 @@ function setupUIEvents() {
   }
 }
 
-async function saveAccount(accountId, username, accessToken) {
+async function saveAccount(accountId, username, accessToken, profilePictureUrl) {
   showLoading(true, 'CONECTANDO...');
   try {
     const res = await fetch(`${API_BASE}/save-account`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ accountId, username, accessToken })
+      body: JSON.stringify({ accountId, username, accessToken, profilePictureUrl })
     });
     if (!res.ok) throw new Error('Falha ao salvar conta.');
     showToast('CONTA CONECTADA!', 'success');

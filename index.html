@@ -246,7 +246,7 @@
           </div>
           <div id="instagram-preview" style="background:#0a0a0a; min-height:480px; padding:1.2rem;">
             <div style="display:flex; align-items:center; gap:10px; margin-bottom:1rem;">
-              <div style="width:32px; height:32px; border-radius:50%; background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);"></div>
+              <div id="preview-user-avatar" style="width:32px; height:32px; border-radius:50%; background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888); background-size:cover; background-position:center;"></div>
               <div style="font-size:0.85rem; font-weight:800;" id="preview-username">@seu_perfil</div>
             </div>
             <div id="preview-image-box" style="width:100%; aspect-ratio:1/1; background:rgba(255,255,255,0.03); border-radius:12px; display:flex; align-items:center; justify-content:center; color:var(--text-dim); font-size:0.9rem;">
@@ -448,8 +448,16 @@
             if (data.error) { alert('Erro: ' + (data.details?.message || data.error)); return; }
 
             validUser = data.username;
+            validPic = data.profilePictureUrl;
+            
             document.getElementById('modal-preview-name').innerText = '@' + validUser;
             previewBox.style.display = 'flex';
+            if (validPic) {
+              const avatar = previewBox.querySelector('#preview-user-avatar');
+              avatar.innerHTML = `<img src="${validPic}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+              avatar.style.background = 'none';
+            }
+            
             btnConfirm.disabled = false;
             btnConfirm.style.opacity = '1';
             this.innerText = '✅ Conta Localizada!';

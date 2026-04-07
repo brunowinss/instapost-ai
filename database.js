@@ -59,6 +59,7 @@ async function initDB() {
       "accountId" TEXT PRIMARY KEY,
       "username" TEXT,
       "accessToken" TEXT,
+      "profilePictureUrl" TEXT,
       "createdAt" TEXT
     );
     CREATE TABLE IF NOT EXISTS posts (

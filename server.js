@@ -25,7 +25,7 @@ app.get('/api/verify-account', async (req, res) => {
 
   try {
     const baseUrl = token.startsWith('IGAA') ? 'https://graph.instagram.com/v21.0' : 'https://graph.facebook.com/v21.0';
-    const r = await fetch(`${baseUrl}/${id}?fields=username&access_token=${token}`);
+    const r = await fetch(`${baseUrl}/${id}?fields=username,profile_picture_url&access_token=${token}`);
     const data = await r.json();
 
     if (data.error) {
@@ -37,7 +37,7 @@ app.get('/api/verify-account', async (req, res) => {
     }
 
     console.log(`[VERIFY SUCCESS] Conta @${data.username} validada.`);
-    res.json({ username: data.username });
+    res.json({ username: data.username, profilePictureUrl: data.profile_picture_url });
   } catch (err) {
     console.error('[SERVER ERROR]', err);
     res.status(500).json({ error: `Erro interno no servidor: ${err.message}` });
@@ -93,16 +93,16 @@ app.get('/api/data', async (req, res) => {
 });
 
 app.post('/api/save-account', async (req, res) => {
-  const { accountId, username, accessToken } = req.body;
+  const { accountId, username, accessToken, profilePictureUrl } = req.body;
   const db = await getDB();
   const isPostgres = !!process.env.DATABASE_URL;
   
   try {
-    const params = [accountId, username, accessToken, new Date().toISOString()];
+    const params = [accountId, username, accessToken, profilePictureUrl, new Date().toISOString()];
     if (isPostgres) {
-      await db.run('INSERT INTO accounts ("accountId", "username", "accessToken", "createdAt") VALUES (?, ?, ?, ?) ON CONFLICT ("accountId") DO UPDATE SET "username"=EXCLUDED."username", "accessToken"=EXCLUDED."accessToken"', params);
+      await db.run('INSERT INTO accounts ("accountId", "username", "accessToken", "profilePictureUrl", "createdAt") VALUES (?, ?, ?, ?, ?) ON CONFLICT ("accountId") DO UPDATE SET "username"=EXCLUDED."username", "accessToken"=EXCLUDED."accessToken", "profilePictureUrl"=EXCLUDED."profilePictureUrl"', params);
     } else {
-      await db.run('INSERT OR REPLACE INTO accounts ("accountId", "username", "accessToken", "createdAt") VALUES (?, ?, ?, ?)', params);
+      await db.run('INSERT OR REPLACE INTO accounts ("accountId", "username", "accessToken", "profilePictureUrl", "createdAt") VALUES (?, ?, ?, ?, ?)', params);
     }
     res.json({ success: true });
   } catch (err) {
