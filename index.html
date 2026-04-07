@@ -266,8 +266,14 @@
           <div id="account-filter-tabs" style="display:flex; gap:8px;"></div>
         </div>
         <div style="display:flex; gap:10px;">
+          <button id="btn-toggle-selection" class="btn btn-sm btn-ghost" onclick="toggleSelectionMode()" style="font-size:0.72rem; color:var(--text-main); border:1px solid var(--glass-border);">
+            <i class="fa-solid fa-check-double"></i> SELECIONAR
+          </button>
           <button class="btn btn-sm btn-ghost" onclick="transferAllPosts()" style="font-size:0.72rem; color:var(--purple-main); border:1px solid rgba(139,92,246,0.3);">
-            <i class="fa-solid fa-shuffle"></i> TRANSFERIR TUDO
+            <i class="fa-solid fa-shuffle"></i> TRANSFERIR
+          </button>
+          <button class="btn btn-sm btn-ghost" onclick="clearAllPending()" style="font-size:0.72rem; color:var(--error); border:1px solid rgba(239,68,68,0.2);">
+            <i class="fa-solid fa-eraser"></i> LIMPAR TUDO
           </button>
         </div>
       </div>
@@ -375,7 +381,21 @@
       </div>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-top:1.5rem;">
         <button class="btn btn-ghost" id="modal-cancel">CANCELAR</button>
-        <button class="btn" id="modal-confirm" disabled style="opacity:0.5;">CONECTAR</button>
+                <button class="btn" id="modal-confirm" disabled style="opacity:0.5;">CONECTAR</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ FLOATING SELECTION BAR ═══════════════ -->
+  <div id="selection-bar" class="selection-bar">
+    <div class="selection-bar-content">
+      <div id="selection-count" class="selection-count">0 selecionados</div>
+      <div style="display:flex; gap:12px;">
+        <button class="btn btn-sm btn-ghost" onclick="selectAllPosts()">SELECIONAR TUDO</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteSelectedPosts()">
+          <i class="fa-solid fa-trash-can"></i> EXCLUIR SELECIONADOS
+        </button>
+        <button class="btn btn-sm btn-ghost" onclick="toggleSelectionMode()" style="background:rgba(255,255,255,0.1);">FECHAR</button>
       </div>
     </div>
   </div>

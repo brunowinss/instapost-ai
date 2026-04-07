@@ -6,7 +6,9 @@ const STATE = {
   activeSection: 'dashboard',
   accounts: [],
   activeAccountId: '',
-  filterAccountId: '', // '' = all accounts
+  filterAccountId: 'all',
+  selectionMode: false,
+  selectedPostIds: [],
   globalConfig: {
     imgbbKey: '',
     cloudinaryName: '',
@@ -444,6 +446,18 @@ function renderScheduleCards() {
     return;
   }
   
+  const selBar = document.getElementById('selection-bar');
+  if (STATE.selectionMode) {
+    selBar.classList.add('active');
+    document.getElementById('selection-count').innerText = `${STATE.selectedPostIds.length} selecionados`;
+    document.getElementById('btn-toggle-selection').style.background = 'var(--purple-main)';
+    document.getElementById('btn-toggle-selection').style.borderColor = 'var(--purple-main)';
+  } else {
+    selBar.classList.remove('active');
+    document.getElementById('btn-toggle-selection').style.background = '';
+    document.getElementById('btn-toggle-selection').style.borderColor = '';
+  }
+
   container.innerHTML = posts.map(p => {
     const acc = STATE.accounts.find(a => a.accountId === p.accountId);
     const accName = acc ? `@${acc.username}` : p.accountId;
@@ -451,9 +465,15 @@ function renderScheduleCards() {
     const dateStr = date.toLocaleDateString('pt-BR', { day:'2-digit', month:'short' });
     const timeStr = date.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
     const thumbUrl = getThumbnailUrl(p.imageUrl);
+    const isSelected = STATE.selectedPostIds.includes(p.id);
     
     return `
-    <div class="sched-card">
+    <div class="sched-card ${isSelected ? 'selected' : ''}" onclick="${STATE.selectionMode ? `togglePostSelection('${p.id}')` : ''}">
+      ${STATE.selectionMode ? `
+        <div class="selection-checkbox ${isSelected ? 'checked' : ''}">
+          <i class="fa-solid fa-check"></i>
+        </div>
+      ` : ''}
       <div class="sched-card-header">
         <span class="sched-account"><i class="fa-brands fa-instagram"></i> ${accName}</span>
         <span class="sched-badge pending">${p.status}</span>
@@ -472,12 +492,14 @@ function renderScheduleCards() {
           <i class="fa-solid fa-calendar"></i> ${dateStr} às ${timeStr}
         </div>
         <div style="display:flex; gap:8px;">
-          <button class="btn btn-sm btn-ghost btn-delete" onclick="deletePost('${p.id}')" style="font-size:0.7rem; padding:0.5rem 0.8rem; color:var(--error);">
-            <i class="fa-solid fa-trash"></i>
-          </button>
-          <button class="btn btn-sm btn-ghost" onclick="publishNow('${p.id}')" style="font-size:0.7rem; padding:0.5rem 0.8rem;">
-            <i class="fa-solid fa-paper-plane"></i> Publicar
-          </button>
+          ${!STATE.selectionMode ? `
+            <button class="btn btn-sm btn-ghost btn-delete" onclick="deletePost('${p.id}')" style="font-size:0.7rem; padding:0.5rem 0.8rem; color:var(--error);">
+              <i class="fa-solid fa-trash"></i>
+            </button>
+            <button class="btn btn-sm btn-ghost" onclick="publishNow('${p.id}')" style="font-size:0.7rem; padding:0.5rem 0.8rem;">
+              <i class="fa-solid fa-paper-plane"></i> Publicar
+            </button>
+          ` : '<span style="font-size:0.65rem; color:var(--purple-main); font-weight:700;">MODO SELEÇÃO</span>'}
         </div>
       </div>
     </div>`;
@@ -732,6 +754,72 @@ function setupForms() {
 /**
  * 🛠️ Management Actions (Globals)
  */
+
+window.toggleSelectionMode = () => {
+  STATE.selectionMode = !STATE.selectionMode;
+  if (!STATE.selectionMode) STATE.selectedPostIds = [];
+  renderScheduleCards();
+};
+
+window.togglePostSelection = (postId) => {
+  if (STATE.selectedPostIds.includes(postId)) {
+    STATE.selectedPostIds = STATE.selectedPostIds.filter(id => id !== postId);
+  } else {
+    STATE.selectedPostIds.push(postId);
+  }
+  renderScheduleCards();
+};
+
+window.selectAllPosts = () => {
+  const posts = getFilteredPosts();
+  STATE.selectedPostIds = posts.map(p => p.id);
+  renderScheduleCards();
+};
+
+window.deleteSelectedPosts = async () => {
+  if (STATE.selectedPostIds.length === 0) return showToast('Nenhum post selecionado.', 'warning');
+  if (!confirm(`Deseja excluir permanentemente os ${STATE.selectedPostIds.length} posts selecionados?`)) return;
+  
+  try {
+    showLoading(true, 'EXCLUINDO SELECIONADOS...');
+    const res = await fetch(`${API_BASE}/posts/bulk-delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: STATE.selectedPostIds })
+    });
+    if (res.ok) {
+      showToast(`${STATE.selectedPostIds.length} posts excluídos!`, 'success');
+      STATE.selectedPostIds = [];
+      STATE.selectionMode = false;
+      await loadData();
+    }
+  } catch (err) {
+    showToast('Erro ao excluir posts.', 'error');
+  } finally {
+    showLoading(false);
+  }
+};
+
+window.clearAllPending = async () => {
+  const accId = STATE.filterAccountId;
+  if (accId === 'all') return showToast('Selecione uma conta específica para limpar tudo.', 'warning');
+  
+  const acc = STATE.accounts.find(a => a.accountId === accId);
+  if (!confirm(`⚠️ EXCLUIR TUDO: Deseja apagar TODOS os posts pendentes da conta @${acc.username}?`)) return;
+  
+  try {
+    showLoading(true, 'LIMPANDO CONTA...');
+    const res = await fetch(`${API_BASE}/posts/clear-pending/${accId}`, { method: 'DELETE' });
+    if (res.ok) {
+      showToast('Todos os agendamentos pendentes foram removidos!', 'success');
+      await loadData();
+    }
+  } catch (err) {
+    showToast('Erro ao limpar conta.', 'error');
+  } finally {
+    showLoading(false);
+  }
+};
 window.deletePost = async (id) => {
   if (!confirm('Deseja realmente excluir este agendamento?')) return;
   try {

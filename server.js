@@ -186,7 +186,33 @@ app.delete('/api/posts/:id', async (req, res) => {
   const { id } = req.params;
   const db = await getDB();
   try {
-    await db.run('DELETE FROM posts WHERE "id" = ?', [id]);
+    await db.run('DELETE FROM posts WHERE id = ?', [id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/posts/bulk-delete', async (req, res) => {
+  const { ids } = req.body;
+  if (!ids || !Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: 'IDs inválidos.' });
+  }
+  const db = await getDB();
+  try {
+    const placeholders = ids.map(() => '?').join(',');
+    await db.run(`DELETE FROM posts WHERE id IN (${placeholders})`, ids);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/posts/clear-pending/:accountId', async (req, res) => {
+  const { accountId } = req.params;
+  const db = await getDB();
+  try {
+    await db.run('DELETE FROM posts WHERE "accountId" = ? AND status = ?', [accountId, 'pending']);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
