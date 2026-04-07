@@ -457,9 +457,14 @@ function renderScheduleCards() {
         <div style="font-size:0.78rem; color:var(--text-dim); display:flex; align-items:center; gap:6px;">
           <i class="fa-solid fa-calendar"></i> ${dateStr} às ${timeStr}
         </div>
-        <button class="btn btn-sm btn-ghost" onclick="publishNow('${p.id}')" style="font-size:0.7rem; padding:0.5rem 0.8rem;">
-          <i class="fa-solid fa-paper-plane"></i> Publicar
-        </button>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-sm btn-ghost btn-delete" onclick="deletePost('${p.id}')" style="font-size:0.7rem; padding:0.5rem 0.8rem; color:var(--error);">
+            <i class="fa-solid fa-trash"></i>
+          </button>
+          <button class="btn btn-sm btn-ghost" onclick="publishNow('${p.id}')" style="font-size:0.7rem; padding:0.5rem 0.8rem;">
+            <i class="fa-solid fa-paper-plane"></i> Publicar
+          </button>
+        </div>
       </div>
     </div>`;
   }).join('');
@@ -691,88 +696,157 @@ function setupForms() {
       await loadData();
     }
   };
-
-  document.getElementById('settings-form').onsubmit = async (e) => {
-    e.preventDefault();
-    const config = {
-      imgbbKey: document.getElementById('imgbb-key-input').value,
-      cloudinaryName: document.getElementById('cloudinary-name-input').value,
-      cloudinaryPreset: document.getElementById('cloudinary-preset-input').value
-    };
-    
-    showLoading(true, 'SALVANDO...');
-    try {
-      const res = await fetch(`${API_BASE}/save-config`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config)
-      });
-      
-      if (!res.ok) throw new Error('Falha ao salvar.');
-      
-      STATE.globalConfig = config;
-      showToast('CONFIGURAÇÕES SALVAS!', 'success');
-    } catch (err) {
-      showToast(err.message, 'error');
-    } finally {
-      showLoading(false);
-    }
-  };
-
-  // Telegram Save
-  document.getElementById('telegram-form').onsubmit = async (e) => {
-    e.preventDefault();
-    const config = {
-      telegramToken: document.getElementById('telegram-token-input').value,
-      telegramChatId: document.getElementById('telegram-chatid-input').value
-    };
-    
-    showLoading(true, 'SALVANDO TELEGRAM...');
-    try {
-      const res = await fetch(`${API_BASE}/save-config`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config)
-      });
-      if (!res.ok) throw new Error('Falha ao salvar.');
-      STATE.globalConfig = { ...STATE.globalConfig, ...config };
-      showToast('TELEGRAM CONFIGURADO!', 'success');
-    } catch (err) {
-      showToast(err.message, 'error');
-    } finally {
-      showLoading(false);
-    }
-  };
-
-  // Telegram Test
-  document.getElementById('test-telegram-btn').onclick = async () => {
-    const token = document.getElementById('telegram-token-input').value;
-    const chatId = document.getElementById('telegram-chatid-input').value;
-    if (!token || !chatId) return showToast('Preencha Token e Chat ID!', 'warning');
-    
-    try {
-      const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text: '✅ *InstaScheduler AI* — Notificações configuradas com sucesso\\!\n\nVocê receberá alertas aqui quando seus posts forem publicados\\. 🚀',
-          parse_mode: 'MarkdownV2'
-        })
-      });
-      const data = await res.json();
-      if (data.ok) {
-        showToast('Mensagem de teste enviada! Confira no Telegram.', 'success');
-      } else {
-        showToast(`Erro: ${data.description}`, 'error');
-      }
-    } catch (err) {
-      showToast(err.message, 'error');
-    }
-  };
 }
 
+/**
+ * 🛠️ Management Actions (Globals)
+ */
+window.deletePost = async (id) => {
+  if (!confirm('Deseja realmente excluir este agendamento?')) return;
+  try {
+    const res = await fetch(`${API_BASE}/posts/${id}`, { method: 'DELETE' });
+    if (res.ok) {
+      showToast('Agendamento excluído!', 'success');
+      await loadData();
+    }
+  } catch (err) {
+    showToast('Erro ao excluir.', 'error');
+  }
+};
 
+window.transferAllPosts = async () => {
+  if (STATE.accounts.length < 2) {
+    return showToast('Você precisa de pelo menos duas contas conectadas.', 'warning');
+  }
+
+  const fromAcc = STATE.accounts.find(a => a.accountId === STATE.filterAccountId) || STATE.accounts[0];
+  
+  const res = await showCustomModal({
+    title: 'TRANSFERIR AGENDAMENTOS',
+    message: `Mover todos os posts pendentes de @${fromAcc.username} para:`,
+    inputs: [{ id: 'targetAccountId', placeholder: 'ID da conta de destino', type: 'text' }]
+  });
+
+  if (!res || !res.targetAccountId) return;
+
+  try {
+    showLoading(true, 'TRANSFERINDO...');
+    const response = await fetch(`${API_BASE}/posts/transfer-all`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fromAccountId: fromAcc.accountId, toAccountId: res.targetAccountId })
+    });
+    if (response.ok) {
+      showToast('Transferência concluída!', 'success');
+      await loadData();
+    }
+  } catch (err) {
+    showToast('Erro na transferência.', 'error');
+  } finally {
+    showLoading(false);
+  }
+};
+
+window.publishNow = async (postId) => {
+  const post = STATE.scheduledPosts.find(p => p.id === postId);
+  if (!post) return;
+  
+  showLoading(true, 'PUBLICANDO AGORA...');
+  try {
+    const res = await fetch(`${API_BASE}/publish-now`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ post })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast('Publicado com sucesso!', 'success');
+      await loadData();
+    } else {
+      throw new Error(data.error || 'Erro ao publicar.');
+    }
+  } catch (err) {
+    showToast(`Erro: ${err.message}`, 'error');
+  } finally {
+    showLoading(false);
+  }
+};
+
+// NEW ACTIONS
+window.deletePost = async (id) => {
+  if (!confirm('Deseja realmente excluir este agendamento?')) return;
+  try {
+    const res = await fetch(`${API_BASE}/posts/${id}`, { method: 'DELETE' });
+    if (res.ok) {
+      showToast('Agendamento excluído!', 'success');
+      await loadData();
+    }
+  } catch (err) {
+    showToast('Erro ao excluir.', 'error');
+  }
+};
+
+window.transferAllPosts = async () => {
+  if (STATE.accounts.length < 2) {
+    return showToast('Você precisa de pelo menos duas contas conectadas.', 'warning');
+  }
+
+  const fromAcc = STATE.accounts.find(a => a.accountId === STATE.filterAccountId) || STATE.accounts[0];
+  
+  const res = await showCustomModal({
+    title: 'TRANSFERIR AGENDAMENTOS',
+    message: `Mover todos os posts pendentes de @${fromAcc.username} para:`,
+    inputs: [{ id: 'targetAccountId', placeholder: 'ID da conta de destino', type: 'text' }]
+  });
+
+  if (!res || !res.targetAccountId) return;
+
+  try {
+    showLoading(true, 'TRANSFERINDO...');
+    const response = await fetch(`${API_BASE}/posts/transfer-all`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fromAccountId: fromAcc.accountId, toAccountId: res.targetAccountId })
+    });
+    if (response.ok) {
+      showToast('Transferência concluída!', 'success');
+      await loadData();
+    }
+  } catch (err) {
+    showToast('Erro na transferência.', 'error');
+  } finally {
+    showLoading(false);
+  }
+};
+
+window.publishNow = async (postId) => {
+  const post = STATE.scheduledPosts.find(p => p.id === postId);
+  if (!post) return;
+  
+  showLoading(true, 'PUBLICANDO AGORA...');
+  try {
+    const res = await fetch(`${API_BASE}/publish-now`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ post })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast('Publicado com sucesso!', 'success');
+      await loadData();
+    } else {
+      throw new Error(data.error);
+    }
+  } catch (err) {
+    showToast(`Erro: ${err.message}`, 'error');
+  } finally {
+    showLoading(false);
+  }
+};
+
+/**
+ * 📡 API Helpers
+ */
 async function uploadToImgbb(file) {
   const fd = new FormData();
   fd.append('image', file);
@@ -796,44 +870,6 @@ async function uploadToCloudinary(file) {
   const data = await r.json();
   if (data.error) throw new Error(data.error.message);
   return data.secure_url;
-}
-
-function updatePreview(url, type) {
-  const box = document.getElementById('preview-image-box');
-  const preview = document.getElementById('file-preview');
-  const container = document.getElementById('file-preview-container');
-  
-  if (type === 'IMAGE') {
-    box.innerHTML = `<img src="${url}" style="width:100%; height:100%; object-fit:cover; border-radius:12px;">`;
-    preview.src = url;
-    container.style.display = 'block';
-  } else {
-    box.innerHTML = `<video src="${url}" autoplay muted loop style="width:100%; height:100%; object-fit:cover; border-radius:12px;"></video>`;
-    container.style.display = 'none';
-  }
-}
-
-async function publishNow(id) {
-  const post = STATE.scheduledPosts.find(p => p.id === id);
-  if (!post) return;
-  
-  showLoading(true, 'PUBLICANDO AGORA...');
-  try {
-    const res = await fetch(`${API_BASE}/publish-now`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ post })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Erro ao publicar.');
-    
-    showToast('POST PUBLICADO!', 'success');
-    await loadData();
-  } catch (err) {
-    showToast(err.message, 'error');
-  } finally {
-    showLoading(false);
-  }
 }
 
 function setupUIEvents() {

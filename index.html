@@ -151,7 +151,7 @@
         <div class="card">
           <div class="card-title"><i class="fa-solid fa-chart-line" style="color:var(--magenta);"></i><span>META SEMANAL</span></div>
           <div style="text-align:center; padding:1.5rem 0;">
-            <div style="font-size:3.5rem; font-weight:800; background:linear-gradient(135deg,#fff 30%,#64748b);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">0/7</div>
+            <div style="font-size:3.5rem; font-weight:800; background:linear-gradient(135deg,#fff 30%,#64748b); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;">0/7</div>
             <p style="color:var(--text-dim); font-size:0.85rem; margin-top:0.5rem;">Publicações esta semana</p>
           </div>
           <div class="progress-bar" style="height:10px;"><div class="progress-fill" style="width:5%; background:var(--magenta);"></div></div>
@@ -259,14 +259,19 @@
     </section>
 
     <!-- ═══════════════ CALENDAR ═══════════════ -->
-    <section id="section-schedule" class="section">
-      <!-- Account Filter Tabs -->
-      <div class="card" style="padding:1.2rem 2rem; margin-bottom:1.5rem;">
+    <div class="card" style="padding:1.2rem 2rem; margin-bottom:1.5rem;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
         <div style="display:flex; align-items:center; gap:10px; overflow-x:auto;">
           <span style="font-size:0.72rem; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; white-space:nowrap;">FILTRAR CONTA:</span>
           <div id="account-filter-tabs" style="display:flex; gap:8px;"></div>
         </div>
+        <div style="display:flex; gap:10px;">
+          <button class="btn btn-sm btn-ghost" onclick="transferAllPosts()" style="font-size:0.72rem; color:var(--purple-main); border:1px solid rgba(139,92,246,0.3);">
+            <i class="fa-solid fa-shuffle"></i> TRANSFERIR TUDO
+          </button>
+        </div>
       </div>
+    </div>
       <!-- Calendar -->
       <div class="card" style="margin-bottom:2rem;">
         <div style="display:flex; justify-content:space-between; align-items:center;">

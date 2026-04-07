@@ -169,6 +169,39 @@ app.post('/api/save-post', async (req, res) => {
   }
 });
 
+app.delete('/api/posts/:id', async (req, res) => {
+  const { id } = req.params;
+  const db = await getDB();
+  try {
+    await db.run('DELETE FROM posts WHERE "id" = ?', [id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/posts/transfer-all', async (req, res) => {
+  const { fromAccountId, toAccountId } = req.body;
+  const db = await getDB();
+  try {
+    await db.run('UPDATE posts SET "accountId" = ? WHERE "accountId" = ? AND "status" = \'pending\'', [toAccountId, fromAccountId]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/posts/clear-pending/:accountId', async (req, res) => {
+  const { accountId } = req.params;
+  const db = await getDB();
+  try {
+    await db.run('DELETE FROM posts WHERE "accountId" = ? AND "status" = \'pending\'', [accountId]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/publish-now', async (req, res) => {
   const { post } = req.body;
   try {

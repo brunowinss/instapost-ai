@@ -53,7 +53,7 @@ body { background: var(--bg-deep); color: var(--text-main); min-height: 100vh; o
 .logo-container { display: flex; align-items: center; gap: 14px; margin-bottom: 3rem; text-decoration: none; padding-left: 0.5rem; }
 .logo-icon { width: 44px; height: 44px; background: linear-gradient(135deg, var(--purple-main), var(--magenta)); border-radius: 14px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.2rem; color: white; box-shadow: 0 6px 24px var(--purple-glow); position: relative; overflow: hidden; }
 .logo-icon::after { content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: linear-gradient(45deg, transparent, rgba(255,255,255,0.2), transparent); transform: rotate(45deg); animation: spin-slow 4s linear infinite; }
-.logo-text { font-weight: 800; font-size: 1.15rem; letter-spacing: -0.5px; background: linear-gradient(to right, #fff, #94a3b8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.logo-text { font-weight: 800; font-size: 1.15rem; letter-spacing: -0.5px; background: linear-gradient(to right, #fff, #94a3b8); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
 
 .nav-links { display: flex; flex-direction: column; gap: 6px; }
 .nav-item { display: flex; align-items: center; gap: 14px; padding: 0.95rem 1.2rem; border-radius: var(--radius-md); color: var(--text-dim); text-decoration: none; font-weight: 600; font-size: 0.9rem; transition: var(--transition); border: 1px solid transparent; }
@@ -83,7 +83,7 @@ body { background: var(--bg-deep); color: var(--text-main); min-height: 100vh; o
 .card-title { font-size: 0.8rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 10px; }
 .card-title i { color: var(--purple-main); font-size: 1rem; }
 
-.stat-value { font-size: 3.5rem; font-weight: 800; letter-spacing: -2px; background: linear-gradient(135deg, #fff 30%, #64748b); -webkit-background-clip: text; -webkit-text-fill-color: transparent; line-height: 1; margin-bottom: 0.4rem; }
+.stat-value { font-size: 3.5rem; font-weight: 800; letter-spacing: -2px; background: linear-gradient(135deg, #fff 30%, #64748b); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; line-height: 1; margin-bottom: 0.4rem; }
 .stat-desc { color: var(--text-dim); font-size: 0.8rem; font-weight: 600; }
 
 .progress-bar { width: 100%; height: 6px; background: rgba(255,255,255,0.04); border-radius: 10px; margin-top: 1.2rem; overflow: hidden; }
@@ -114,6 +114,7 @@ select.input option { background: #111; color: #fff; }
 .btn-sm { padding: 0.7rem 1.2rem; font-size: 0.78rem; }
 .btn-media { border-radius: 12px; }
 .btn-danger { background: linear-gradient(135deg, #ef4444, #dc2626); }
+.btn-delete:hover { background: rgba(239,68,68,0.15) !important; border-color: var(--error) !important; color: #ff5f5f !important; }
 
 /* ── Dropzone ── */
 .dropzone { border: 2px dashed var(--glass-border); border-radius: var(--radius-lg); padding: 2.5rem; text-align: center; cursor: pointer; transition: var(--transition); }
