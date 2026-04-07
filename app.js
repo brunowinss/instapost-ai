@@ -442,6 +442,7 @@ function renderScheduleCards() {
     const date = new Date(p.scheduledAt);
     const dateStr = date.toLocaleDateString('pt-BR', { day:'2-digit', month:'short' });
     const timeStr = date.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+    const thumbUrl = getThumbnailUrl(p.imageUrl);
     
     return `
     <div class="sched-card">
@@ -450,8 +451,13 @@ function renderScheduleCards() {
         <span class="sched-badge pending">${p.status}</span>
       </div>
       <div style="margin-bottom:0.8rem;">
-        ${p.imageUrl ? `<div style="width:100%; height:140px; border-radius:10px; overflow:hidden; margin-bottom:0.8rem;"><img src="${p.imageUrl}" style="width:100%; height:100%; object-fit:cover;" onerror="this.parentElement.style.display='none'"><video src="${p.imageUrl}" style="width:100%; height:100%; object-fit:cover; display:none;" onerror=""></video></div>` : ''}
-        <p style="font-size:0.85rem; line-height:1.5; color:rgba(255,255,255,0.8); max-height:3.2em; overflow:hidden;">${p.caption || 'Sem legenda'}</p>
+        <div class="sched-img-container">
+          <img src="${thumbUrl}" alt="Capinha" class="sched-thumb" loading="lazy" onerror="this.src='https://placehold.co/400x400/0a0a0a/ffffff?text=Video+Indisponivel'">
+          <div class="sched-img-overlay">
+            <i class="fa-solid ${p.mediaType === 'REELS' ? 'fa-circle-play' : 'fa-image'}"></i>
+          </div>
+        </div>
+        <p style="font-size:0.85rem; line-height:1.5; color:rgba(255,255,255,0.8); max-height:3.2em; overflow:hidden; margin-top:0.8rem;">${p.caption || 'Sem legenda'}</p>
       </div>
       <div style="display:flex; justify-content:space-between; align-items:center; padding-top:0.8rem; border-top:1px solid var(--glass-border);">
         <div style="font-size:0.78rem; color:var(--text-dim); display:flex; align-items:center; gap:6px;">
@@ -468,6 +474,23 @@ function renderScheduleCards() {
       </div>
     </div>`;
   }).join('');
+}
+
+/**
+ * 🎨 Helpers de UI e Otimização
+ */
+
+function getThumbnailUrl(url) {
+  if (!url) return '';
+  if (url.includes('cloudinary.com')) {
+    // Transforma vídeos .mp4 em imagens .jpg e aplica compressão w_400
+    if (url.endsWith('.mp4') || url.endsWith('.mov') || url.includes('/video/upload/')) {
+        return url.replace('/video/upload/', '/video/upload/w_400,c_fill,f_auto,so_0/').replace(/\.(mp4|mov)$/, '.jpg');
+    }
+    // Aplica compressão básica em imagens também
+    return url.replace('/upload/', '/upload/w_400,c_fill,f_auto/');
+  }
+  return url; // Retorna URL original se não for Cloudinary (ex: imgbb)
 }
 
 
