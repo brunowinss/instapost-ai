@@ -110,6 +110,19 @@ app.post('/api/save-account', async (req, res) => {
   }
 });
 
+app.delete('/api/accounts/:id', async (req, res) => {
+  const { id } = req.params;
+  const db = await getDB();
+  try {
+    // Apagar conta e posts associados em sequência
+    await db.run('DELETE FROM posts WHERE "accountId" = ?', [id]);
+    await db.run('DELETE FROM accounts WHERE "accountId" = ?', [id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/save-config', async (req, res) => {
   const db = await getDB();
   const isPostgres = !!process.env.DATABASE_URL;

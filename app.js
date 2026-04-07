@@ -247,12 +247,20 @@ function renderSettingsAccounts() {
   }
   
   list.innerHTML = STATE.accounts.map(acc => `
-    <div style="display:flex; align-items:center; justify-content:space-between; padding:1rem; background:rgba(255,255,255,0.03); border-radius:14px; border:1px solid var(--glass-border);">
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:1rem; background:rgba(255,255,255,0.03); border-radius:14px; border:1px solid var(--glass-border); margin-bottom:0.8rem;">
       <div style="display:flex; align-items:center; gap:12px;">
-        <div style="width:32px; height:32px; border-radius:50%; background:linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);"></div>
-        <div style="font-weight:700; font-size:0.9rem;">@${acc.username}</div>
+        <div style="width:36px; height:36px; border-radius:50%; background:linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888); display:flex; align-items:center; justify-content:center; color:white;"><i class="fa-brands fa-instagram"></i></div>
+        <div>
+          <div style="font-weight:700; font-size:0.95rem;">@${acc.username}</div>
+          <div style="font-size:0.7rem; color:var(--text-dim);">ID: ${acc.accountId}</div>
+        </div>
       </div>
-      <span style="font-size:0.65rem; padding:4px 8px; border-radius:6px; background:rgba(16,185,129,0.1); color:var(--success); border:1px solid currentColor; font-weight:800;">ATIVO</span>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span style="font-size:0.6rem; padding:3px 8px; border-radius:6px; background:rgba(16,185,129,0.1); color:var(--success); border:1px solid rgba(16,185,129,0.2); font-weight:800; letter-spacing:0.5px;">ATIVO</span>
+        <button class="btn btn-sm btn-ghost btn-delete" onclick="deleteAccount('${acc.accountId}')" style="padding:0.5rem; width:32px; height:32px; color:var(--error); border-color:rgba(239,68,68,0.2);">
+          <i class="fa-solid fa-trash-can"></i>
+        </button>
+      </div>
     </div>
   `).join('');
 }
@@ -765,6 +773,26 @@ window.transferAllPosts = async () => {
     }
   } catch (err) {
     showToast('Erro na transferência.', 'error');
+  } finally {
+    showLoading(false);
+  }
+};
+
+window.deleteAccount = async (id) => {
+  if (!confirm('⚠️ ATENÇÃO: Isso excluirá permanentemente esta conta e TODOS os posts agendados associados a ela. Confirmar?')) return;
+  
+  try {
+    showLoading(true, 'EXCLUINDO CONTA...');
+    const res = await fetch(`${API_BASE}/accounts/${id}`, { method: 'DELETE' });
+    if (res.ok) {
+      showToast('Conta e posts removidos!', 'success');
+      if (STATE.activeAccountId === id) STATE.activeAccountId = null;
+      await loadData();
+    } else {
+      throw new Error('Falha ao excluir conta.');
+    }
+  } catch (err) {
+    showToast(err.message, 'error');
   } finally {
     showLoading(false);
   }
