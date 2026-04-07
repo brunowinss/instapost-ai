@@ -277,10 +277,14 @@ function updateHeaderUI() {
     authStatus.style.background = 'var(--success)';
     authStatus.style.boxShadow = '0 0 10px var(--success)';
     accountName.innerText = `@${activeAcc.username}`;
+    const previewName = document.getElementById('preview-username');
+    if (previewName) previewName.innerText = `@${activeAcc.username}`;
   } else {
     authStatus.style.background = 'var(--error)';
     authStatus.style.boxShadow = '0 0 10px var(--error)';
     accountName.innerText = 'Login Pendente';
+    const previewName = document.getElementById('preview-username');
+    if (previewName) previewName.innerText = '@seu_perfil';
   }
 }
 
