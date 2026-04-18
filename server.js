@@ -397,7 +397,7 @@ app.get('/api/import-local', async (req, res) => {
  * 🌐 SPA Routing
  */
 
-app.get('*', (req, res) => {
+app.get('/*splat', (req, res) => {
   if (req.path.startsWith('/api')) return res.status(404).json({ error: 'Endpoint not found' });
   res.sendFile(path.join(__dirname, 'index.html'));
 });
