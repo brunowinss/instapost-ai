@@ -434,6 +434,7 @@
         modal.style.display = 'flex';
 
         let validUser = null;
+        let validPic = null;
 
         document.getElementById('v20-search-btn').onclick = async function(ev) {
           ev.preventDefault();
@@ -473,14 +474,32 @@
           const id = document.getElementById('v20-id').value.trim();
           const token = document.getElementById('v20-token').value.trim();
           this.innerText = 'Salvando...';
+          this.disabled = true;
+
           try {
             const res = await fetch('/api/save-account', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ accountId: id, username: validUser, accessToken: token })
+              body: JSON.stringify({ 
+                accountId: id, 
+                username: validUser, 
+                accessToken: token,
+                profilePictureUrl: validPic // Agora incluído corretamente
+              })
             });
-            if (res.ok) { modal.style.display = 'none'; location.reload(); }
-          } catch (e) { alert('Erro: ' + e.message); }
+
+            if (res.ok) { 
+              modal.style.display = 'none'; 
+              location.reload(); 
+            } else {
+              const data = await res.json();
+              throw new Error(data.error || 'Erro desconhecido no servidor.');
+            }
+          } catch (e) { 
+            alert('Erro ao salvar: ' + e.message);
+            this.innerText = 'CONECTAR';
+            this.disabled = false;
+          }
         };
 
         document.getElementById('modal-cancel').onclick = () => { modal.style.display = 'none'; };

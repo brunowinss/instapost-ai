@@ -9,11 +9,21 @@ const isPostgres = !!process.env.DATABASE_URL;
  */
 async function initDB() {
   if (isPostgres) {
+    console.log(`📡 Attempting to connect to PostgreSQL... (SSL Enabled)`);
     const { Pool } = require('pg');
     const pool = new Pool({
       connectionString: process.env.DATABASE_URL,
       ssl: { rejectUnauthorized: false }
     });
+
+    // Check connection immediately
+    try {
+      await pool.query('SELECT NOW()');
+      console.log('🌐 Connected to PostgreSQL Database (Cloud).');
+    } catch (err) {
+      console.error('❌ PostgreSQL Connection Failed:', err.message);
+      throw err;
+    }
 
     // Polyfill to maintain SQLite-like syntax for simpler backend logic
     db = {};
@@ -76,6 +86,28 @@ async function initDB() {
       "sourceFile" TEXT
     );
   `);
+
+  // --- UNIFIED MIGRATION SYSTEM ---
+  try {
+    if (isPostgres) {
+      // Postgres Migration Logic
+      const checkResult = await db.all("SELECT column_name FROM information_schema.columns WHERE table_name = 'accounts' AND column_name = 'profilePictureUrl'");
+      if (checkResult.length === 0) {
+        console.log('🌐 [MIGRATION] PostgreSQL: Adding "profilePictureUrl" column to accounts table...');
+        await db.exec('ALTER TABLE accounts ADD COLUMN "profilePictureUrl" TEXT');
+      }
+    } else {
+      // SQLite Migration Logic
+      const columns = await db.all('PRAGMA table_info(accounts)');
+      const hasPic = columns.some(c => c.name === 'profilePictureUrl');
+      if (!hasPic) {
+        console.log('🏠 [MIGRATION] SQLite: Adding "profilePictureUrl" column to accounts table...');
+        await db.exec('ALTER TABLE accounts ADD COLUMN "profilePictureUrl" TEXT');
+      }
+    }
+  } catch (err) {
+    console.warn('⚠️ [MIGRATION WARNING] Database migration check skipped or failed:', err.message);
+  }
 
   return db;
 }

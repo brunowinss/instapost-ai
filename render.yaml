@@ -10,4 +10,4 @@ services:
       - key: DATABASE_URL
         sync: false # Set this in Render dashboard (PostgreSQL URL)
       - key: PORT
-        value: 3000
+        value: 10000

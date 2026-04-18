@@ -7,7 +7,7 @@ const { runAutoImporter } = require('./auto_importer');
 require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000; // Render uses 10000 by default
 
 app.use(cors());
 app.use(express.json({ limit: '60mb' }));
@@ -94,6 +94,7 @@ app.get('/api/data', async (req, res) => {
 
 app.post('/api/save-account', async (req, res) => {
   const { accountId, username, accessToken, profilePictureUrl } = req.body;
+  console.log(`[SAVE-ACCOUNT] Tentando salvar conta: ${username} (${accountId})`);
   const db = await getDB();
   const isPostgres = !!process.env.DATABASE_URL;
   
@@ -104,8 +105,10 @@ app.post('/api/save-account', async (req, res) => {
     } else {
       await db.run('INSERT OR REPLACE INTO accounts ("accountId", "username", "accessToken", "profilePictureUrl", "createdAt") VALUES (?, ?, ?, ?, ?)', params);
     }
+    console.log(`[SAVE-ACCOUNT SUCCESS] Conta @${username} salva.`);
     res.json({ success: true });
   } catch (err) {
+    console.error(`[SAVE-ACCOUNT ERROR] ${err.message}`);
     res.status(500).json({ error: err.message });
   }
 });
@@ -394,31 +397,41 @@ app.get('/api/import-local', async (req, res) => {
  * 🌐 SPA Routing
  */
 
-app.get('/*splat', (req, res) => {
+app.get('*', (req, res) => {
   if (req.path.startsWith('/api')) return res.status(404).json({ error: 'Endpoint not found' });
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Initialization
-initDB().then(async () => {
-  app.listen(PORT, async () => {
-    console.log(`🚀 InstaScheduler Engine online on port ${PORT}`);
-    
-    // Auto-import on startup and every 5 minutes
-    let isImporting = false;
-    const autoImport = async () => {
-      if (isImporting) return;
-      isImporting = true;
-      try {
-        await runAutoImporter();
-      } catch (e) {
-        console.error('Auto-import periodic failure:', e.message);
-      } finally {
-        isImporting = false;
-      }
-    };
+// Initialization with error tracking for Render/Cloud
+initDB()
+  .then(async () => {
+    app.listen(PORT, '0.0.0.0', async () => {
+      console.log(`🚀 [ENGINE] InstaScheduler AI online on port ${PORT}`);
+      console.log(`🌐 [ENV] Database: ${process.env.DATABASE_URL ? 'PostgreSQL (Cloud)' : 'SQLite (Local)'}`);
+      
+      // Auto-import on startup and every 5 minutes
+      let isImporting = false;
+      const autoImport = async () => {
+        if (isImporting) return;
+        isImporting = true;
+        try {
+          await runAutoImporter();
+        } catch (e) {
+          console.error('Auto-import periodic failure:', e.message);
+        } finally {
+          isImporting = false;
+        }
+      };
 
-    autoImport(); // Run once at start
-    setInterval(autoImport, 300000); // Run every 5 mins
+      autoImport(); // Run once at start
+      setInterval(autoImport, 300000); // Run every 5 mins
+    });
+  })
+  .catch(err => {
+    console.error('####################################################');
+    console.error('❌ CRITICAL: SYSTEM FAILED TO START');
+    console.error('Reason:', err.message);
+    if (err.stack) console.error('Stack:', err.stack);
+    console.error('####################################################');
+    process.exit(1);
   });
-});
