@@ -326,43 +326,62 @@ async function publishToInstagram(post) {
   }
   console.log(`[PUBLISH] Container criado: ${containerId}`);
 
-  // 2. Wait for Reels processing (Instagram pode levar 3-5+ minutos)
-  if (post.mediaType === 'REELS') {
-    // Aguarda antes do primeiro poll — Instagram precisa de tempo para iniciar
-    await new Promise(r => setTimeout(r, 10000));
+  // 2. Aguardar processamento do container (REELS e IMAGE)
+  //    Para REELS: Instagram pode levar 3-5+ minutos para processar o vídeo.
+  //    Para IMAGE: Instagram também precisa baixar a imagem antes de publicar.
+  //    Sem este check, media_publish retorna [IG 9007] "Media ID is not available".
+  const initialDelay = post.mediaType === 'REELS' ? 10000 : 3000; // 10s Reels / 3s imagem
+  const MAX_ATTEMPTS = post.mediaType === 'REELS' ? 30 : 10;       // 5min Reels / 30s imagem
+  const POLL_INTERVAL = post.mediaType === 'REELS' ? 10000 : 3000;
 
-    let finished = false;
-    let attempts = 0;
-    const MAX_ATTEMPTS = 30; // 30 × 10s = 5 minutos
+  await new Promise(r => setTimeout(r, initialDelay));
 
-    while (!finished && attempts < MAX_ATTEMPTS) {
-      const status = await graphReq(`/${containerId}?fields=status_code`);
-      const code = status.status_code;
-      console.log(`[PUBLISH] Container ${containerId} status: ${code} (tentativa ${attempts + 1}/${MAX_ATTEMPTS})`);
+  let finished = false;
+  let attempts = 0;
 
-      if (code === 'FINISHED') {
-        finished = true;
-      } else if (code === 'ERROR') {
-        throw new Error('Instagram não conseguiu processar o vídeo. Verifique se a URL do vídeo é pública e o formato é suportado (MP4, H.264).');
-      } else if (code === 'EXPIRED') {
-        throw new Error('Container de mídia expirou antes de publicar. A URL do vídeo pode ter se tornado inacessível.');
-      } else if (code === 'PUBLISHED') {
-        finished = true; // Raro, mas tratado
-      } else {
-        // IN_PROGRESS ou outro — aguarda
-        attempts++;
-        await new Promise(r => setTimeout(r, 10000));
-      }
+  while (!finished && attempts < MAX_ATTEMPTS) {
+    const status = await graphReq(`/${containerId}?fields=status_code`);
+    const code = status.status_code;
+    console.log(`[PUBLISH] Container ${containerId} status: ${code} (tentativa ${attempts + 1}/${MAX_ATTEMPTS})`);
+
+    if (code === 'FINISHED') {
+      finished = true;
+    } else if (code === 'ERROR') {
+      const hint = post.mediaType === 'REELS'
+        ? 'Verifique se a URL do vídeo é pública e o formato é suportado (MP4, H.264).'
+        : 'Verifique se a URL da imagem é pública e acessível pelo Instagram (JPG/PNG).';
+      throw new Error(`Instagram falhou ao processar a mídia. ${hint}`);
+    } else if (code === 'EXPIRED') {
+      throw new Error('Container expirou antes de publicar. A URL da mídia pode ter se tornado inacessível.');
+    } else if (code === 'PUBLISHED') {
+      finished = true; // edge case: já publicado
+    } else {
+      // IN_PROGRESS ou desconhecido — aguarda
+      attempts++;
+      await new Promise(r => setTimeout(r, POLL_INTERVAL));
     }
+  }
 
-    if (!finished) {
-      throw new Error(`Timeout no processamento do Instagram após ${MAX_ATTEMPTS * 10}s. Container: ${containerId}`);
-    }
+  if (!finished) {
+    const timeoutSecs = (initialDelay + MAX_ATTEMPTS * POLL_INTERVAL) / 1000;
+    throw new Error(`Timeout após ${timeoutSecs}s aguardando o Instagram processar a mídia. Container: ${containerId}`);
   }
 
   // 3. Publish
   console.log(`[PUBLISH] Publicando container ${containerId}...`);
-  const result = await graphReq(`/${post.accountId}/media_publish`, 'POST', { creation_id: containerId });
+  let result;
+  try {
+    result = await graphReq(`/${post.accountId}/media_publish`, 'POST', { creation_id: containerId });
+  } catch (err) {
+    // Erro 9007 = token sem permissão de publicação ou conta não é Business/Creator
+    if (err.message.includes('9007')) {
+      throw new Error(
+        'Conta @' + post.accountId + ' não tem permissão para publicar via API. ' +
+        'Verifique: (1) é conta Business ou Creator, (2) token tem permissão instagram_content_publish.'
+      );
+    }
+    throw err;
+  }
   console.log(`[PUBLISH] Sucesso! Media ID: ${result.id}`);
   return result.id;
 }
