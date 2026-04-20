@@ -327,6 +327,28 @@
             <button type="submit" class="btn" style="width:100%;"><i class="fa-solid fa-floppy-disk"></i> Salvar Configurações</button>
           </form>
         </div>
+        <!-- Password Change Card -->
+        <div class="card">
+          <h3 class="card-title"><i class="fa-solid fa-lock" style="color:var(--magenta);"></i> Alterar Credenciais de Acesso</h3>
+          <p style="font-size:0.8rem; color:var(--text-dim); margin-bottom:1.5rem; line-height:1.6;">
+            Altere o usuário e senha usados na tela de login. Mínimo de 6 caracteres para a senha.
+          </p>
+          <form id="password-form">
+            <div class="form-group">
+              <label class="label"><i class="fa-solid fa-user"></i> NOVO USUÁRIO</label>
+              <input type="text" class="input" id="new-login-user" placeholder="Novo nome de usuário" autocomplete="username">
+            </div>
+            <div class="form-group">
+              <label class="label"><i class="fa-solid fa-key"></i> NOVA SENHA</label>
+              <input type="password" class="input" id="new-login-pass" placeholder="Nova senha (mín. 6 caracteres)" autocomplete="new-password">
+            </div>
+            <div class="form-group">
+              <label class="label"><i class="fa-solid fa-key"></i> CONFIRMAR SENHA</label>
+              <input type="password" class="input" id="new-login-pass-confirm" placeholder="Repita a nova senha" autocomplete="new-password">
+            </div>
+            <button type="submit" class="btn" style="width:100%;"><i class="fa-solid fa-shield-halved"></i> Salvar Credenciais</button>
+          </form>
+        </div>
         <!-- Telegram Notifications Card -->
         <div class="card" style="grid-column:1/-1;">
           <h3 class="card-title"><i class="fa-brands fa-telegram" style="color:#0ea5e9;"></i> Notificações (Telegram)</h3>

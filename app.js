@@ -12,7 +12,9 @@ const STATE = {
   globalConfig: {
     imgbbKey: '',
     cloudinaryName: '',
-    cloudinaryPreset: ''
+    cloudinaryPreset: '',
+    telegramToken: '',
+    telegramChatId: ''
   },
   scheduledPosts: [],
   history: [],
@@ -39,16 +41,31 @@ function showCustomModal({ title, message, inputs }) {
     container.innerHTML = '';
 
     inputs.forEach(inp => {
-      const input = document.createElement('input');
-      input.id = `modal-inp-${inp.id}`;
-      input.placeholder = inp.placeholder || '';
-      input.type = inp.type || 'text';
-      input.className = 'input';
-      container.appendChild(input);
+      if (inp.type === 'select') {
+        const select = document.createElement('select');
+        select.id = `modal-inp-${inp.id}`;
+        select.className = 'input';
+        select.style.cssText = 'background:var(--card-bg);color:var(--text-main);cursor:pointer;';
+        (inp.options || []).forEach(opt => {
+          const option = document.createElement('option');
+          option.value = opt.value;
+          option.textContent = opt.label;
+          select.appendChild(option);
+        });
+        container.appendChild(select);
+      } else {
+        const input = document.createElement('input');
+        input.id = `modal-inp-${inp.id}`;
+        input.placeholder = inp.placeholder || '';
+        input.type = inp.type || 'text';
+        input.className = 'input';
+        container.appendChild(input);
+      }
     });
 
     modal.style.display = 'flex';
-    container.querySelector('input').focus();
+    const firstFocusable = container.querySelector('input, select');
+    if (firstFocusable) firstFocusable.focus();
 
     const cleanup = () => {
       modal.style.display = 'none';
@@ -632,7 +649,27 @@ function setupForms() {
   fileInput.onchange = (e) => {
     const files = Array.from(e.target.files);
     if (!files.length) return;
-    
+
+    // ✅ Validação de tipo e tamanho antes de aceitar
+    const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'video/mp4', 'video/quicktime'];
+    const MAX_IMAGE_MB = 10;
+    const MAX_VIDEO_MB = 100;
+
+    for (const file of files) {
+      if (!ALLOWED_TYPES.includes(file.type)) {
+        showToast(`Tipo não suportado: "${file.name}". Use JPG, PNG, GIF, WEBP, MP4 ou MOV.`, 'error');
+        fileInput.value = '';
+        return;
+      }
+      const mb = file.size / 1024 / 1024;
+      const limit = file.type.startsWith('video/') ? MAX_VIDEO_MB : MAX_IMAGE_MB;
+      if (mb > limit) {
+        showToast(`"${file.name}" excede o limite (${limit}MB). Tamanho: ${mb.toFixed(1)}MB.`, 'error');
+        fileInput.value = '';
+        return;
+      }
+    }
+
     STATE.queuedFiles = files;
     
     const first = files[0];
@@ -866,11 +903,16 @@ window.transferAllPosts = async () => {
   }
 
   const fromAcc = STATE.accounts.find(a => a.accountId === STATE.filterAccountId) || STATE.accounts[0];
-  
+  const otherAccounts = STATE.accounts.filter(a => a.accountId !== fromAcc.accountId);
+
   const res = await showCustomModal({
     title: 'TRANSFERIR AGENDAMENTOS',
     message: `Mover todos os posts pendentes de @${fromAcc.username} para:`,
-    inputs: [{ id: 'targetAccountId', placeholder: 'ID da conta de destino', type: 'text' }]
+    inputs: [{
+      id: 'targetAccountId',
+      type: 'select',
+      options: otherAccounts.map(a => ({ value: a.accountId, label: `@${a.username}` }))
+    }]
   });
 
   if (!res || !res.targetAccountId) return;
@@ -938,77 +980,7 @@ window.publishNow = async (postId) => {
   }
 };
 
-// NEW ACTIONS
-window.deletePost = async (id) => {
-  if (!confirm('Deseja realmente excluir este agendamento?')) return;
-  try {
-    const res = await fetch(`${API_BASE}/posts/${id}`, { method: 'DELETE' });
-    if (res.ok) {
-      showToast('Agendamento excluído!', 'success');
-      await loadData();
-    }
-  } catch (err) {
-    showToast('Erro ao excluir.', 'error');
-  }
-};
-
-window.transferAllPosts = async () => {
-  if (STATE.accounts.length < 2) {
-    return showToast('Você precisa de pelo menos duas contas conectadas.', 'warning');
-  }
-
-  const fromAcc = STATE.accounts.find(a => a.accountId === STATE.filterAccountId) || STATE.accounts[0];
-  
-  const res = await showCustomModal({
-    title: 'TRANSFERIR AGENDAMENTOS',
-    message: `Mover todos os posts pendentes de @${fromAcc.username} para:`,
-    inputs: [{ id: 'targetAccountId', placeholder: 'ID da conta de destino', type: 'text' }]
-  });
-
-  if (!res || !res.targetAccountId) return;
-
-  try {
-    showLoading(true, 'TRANSFERINDO...');
-    const response = await fetch(`${API_BASE}/posts/transfer-all`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fromAccountId: fromAcc.accountId, toAccountId: res.targetAccountId })
-    });
-    if (response.ok) {
-      showToast('Transferência concluída!', 'success');
-      await loadData();
-    }
-  } catch (err) {
-    showToast('Erro na transferência.', 'error');
-  } finally {
-    showLoading(false);
-  }
-};
-
-window.publishNow = async (postId) => {
-  const post = STATE.scheduledPosts.find(p => p.id === postId);
-  if (!post) return;
-  
-  showLoading(true, 'PUBLICANDO AGORA...');
-  try {
-    const res = await fetch(`${API_BASE}/publish-now`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ post })
-    });
-    const data = await res.json();
-    if (res.ok) {
-      showToast('Publicado com sucesso!', 'success');
-      await loadData();
-    } else {
-      throw new Error(data.error);
-    }
-  } catch (err) {
-    showToast(`Erro: ${err.message}`, 'error');
-  } finally {
-    showLoading(false);
-  }
-};
+// (funções duplicadas removidas — definições únicas acima)
 
 /**
  * 📡 API Helpers
@@ -1068,7 +1040,88 @@ function setupUIEvents() {
     };
   }
 
-  // 2. Vincular Sincronização Local
+  // 2. Formulário Telegram (salvar token + chat id)
+  const telegramForm = document.getElementById('telegram-form');
+  if (telegramForm) {
+    telegramForm.onsubmit = async (e) => {
+      e.preventDefault();
+      const telegramToken = document.getElementById('telegram-token-input').value.trim();
+      const telegramChatId = document.getElementById('telegram-chatid-input').value.trim();
+      if (!telegramToken || !telegramChatId) return showToast('Preencha o Token e o Chat ID.', 'warning');
+      showLoading(true, 'SALVANDO TELEGRAM...');
+      try {
+        const res = await fetch(`${API_BASE}/save-config`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ telegramToken, telegramChatId })
+        });
+        if (!res.ok) throw new Error('Falha ao salvar configuração do Telegram.');
+        STATE.globalConfig.telegramToken = telegramToken;
+        STATE.globalConfig.telegramChatId = telegramChatId;
+        showToast('TELEGRAM SALVO!', 'success');
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        showLoading(false);
+      }
+    };
+  }
+
+  // 2b. Botão Testar Telegram
+  const testTelegramBtn = document.getElementById('test-telegram-btn');
+  if (testTelegramBtn) {
+    testTelegramBtn.onclick = async () => {
+      const token = document.getElementById('telegram-token-input').value.trim() || STATE.globalConfig.telegramToken;
+      const chatId = document.getElementById('telegram-chatid-input').value.trim() || STATE.globalConfig.telegramChatId;
+      if (!token || !chatId) return showToast('Preencha o Token e o Chat ID primeiro.', 'warning');
+      showLoading(true, 'TESTANDO TELEGRAM...');
+      try {
+        const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: chatId, text: '✅ *InstaScheduler AI* conectado com sucesso!', parse_mode: 'Markdown' })
+        });
+        const data = await res.json();
+        if (data.ok) showToast('Mensagem de teste enviada!', 'success');
+        else throw new Error(data.description || 'Erro ao enviar mensagem de teste.');
+      } catch (err) {
+        showToast(`Erro: ${err.message}`, 'error');
+      } finally {
+        showLoading(false);
+      }
+    };
+  }
+
+  // 2c. Formulário Trocar Senha
+  const passwordForm = document.getElementById('password-form');
+  if (passwordForm) {
+    passwordForm.onsubmit = async (e) => {
+      e.preventDefault();
+      const loginUser = document.getElementById('new-login-user').value.trim();
+      const loginPass = document.getElementById('new-login-pass').value.trim();
+      const loginPassConfirm = document.getElementById('new-login-pass-confirm').value.trim();
+      if (!loginUser || !loginPass) return showToast('Preencha usuário e senha.', 'warning');
+      if (loginPass !== loginPassConfirm) return showToast('As senhas não coincidem.', 'error');
+      if (loginPass.length < 6) return showToast('Senha deve ter pelo menos 6 caracteres.', 'warning');
+      showLoading(true, 'ALTERANDO CREDENCIAIS...');
+      try {
+        const res = await fetch(`${API_BASE}/save-config`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ loginUser, loginPass })
+        });
+        if (!res.ok) throw new Error('Falha ao salvar credenciais.');
+        showToast('CREDENCIAIS ATUALIZADAS! Faça login novamente.', 'success');
+        document.getElementById('password-form').reset();
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        showLoading(false);
+      }
+    };
+  }
+
+  // 3. Vincular Sincronização Local
   const syncBtn = document.getElementById('btn-sync-local');
   if (syncBtn) {
     syncBtn.onclick = async () => {
@@ -1157,5 +1210,9 @@ function renderSettings() {
   document.getElementById('imgbb-key-input').value = STATE.globalConfig.imgbbKey || '';
   document.getElementById('cloudinary-name-input').value = STATE.globalConfig.cloudinaryName || '';
   document.getElementById('cloudinary-preset-input').value = STATE.globalConfig.cloudinaryPreset || '';
+  // Telegram
+  const tToken = document.getElementById('telegram-token-input');
+  const tChat = document.getElementById('telegram-chatid-input');
+  if (tToken) tToken.value = STATE.globalConfig.telegramToken || '';
+  if (tChat) tChat.value = STATE.globalConfig.telegramChatId || '';
 }
-// Force deploy: 04/04/2026 18:04:07

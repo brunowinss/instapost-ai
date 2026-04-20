@@ -9,6 +9,25 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 10000; // Render uses 10000 by default
 
+// Rate limiting simples para login (in-memory, max 10 tentativas / 15 min por IP)
+const loginAttempts = new Map();
+function checkLoginRateLimit(ip) {
+  const now = Date.now();
+  const WINDOW = 15 * 60 * 1000;
+  const MAX = 10;
+  let entry = loginAttempts.get(ip);
+  if (!entry || now > entry.resetAt) entry = { count: 0, resetAt: now + WINDOW };
+  entry.count++;
+  loginAttempts.set(ip, entry);
+  return entry.count <= MAX;
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of loginAttempts) {
+    if (now > entry.resetAt) loginAttempts.delete(ip);
+  }
+}, 60 * 60 * 1000); // Limpa entradas expiradas a cada hora
+
 app.use(cors());
 app.use(express.json({ limit: '60mb' }));
 app.use(express.static(__dirname));
@@ -46,6 +65,10 @@ app.get('/api/verify-account', async (req, res) => {
 
 // Login
 app.post('/api/login', async (req, res) => {
+  const ip = req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress || 'unknown';
+  if (!checkLoginRateLimit(ip)) {
+    return res.status(429).json({ error: 'Muitas tentativas. Aguarde 15 minutos.' });
+  }
   const { username, password } = req.body;
   const db = await getDB();
   
@@ -211,17 +234,6 @@ app.post('/api/posts/bulk-delete', async (req, res) => {
   }
 });
 
-app.delete('/api/posts/clear-pending/:accountId', async (req, res) => {
-  const { accountId } = req.params;
-  const db = await getDB();
-  try {
-    await db.run('DELETE FROM posts WHERE "accountId" = ? AND status = ?', [accountId, 'pending']);
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 app.post('/api/posts/transfer-all', async (req, res) => {
   const { fromAccountId, toAccountId } = req.body;
   const db = await getDB();
@@ -246,12 +258,14 @@ app.delete('/api/posts/clear-pending/:accountId', async (req, res) => {
 
 app.post('/api/publish-now', async (req, res) => {
   const { post } = req.body;
+  const db = await getDB();
   try {
+    await db.run('UPDATE posts SET "status" = \'processing\' WHERE "id" = ?', [post.id]);
     const mediaId = await publishToInstagram(post);
-    const db = await getDB();
     await db.run('UPDATE posts SET "status" = \'success\', "mediaId" = ?, "publishedAt" = ? WHERE "id" = ?', [mediaId, new Date().toISOString(), post.id]);
     res.json({ success: true, mediaId });
   } catch (err) {
+    await db.run('UPDATE posts SET "status" = \'error\', "publishedAt" = ? WHERE "id" = ?', [new Date().toISOString(), post.id]).catch(() => {});
     res.status(500).json({ error: err.message });
   }
 });
@@ -269,7 +283,7 @@ async function publishToInstagram(post) {
   const isGraphApi = token.startsWith('IGAA');
   const baseUrl = isGraphApi ? 'https://graph.instagram.com/v21.0' : 'https://graph.facebook.com/v20.0';
 
-  const graphReq = async (path, method = 'GET', body = null) => {
+  const graphReq = async (path, method = 'GET', body = null, retries = 2) => {
     const url = `${baseUrl}${path}${path.includes('?') ? '&' : '?'}access_token=${token}`;
     const options = { method };
     if (method === 'POST' && body) {
@@ -280,7 +294,17 @@ async function publishToInstagram(post) {
     }
     const res = await fetch(url, options);
     const data = await res.json();
-    if (data.error) throw new Error(`[IG ${data.error.code || '?'}] ${data.error.message}`);
+    if (data.error) {
+      // Retry automático em rate limit do Instagram (códigos 4, 17, 32, 613)
+      const rateLimitCodes = [4, 17, 32, 613];
+      if (retries > 0 && rateLimitCodes.includes(data.error.code)) {
+        const waitMs = 61000; // 61 segundos
+        console.warn(`[IG] Rate limit (código ${data.error.code}), aguardando ${waitMs / 1000}s... (${retries} tentativas restantes)`);
+        await new Promise(r => setTimeout(r, waitMs));
+        return graphReq(path, method, body, retries - 1);
+      }
+      throw new Error(`[IG ${data.error.code || '?'}] ${data.error.message}`);
+    }
     return data;
   };
 
