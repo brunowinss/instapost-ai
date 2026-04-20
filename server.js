@@ -72,7 +72,7 @@ app.get('/api/data', async (req, res) => {
   try {
     const db = await getDB();
     const accounts = await db.all('SELECT * FROM accounts');
-    const scheduledPosts = await db.all('SELECT * FROM posts WHERE "status" = \'pending\' ORDER BY "scheduledAt" ASC');
+    const scheduledPosts = await db.all('SELECT * FROM posts WHERE "status" IN (\'pending\', \'processing\') ORDER BY "scheduledAt" ASC');
     const history = await db.all('SELECT * FROM posts WHERE "status" != \'pending\' ORDER BY "publishedAt" DESC LIMIT 50');
     
     // Fetch global config
@@ -264,7 +264,7 @@ async function publishToInstagram(post) {
   const db = await getDB();
   const account = await db.get('SELECT "accessToken" FROM accounts WHERE "accountId" = ?', [post.accountId]);
   if (!account) throw new Error('Account disconnected or not found.');
-  
+
   const token = account.accessToken;
   const isGraphApi = token.startsWith('IGAA');
   const baseUrl = isGraphApi ? 'https://graph.instagram.com/v21.0' : 'https://graph.facebook.com/v20.0';
@@ -280,7 +280,7 @@ async function publishToInstagram(post) {
     }
     const res = await fetch(url, options);
     const data = await res.json();
-    if (data.error) throw new Error(data.error.message);
+    if (data.error) throw new Error(`[IG ${data.error.code || '?'}] ${data.error.message}`);
     return data;
   };
 
@@ -293,27 +293,53 @@ async function publishToInstagram(post) {
     payload.image_url = post.imageUrl;
   }
 
+  console.log(`[PUBLISH] Criando container para post ${post.id} (${post.mediaType})...`);
   const container = await graphReq(`/${post.accountId}/media`, 'POST', payload);
   const containerId = container.id;
 
-  // 2. Wait for Reels processing
+  if (!containerId) {
+    throw new Error(`Container criado sem ID. Resposta: ${JSON.stringify(container)}`);
+  }
+  console.log(`[PUBLISH] Container criado: ${containerId}`);
+
+  // 2. Wait for Reels processing (Instagram pode levar 3-5+ minutos)
   if (post.mediaType === 'REELS') {
+    // Aguarda antes do primeiro poll — Instagram precisa de tempo para iniciar
+    await new Promise(r => setTimeout(r, 10000));
+
     let finished = false;
     let attempts = 0;
-    while (!finished && attempts < 20) {
+    const MAX_ATTEMPTS = 30; // 30 × 10s = 5 minutos
+
+    while (!finished && attempts < MAX_ATTEMPTS) {
       const status = await graphReq(`/${containerId}?fields=status_code`);
-      if (status.status_code === 'FINISHED') finished = true;
-      else if (status.status_code === 'ERROR') throw new Error('Instagram failed to process video.');
-      else {
+      const code = status.status_code;
+      console.log(`[PUBLISH] Container ${containerId} status: ${code} (tentativa ${attempts + 1}/${MAX_ATTEMPTS})`);
+
+      if (code === 'FINISHED') {
+        finished = true;
+      } else if (code === 'ERROR') {
+        throw new Error('Instagram não conseguiu processar o vídeo. Verifique se a URL do vídeo é pública e o formato é suportado (MP4, H.264).');
+      } else if (code === 'EXPIRED') {
+        throw new Error('Container de mídia expirou antes de publicar. A URL do vídeo pode ter se tornado inacessível.');
+      } else if (code === 'PUBLISHED') {
+        finished = true; // Raro, mas tratado
+      } else {
+        // IN_PROGRESS ou outro — aguarda
         attempts++;
-        await new Promise(r => setTimeout(r, 6000));
+        await new Promise(r => setTimeout(r, 10000));
       }
     }
-    if (!finished) throw new Error('Instagram processing timeout.');
+
+    if (!finished) {
+      throw new Error(`Timeout no processamento do Instagram após ${MAX_ATTEMPTS * 10}s. Container: ${containerId}`);
+    }
   }
 
   // 3. Publish
+  console.log(`[PUBLISH] Publicando container ${containerId}...`);
   const result = await graphReq(`/${post.accountId}/media_publish`, 'POST', { creation_id: containerId });
+  console.log(`[PUBLISH] Sucesso! Media ID: ${result.id}`);
   return result.id;
 }
 
@@ -358,16 +384,24 @@ async function cron() {
     const now = new Date();
     const db = await getDB();
     const pending = await db.all('SELECT * FROM posts WHERE "status" = \'pending\'');
-    
+
     for (const post of pending) {
       if (now >= new Date(post.scheduledAt)) {
+        // ✅ RACE CONDITION FIX: Marca como 'processing' ANTES de publicar.
+        // O cron roda a cada 60s, mas Reels levam 2-5 min para processar.
+        // Sem isso, o próximo tick do cron encontraria o post ainda 'pending'
+        // e tentaria publicar o mesmo vídeo duas vezes — causando o erro
+        // "Media ID is not available" do Instagram.
+        await db.run('UPDATE posts SET "status" = \'processing\' WHERE "id" = ? AND "status" = \'pending\'', [post.id]);
+        console.log(`[CRON] Iniciando publicação do post ${post.id} (@${post.accountId})...`);
+
         try {
           const mediaId = await publishToInstagram(post);
           await db.run('UPDATE posts SET "status" = \'success\', "mediaId" = ?, "publishedAt" = ? WHERE "id" = ?', [mediaId, new Date().toISOString(), post.id]);
-          console.log(`✅ Posted: ${post.id}`);
+          console.log(`✅ Publicado: ${post.id}`);
           await sendTelegramNotification(post, 'success');
         } catch (e) {
-          console.error(`❌ Fail: ${post.id}`, e.message);
+          console.error(`❌ Falha: ${post.id}`, e.message);
           await db.run('UPDATE posts SET "status" = \'error\', "publishedAt" = ? WHERE "id" = ?', [new Date().toISOString(), post.id]);
           await sendTelegramNotification(post, 'error', e.message);
         }

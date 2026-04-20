@@ -91,18 +91,27 @@ async function initDB() {
   try {
     if (isPostgres) {
       // Postgres Migration Logic
-      const checkResult = await db.all("SELECT column_name FROM information_schema.columns WHERE table_name = 'accounts' AND column_name = 'profilePictureUrl'");
-      if (checkResult.length === 0) {
-        console.log('🌐 [MIGRATION] PostgreSQL: Adding "profilePictureUrl" column to accounts table...');
+      const checkPic = await db.all("SELECT column_name FROM information_schema.columns WHERE table_name = 'accounts' AND column_name = 'profilePictureUrl'");
+      if (checkPic.length === 0) {
+        console.log('🌐 [MIGRATION] PostgreSQL: Adding "profilePictureUrl" column to accounts...');
         await db.exec('ALTER TABLE accounts ADD COLUMN "profilePictureUrl" TEXT');
+      }
+      const checkSource = await db.all("SELECT column_name FROM information_schema.columns WHERE table_name = 'posts' AND column_name = 'sourceFile'");
+      if (checkSource.length === 0) {
+        console.log('🌐 [MIGRATION] PostgreSQL: Adding "sourceFile" column to posts...');
+        await db.exec('ALTER TABLE posts ADD COLUMN "sourceFile" TEXT');
       }
     } else {
       // SQLite Migration Logic
-      const columns = await db.all('PRAGMA table_info(accounts)');
-      const hasPic = columns.some(c => c.name === 'profilePictureUrl');
-      if (!hasPic) {
-        console.log('🏠 [MIGRATION] SQLite: Adding "profilePictureUrl" column to accounts table...');
+      const accColumns = await db.all('PRAGMA table_info(accounts)');
+      if (!accColumns.some(c => c.name === 'profilePictureUrl')) {
+        console.log('🏠 [MIGRATION] SQLite: Adding "profilePictureUrl" column to accounts...');
         await db.exec('ALTER TABLE accounts ADD COLUMN "profilePictureUrl" TEXT');
+      }
+      const postColumns = await db.all('PRAGMA table_info(posts)');
+      if (!postColumns.some(c => c.name === 'sourceFile')) {
+        console.log('🏠 [MIGRATION] SQLite: Adding "sourceFile" column to posts...');
+        await db.exec('ALTER TABLE posts ADD COLUMN "sourceFile" TEXT');
       }
     }
   } catch (err) {
