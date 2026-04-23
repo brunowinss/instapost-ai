@@ -263,9 +263,17 @@ app.post('/api/publish-now', async (req, res) => {
     await db.run('UPDATE posts SET "status" = \'processing\' WHERE "id" = ?', [post.id]);
     const mediaId = await publishToInstagram(post);
     await db.run('UPDATE posts SET "status" = \'success\', "mediaId" = ?, "publishedAt" = ? WHERE "id" = ?', [mediaId, new Date().toISOString(), post.id]);
+    
+    // ✅ Notifica Telegram sobre publicação manual
+    await sendTelegramNotification(post, 'success');
+    
     res.json({ success: true, mediaId });
   } catch (err) {
     await db.run('UPDATE posts SET "status" = \'error\', "publishedAt" = ? WHERE "id" = ?', [new Date().toISOString(), post.id]).catch(() => {});
+    
+    // ❌ Notifica Telegram sobre erro na publicação manual
+    await sendTelegramNotification(post, 'error', err.message);
+    
     res.status(500).json({ error: err.message });
   }
 });
