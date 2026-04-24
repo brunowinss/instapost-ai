@@ -443,7 +443,15 @@ async function cron() {
         // Sem isso, o próximo tick do cron encontraria o post ainda 'pending'
         // e tentaria publicar o mesmo vídeo duas vezes — causando o erro
         // "Media ID is not available" do Instagram.
-        await db.run('UPDATE posts SET "status" = \'processing\' WHERE "id" = ? AND "status" = \'pending\'', [post.id]);
+        const updateResult = await db.run('UPDATE posts SET "status" = \'processing\' WHERE "id" = ? AND "status" = \'pending\'', [post.id]);
+
+        // Se nenhuma linha foi alterada, outro processo já pegou este post — pular.
+        const changed = updateResult?.changes ?? updateResult?.rowCount ?? 0;
+        if (!changed) {
+          console.log(`[CRON] Post ${post.id} já em processamento por outro processo, pulando.`);
+          continue;
+        }
+
         console.log(`[CRON] Iniciando publicação do post ${post.id} (@${post.accountId})...`);
 
         try {
