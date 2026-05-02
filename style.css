@@ -179,14 +179,69 @@ select.input option { background: #111; color: #fff; }
 .selection-checkbox i { color: white; font-size: 0.8rem; display: none; }
 .selection-checkbox.checked i { display: block; }
 
+/* ── Layout Classes ── */
+.dashboard-grid-activity { grid-template-columns: 1fr 380px; margin-top: 2.5rem; }
+.dashboard-grid-new-post { grid-template-columns: 1fr 420px; }
+
 /* ── Responsive ── */
 @media (max-width: 1300px) {
-  .dashboard-grid { grid-template-columns: repeat(2, 1fr); }
+  .dashboard-grid, .dashboard-grid-activity, .dashboard-grid-new-post { grid-template-columns: repeat(2, 1fr); }
   .main-wrapper { padding: 2.5rem; }
 }
+
 @media (max-width: 900px) {
   .sidebar { width: 80px; padding: 2rem 0.8rem; }
   .logo-text, .nav-item span { display: none; }
-  .dashboard-grid { grid-template-columns: 1fr; }
+  .sidebar > div:nth-child(3) { display: none; } /* Ocultar painel Cron no tablet/mobile */
+  .sidebar > button { font-size: 0; padding: 1rem 0 !important; }
+  .sidebar > button i { font-size: 1.2rem; margin: 0; }
+  .dashboard-grid, .dashboard-grid-activity, .dashboard-grid-new-post { grid-template-columns: 1fr; }
   .main-wrapper { padding: 1.5rem; }
+}
+
+@media (max-width: 768px) {
+  body { flex-direction: column; }
+  
+  /* Bottom Navigation */
+  .sidebar { 
+    position: fixed; bottom: 0; left: 0; width: 100%; height: 65px; 
+    flex-direction: row; padding: 0; border-right: none; border-top: 1px solid var(--glass-border); 
+    justify-content: space-between; align-items: center; background: rgba(8, 8, 12, 0.98); z-index: 10000;
+  }
+  .sidebar .logo-container { display: none; }
+  
+  .nav-links { flex-direction: row; flex: 1; justify-content: space-around; align-items: center; margin: 0; }
+  .nav-item { flex: 1; justify-content: center; padding: 1rem 0; border-radius: 0; border-top: 3px solid transparent; }
+  .nav-item i { font-size: 1.4rem; margin: 0; width: auto; }
+  .nav-item.active { border-bottom: none; border-top: 3px solid var(--purple-main); background: transparent; }
+  .nav-item.active i { filter: drop-shadow(0 0 10px var(--purple-main)); }
+  
+  .sidebar > button { 
+    margin: 0 !important; width: 65px !important; padding: 0 !important; 
+    height: 100% !important; border: none !important; border-radius: 0 !important; 
+    background: transparent !important; color: var(--error) !important;
+  }
+  
+  /* Main content adjustments */
+  .main-wrapper { padding: 1.2rem; padding-bottom: 90px; }
+  .header { flex-direction: column; align-items: flex-start; gap: 1.2rem; margin-bottom: 2rem; }
+  .header-left h1 { font-size: 1.8rem; }
+  .header-right { width: 100%; justify-content: space-between; }
+  
+  /* Cards and Forms */
+  .card { padding: 1.2rem; }
+  .stat-value { font-size: 2.5rem; }
+  .dashboard-grid { gap: 1.2rem; }
+  .cal-day { font-size: 0.75rem; border-radius: 8px; }
+  #schedule-manual > div { grid-template-columns: 1fr !important; }
+  
+  /* Modals & Bars */
+  .modal-content { width: 95%; padding: 1.5rem !important; }
+  .selection-bar { width: 90%; padding: 15px; border-radius: 16px; bottom: 85px; }
+  .selection-bar-content { flex-direction: column; gap: 12px; }
+  .selection-bar-content > div:nth-child(2) { flex-direction: column; width: 100%; }
+  .selection-bar-content button { width: 100%; justify-content: center; }
+  
+  /* Login Screen */
+  #login-screen .card { padding: 2rem 1.5rem; }
 }
