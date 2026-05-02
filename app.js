@@ -114,8 +114,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Login form handler
   document.getElementById('login-form').onsubmit = async (e) => {
     e.preventDefault();
-    const user = document.getElementById('login-user').value;
-    const pass = document.getElementById('login-pass').value;
+    const user = document.getElementById('login-user').value.trim();
+    const pass = document.getElementById('login-pass').value.trim();
     const errorEl = document.getElementById('login-error');
     
     const btn = e.target.querySelector('button[type="submit"]');
