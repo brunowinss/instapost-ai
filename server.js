@@ -13,8 +13,8 @@ const PORT = process.env.PORT || 10000; // Render uses 10000 by default
 const loginAttempts = new Map();
 function checkLoginRateLimit(ip) {
   const now = Date.now();
-  const WINDOW = 15 * 60 * 1000;
-  const MAX = 10;
+  const WINDOW = 1 * 60 * 1000; // 1 minuto
+  const MAX = 100; // 100 tentativas
   let entry = loginAttempts.get(ip);
   if (!entry || now > entry.resetAt) entry = { count: 0, resetAt: now + WINDOW };
   entry.count++;
