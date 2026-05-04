@@ -509,9 +509,9 @@ async function sendTelegramNotification(post, status, errorMsg) {
     
     let text;
     if (status === 'success') {
-      text = `✅ *Post Publicado!*\n\n📱 Conta: ${accName}\n📝 Legenda: ${post.caption || '(sem legenda)'}\n🕐 Horário: ${time}\n\n_InstaScheduler AI_`;
+      text = `✅ *Post Publicado!*\n\n📱 Conta: ${accName}\n📝 Legenda: ${post.caption || '(sem legenda)'}\n🕐 Horário: ${time}\n\n_Insta Post_`;
     } else {
-      text = `❌ *Erro ao Publicar*\n\n📱 Conta: ${accName}\n📝 Legenda: ${post.caption || '(sem legenda)'}\n🕐 Horário: ${time}\n⚠️ Erro: ${errorMsg}\n\n_InstaScheduler AI_`;
+      text = `❌ *Erro ao Publicar*\n\n📱 Conta: ${accName}\n📝 Legenda: ${post.caption || '(sem legenda)'}\n🕐 Horário: ${time}\n⚠️ Erro: ${errorMsg}\n\n_Insta Post_`;
     }
 
     await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -610,7 +610,7 @@ initDB()
   .then(async () => {
     await initWebPush();
     app.listen(PORT, '0.0.0.0', async () => {
-      console.log(`🚀 [ENGINE] InstaScheduler AI online on port ${PORT}`);
+      console.log(`🚀 [ENGINE] Insta Post online on port ${PORT}`);
       console.log(`🌐 [ENV] Database: ${process.env.DATABASE_URL ? 'PostgreSQL (Cloud)' : 'SQLite (Local)'}`);
       
       // Auto-import on startup and every 5 minutes

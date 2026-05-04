@@ -1,6 +1,6 @@
 {
-  "name": "InstaScheduler AI",
-  "short_name": "InstaScheduler",
+  "name": "Insta Post",
+  "short_name": "Insta Post",
   "description": "Automação de Posts para Instagram",
   "start_url": "/",
   "display": "standalone",
