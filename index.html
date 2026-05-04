@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -360,6 +361,20 @@
               <button type="button" class="btn btn-ghost" id="test-telegram-btn"><i class="fa-solid fa-paper-plane"></i> Testar</button>
             </div>
           </form>
+        </div>
+        
+        <!-- Push Notifications Card -->
+        <div class="card" style="grid-column:1/-1;">
+          <h3 class="card-title"><i class="fa-solid fa-bell"></i> Notificações de Tela (App)</h3>
+          <p style="font-size:0.85rem; color:var(--text-dim); margin-bottom:1.5rem;">
+            Receba notificações na tela do seu computador ou celular. No iPhone, adicione este site à Tela de Início primeiro.
+          </p>
+          <div style="display:flex; gap:12px;">
+            <button type="button" class="btn btn-primary" id="btn-enable-push" style="width:100%;">
+              <i class="fa-solid fa-bell-ring"></i> Ativar Notificações neste Dispositivo
+            </button>
+          </div>
+          <p id="push-status-msg" style="color:var(--text-dim); font-size:0.85rem; margin-top:1rem; text-align:center;"></p>
         </div>
       </div>
     </section>

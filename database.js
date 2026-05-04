@@ -85,6 +85,11 @@ async function initDB() {
       "createdAt" TEXT,
       "sourceFile" TEXT
     );
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      "endpoint" TEXT PRIMARY KEY,
+      "subscription" TEXT,
+      "createdAt" TEXT
+    );
   `);
 
   // --- UNIFIED MIGRATION SYSTEM ---

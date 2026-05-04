@@ -2,9 +2,36 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fetch = require('node-fetch');
+const webpush = require('web-push');
 const { getDB, initDB } = require('./database');
 const { runAutoImporter } = require('./auto_importer');
 require('dotenv').config();
+
+let vapidKeys = { publicKey: '', privateKey: '' };
+async function initWebPush() {
+  const db = await getDB();
+  const pubRow = await db.get('SELECT value FROM global_config WHERE key = \'vapidPublicKey\'');
+  const privRow = await db.get('SELECT value FROM global_config WHERE key = \'vapidPrivateKey\'');
+  
+  if (pubRow && privRow) {
+    vapidKeys.publicKey = pubRow.value;
+    vapidKeys.privateKey = privRow.value;
+  } else {
+    const keys = webpush.generateVAPIDKeys();
+    vapidKeys = keys;
+    const isPostgres = !!process.env.DATABASE_URL;
+    if (isPostgres) {
+      await db.run('INSERT INTO global_config ("key", "value") VALUES (?, ?) ON CONFLICT ("key") DO UPDATE SET "value"=EXCLUDED."value"', ['vapidPublicKey', keys.publicKey]);
+      await db.run('INSERT INTO global_config ("key", "value") VALUES (?, ?) ON CONFLICT ("key") DO UPDATE SET "value"=EXCLUDED."value"', ['vapidPrivateKey', keys.privateKey]);
+    } else {
+      await db.run('INSERT OR REPLACE INTO global_config ("key", "value") VALUES (?, ?)', ['vapidPublicKey', keys.publicKey]);
+      await db.run('INSERT OR REPLACE INTO global_config ("key", "value") VALUES (?, ?)', ['vapidPrivateKey', keys.privateKey]);
+    }
+  }
+  
+  webpush.setVapidDetails('mailto:contato@instascheduler.com', vapidKeys.publicKey, vapidKeys.privateKey);
+  console.log('📡 [WEB-PUSH] VAPID Keys configuradas.');
+}
 
 const app = express();
 const PORT = process.env.PORT || 10000; // Render uses 10000 by default
@@ -264,19 +291,68 @@ app.post('/api/publish-now', async (req, res) => {
     const mediaId = await publishToInstagram(post);
     await db.run('UPDATE posts SET "status" = \'success\', "mediaId" = ?, "publishedAt" = ? WHERE "id" = ?', [mediaId, new Date().toISOString(), post.id]);
     
-    // ✅ Notifica Telegram sobre publicação manual
-    await sendTelegramNotification(post, 'success');
+    // ✅ Notifica Telegram e WebPush sobre publicação manual
+    await notifyAll(post, 'success');
     
     res.json({ success: true, mediaId });
   } catch (err) {
     await db.run('UPDATE posts SET "status" = \'error\', "publishedAt" = ? WHERE "id" = ?', [new Date().toISOString(), post.id]).catch(() => {});
     
-    // ❌ Notifica Telegram sobre erro na publicação manual
-    await sendTelegramNotification(post, 'error', err.message);
+    // ❌ Notifica Telegram e WebPush sobre erro na publicação manual
+    await notifyAll(post, 'error', err.message);
     
     res.status(500).json({ error: err.message });
   }
 });
+
+/**
+ * 🔔 Web Push Endpoints
+ */
+app.get('/api/push/public-key', (req, res) => {
+  res.json({ publicKey: vapidKeys.publicKey });
+});
+
+app.post('/api/push/subscribe', async (req, res) => {
+  const subscription = req.body;
+  if (!subscription || !subscription.endpoint) return res.status(400).json({ error: 'Inscrição inválida' });
+  
+  const db = await getDB();
+  const isPostgres = !!process.env.DATABASE_URL;
+  try {
+    if (isPostgres) {
+      await db.run('INSERT INTO push_subscriptions ("endpoint", "subscription", "createdAt") VALUES (?, ?, ?) ON CONFLICT ("endpoint") DO UPDATE SET "subscription"=EXCLUDED."subscription"', [subscription.endpoint, JSON.stringify(subscription), new Date().toISOString()]);
+    } else {
+      await db.run('INSERT OR REPLACE INTO push_subscriptions ("endpoint", "subscription", "createdAt") VALUES (?, ?, ?)', [subscription.endpoint, JSON.stringify(subscription), new Date().toISOString()]);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+async function sendWebPushNotification(title, body) {
+  const db = await getDB();
+  try {
+    const subscriptions = await db.all('SELECT * FROM push_subscriptions');
+    const payload = JSON.stringify({ title, body, icon: '/icon-192.png' });
+    
+    for (const subRow of subscriptions) {
+      const sub = JSON.parse(subRow.subscription);
+      try {
+        await webpush.sendNotification(sub, payload);
+      } catch (err) {
+        if (err.statusCode === 404 || err.statusCode === 410) {
+          console.log('[WEB-PUSH] Inscrição expirada, removendo:', subRow.endpoint);
+          await db.run('DELETE FROM push_subscriptions WHERE "endpoint" = ?', [subRow.endpoint]);
+        } else {
+          console.error('[WEB-PUSH ERROR]', err.message);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[WEB-PUSH DB ERROR]', err.message);
+  }
+}
 
 /**
  * 📸 Instagram Engine
@@ -430,6 +506,22 @@ async function sendTelegramNotification(post, status, errorMsg) {
   }
 }
 
+async function notifyAll(post, status, errorMsg) {
+  await sendTelegramNotification(post, status, errorMsg);
+  
+  const db = await getDB();
+  const acc = await db.get('SELECT username FROM accounts WHERE "accountId" = ?', [post.accountId]);
+  const accName = acc ? `@${acc.username}` : post.accountId;
+  
+  let title = status === 'success' ? 'Post Publicado!' : 'Erro na Publicação';
+  let body = status === 'success' 
+    ? `O post na conta ${accName} foi publicado com sucesso!` 
+    : `O post na conta ${accName} falhou: ${errorMsg}`;
+    
+  await sendWebPushNotification(title, body);
+}
+
+
 async function cron() {
   try {
     const now = new Date();
@@ -458,11 +550,11 @@ async function cron() {
           const mediaId = await publishToInstagram(post);
           await db.run('UPDATE posts SET "status" = \'success\', "mediaId" = ?, "publishedAt" = ? WHERE "id" = ?', [mediaId, new Date().toISOString(), post.id]);
           console.log(`✅ Publicado: ${post.id}`);
-          await sendTelegramNotification(post, 'success');
+          await notifyAll(post, 'success');
         } catch (e) {
           console.error(`❌ Falha: ${post.id}`, e.message);
           await db.run('UPDATE posts SET "status" = \'error\', "publishedAt" = ? WHERE "id" = ?', [new Date().toISOString(), post.id]);
-          await sendTelegramNotification(post, 'error', e.message);
+          await notifyAll(post, 'error', e.message);
         }
       }
     }
@@ -498,6 +590,7 @@ app.get('/*splat', (req, res) => {
 // Initialization with error tracking for Render/Cloud
 initDB()
   .then(async () => {
+    await initWebPush();
     app.listen(PORT, '0.0.0.0', async () => {
       console.log(`🚀 [ENGINE] InstaScheduler AI online on port ${PORT}`);
       console.log(`🌐 [ENV] Database: ${process.env.DATABASE_URL ? 'PostgreSQL (Cloud)' : 'SQLite (Local)'}`);

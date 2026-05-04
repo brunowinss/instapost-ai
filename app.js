@@ -159,6 +159,7 @@ function initApp() {
   setupForms();
   setupUIEvents();
   loadData();
+  setupPushNotifications();
   setInterval(loadData, 30000);
 }
 
@@ -1147,6 +1148,100 @@ function setupUIEvents() {
       const preview = document.getElementById('preview-caption');
       if (preview) preview.innerText = e.target.value || 'Sua legenda aparecerá aqui.';
     };
+  }
+
+  // 4. Web Push Notification Enable Button
+  const btnPush = document.getElementById('btn-enable-push');
+  if (btnPush) {
+    btnPush.onclick = async () => {
+      await subscribeToPush();
+    };
+  }
+}
+
+/**
+ * 🔔 Web Push Client Logic
+ */
+function urlB64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
+async function setupPushNotifications() {
+  const msgEl = document.getElementById('push-status-msg');
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    if (msgEl) msgEl.innerText = 'Notificações Push não suportadas neste navegador.';
+    return;
+  }
+  
+  try {
+    const swReg = await navigator.serviceWorker.register('/sw.js');
+    console.log('[PWA] Service Worker registrado', swReg);
+    
+    // Check permission
+    if (Notification.permission === 'granted') {
+      if (msgEl) msgEl.innerText = 'Notificações já estão ativas neste dispositivo.';
+      const btn = document.getElementById('btn-enable-push');
+      if(btn) {
+         btn.disabled = true;
+         btn.innerHTML = '<i class="fa-solid fa-check"></i> Ativado';
+      }
+    }
+  } catch (err) {
+    console.error('[PWA] Erro ao registrar SW', err);
+  }
+}
+
+async function subscribeToPush() {
+  const msgEl = document.getElementById('push-status-msg');
+  try {
+    showLoading(true, 'SOLICITANDO PERMISSÃO...');
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+      throw new Error('Permissão negada pelo usuário.');
+    }
+
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    
+    if (!sub) {
+      const res = await fetch(`${API_BASE}/push/public-key`);
+      const data = await res.json();
+      const applicationServerKey = urlB64ToUint8Array(data.publicKey);
+      
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey
+      });
+    }
+
+    const saveRes = await fetch(`${API_BASE}/push/subscribe`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(sub)
+    });
+
+    if (saveRes.ok) {
+      showToast('Notificações ativadas com sucesso!', 'success');
+      if (msgEl) msgEl.innerText = 'Tudo certo! Você receberá alertas de publicação.';
+      const btn = document.getElementById('btn-enable-push');
+      if(btn) {
+         btn.disabled = true;
+         btn.innerHTML = '<i class="fa-solid fa-check"></i> Ativado';
+      }
+    } else {
+      throw new Error('Erro ao salvar inscrição no servidor.');
+    }
+  } catch (err) {
+    showToast(err.message, 'error');
+  } finally {
+    showLoading(false);
   }
 }
 
