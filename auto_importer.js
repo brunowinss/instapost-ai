@@ -17,7 +17,13 @@ async function runAutoImporter() {
   // 1. Get API Configs
   const configRows = await db.all('SELECT * FROM global_config');
   const config = {};
-  configRows.forEach(r => config[r.key] = JSON.parse(r.value));
+  configRows.forEach(r => {
+    try {
+      config[r.key] = JSON.parse(r.value);
+    } catch (e) {
+      config[r.key] = r.value;
+    }
+  });
   
   if (!config.cloudinaryName || !config.cloudinaryPreset) {
     console.error('❌ Cloudinary config missing! Please set in UI Settings.');
