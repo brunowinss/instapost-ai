@@ -338,7 +338,21 @@ function populateAccountSelector() {
   if (!prev && STATE.accounts.length > 0) {
     STATE.activeAccountId = STATE.accounts[0].accountId;
     updateHeaderUI();
+    updateHeaderUI();
   }
+}
+
+function getTimeRemaining(dateStr) {
+  const diff = new Date(dateStr) - new Date();
+  if (diff < 0) return 'Postando...';
+  const hours = Math.floor(diff / 1000 / 60 / 60);
+  const mins = Math.floor((diff / 1000 / 60) % 60);
+  
+  if (hours > 48) return `Daqui a ${Math.floor(hours / 24)} dias`;
+  if (hours > 24) return 'Amanhã';
+  if (hours > 0) return `Faltam ${hours}h ${mins}m`;
+  if (mins > 0) return `Faltam ${mins}m`;
+  return 'Agora mesmo';
 }
 
 function renderDashboard() {
@@ -363,7 +377,8 @@ function renderDashboard() {
   const next = STATE.scheduledPosts[0];
   if (next) {
     const date = new Date(next.scheduledAt);
-    document.getElementById('stat-next-label').innerText = `Próximo: ${date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+    const remaining = getTimeRemaining(next.scheduledAt);
+    document.getElementById('stat-next-label').innerText = `Próximo: ${date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} (${remaining})`;
   } else {
     document.getElementById('stat-next-label').innerText = 'Sem agendamentos';
   }
@@ -509,6 +524,7 @@ function renderScheduleCards() {
     const date = new Date(p.scheduledAt);
     const dateStr = date.toLocaleDateString('pt-BR', { day:'2-digit', month:'short' });
     const timeStr = date.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+    const remainingStr = getTimeRemaining(p.scheduledAt);
     const thumbUrl = getThumbnailUrl(p.imageUrl);
     const isSelected = STATE.selectedPostIds.includes(p.id);
     
@@ -533,8 +549,11 @@ function renderScheduleCards() {
         <p style="font-size:0.85rem; line-height:1.5; color:rgba(255,255,255,0.8); max-height:3.2em; overflow:hidden; margin-top:0.8rem;">${p.caption || 'Sem legenda'}</p>
       </div>
       <div style="display:flex; justify-content:space-between; align-items:center; padding-top:0.8rem; border-top:1px solid var(--glass-border);">
-        <div style="font-size:0.78rem; color:var(--text-dim); display:flex; align-items:center; gap:6px;">
-          <i class="fa-solid fa-calendar"></i> ${dateStr} às ${timeStr}
+        <div style="font-size:0.78rem; color:var(--text-dim); display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+          <div><i class="fa-solid fa-calendar"></i> ${dateStr} às ${timeStr}</div>
+          <span style="background: rgba(139,92,246,0.15); color: var(--purple-main); padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 0.68rem;">
+             ${remainingStr}
+          </span>
         </div>
         <div style="display:flex; gap:8px;">
           ${!STATE.selectionMode ? `
