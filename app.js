@@ -1157,6 +1157,20 @@ function setupUIEvents() {
       await subscribeToPush();
     };
   }
+
+  const btnTestPush = document.getElementById('btn-test-push');
+  if (btnTestPush) {
+    btnTestPush.onclick = async () => {
+      const btn = e => e.target;
+      try {
+        const res = await fetch(`${API_BASE}/push/test`, { method: 'POST' });
+        if (!res.ok) throw new Error('Erro ao enviar push de teste');
+        showToast('Notificação de teste enviada!', 'success');
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    };
+  }
 }
 
 /**

@@ -330,6 +330,24 @@ app.post('/api/push/subscribe', async (req, res) => {
   }
 });
 
+app.post('/api/push/test', async (req, res) => {
+  try {
+    await sendWebPushNotification('✅ Notificação de Teste', 'Tudo certo! As notificações Web Push estão funcionando perfeitamente no seu dispositivo.');
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/push/test', async (req, res) => {
+  try {
+    await sendWebPushNotification('✅ Notificação de Teste', 'Tudo certo! As notificações Web Push estão funcionando perfeitamente no seu dispositivo.');
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 async function sendWebPushNotification(title, body) {
   const db = await getDB();
   try {
