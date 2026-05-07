@@ -290,75 +290,85 @@ function renderSettingsAccounts() {
   `).join('');
 }
 
-async function updateAccountToken(accountId, username) {
-  // Build update-token modal content
+function updateAccountToken(accountId, username) {
   const modal = document.getElementById('custom-modal');
-  const modalTitle = document.getElementById('modal-title');
-  const modalBody = document.getElementById('modal-body');
-  if (!modal || !modalTitle || !modalBody) return;
+  const container = document.getElementById('modal-inputs-container');
+  const titleSpan = document.querySelector('#modal-title span');
+  const msg = document.getElementById('modal-msg');
+  const previewBox = document.getElementById('modal-account-preview');
+  const btnConfirm = document.getElementById('modal-confirm');
+  const btnCancel = document.getElementById('modal-cancel');
+  if (!modal || !container) return;
 
-  modalTitle.innerHTML = `<i class="fa-solid fa-key" style="color:#f59e0b;margin-right:8px;"></i>Atualizar Token — @${username}`;
-  modalBody.innerHTML = `
-    <p style="font-size:0.82rem; color:var(--text-dim); margin-bottom:1.2rem; line-height:1.5;">
-      Cole o novo <strong style="color:var(--text-main);">Access Token</strong> do Instagram/Meta abaixo.<br>
-      O token antigo será substituído imediatamente.
-    </p>
-    <div style="position:relative;">
-      <input id="update-token-input" type="text" placeholder="EAABsbCS..."
-        style="width:100%; padding:0.9rem 1rem; background:rgba(255,255,255,0.04); border:1px solid var(--glass-border); border-radius:12px; color:var(--text-main); font-size:0.85rem; font-family:monospace; outline:none; box-sizing:border-box;"
-        oninput="this.style.borderColor=this.value.length>20?'#f59e0b':'var(--glass-border)'"
-      />
-    </div>
-    <div id="update-token-status" style="margin-top:0.8rem; font-size:0.78rem; min-height:20px;"></div>
-    <button id="update-token-btn" onclick="confirmUpdateToken('${accountId}','${username}')"
-      style="margin-top:1.2rem; width:100%; padding:0.9rem; background:linear-gradient(135deg,#f59e0b,#ef4444); border:none; border-radius:12px; color:white; font-weight:800; font-size:0.9rem; letter-spacing:1px; cursor:pointer; transition:opacity 0.2s;"
-      onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">
-      <i class="fa-solid fa-rotate" style="margin-right:8px;"></i>VERIFICAR E SALVAR
-    </button>
-  `;
+  titleSpan.innerText = 'ATUALIZAR TOKEN — @' + username;
+  msg.innerText = 'Cole o novo Access Token do Instagram/Meta. O token antigo será substituído automaticamente.';
 
-  modal.classList.add('active');
-  setTimeout(() => document.getElementById('update-token-input')?.focus(), 100);
-}
+  container.innerHTML = '<input type="text" id="update-new-token" class="input" placeholder="EAABsbCS... ou IGAA..." style="margin-bottom:12px; font-family:monospace; font-size:0.85rem;">' +
+    '<button id="update-verify-btn" class="btn btn-ghost" style="width:100%;"><i class="fa-solid fa-magnifying-glass"></i> Verificar Token</button>';
 
-async function confirmUpdateToken(accountId, username) {
-  const tokenInput = document.getElementById('update-token-input');
-  const statusEl = document.getElementById('update-token-status');
-  const btn = document.getElementById('update-token-btn');
-  const newToken = tokenInput?.value?.trim();
+  previewBox.style.display = 'none';
+  btnConfirm.disabled = true;
+  btnConfirm.style.opacity = '0.5';
+  btnConfirm.innerText = 'Salvar Token';
+  modal.style.display = 'flex';
 
-  if (!newToken || newToken.length < 20) {
-    statusEl.innerHTML = '<span style="color:#ef4444;"><i class="fa-solid fa-circle-xmark" style="margin-right:4px;"></i>Token inválido ou muito curto.</span>';
-    return;
-  }
+  let validUser = null;
+  let validPic = null;
 
-  btn.disabled = true;
-  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="margin-right:8px;"></i>VERIFICANDO...';
-  statusEl.innerHTML = '<span style="color:#f59e0b;">Validando token com a Meta...</span>';
+  document.getElementById('update-verify-btn').onclick = async function() {
+    const newToken = document.getElementById('update-new-token').value.trim();
+    if (!newToken || newToken.length < 20) { alert('Token inválido ou muito curto.'); return; }
+    this.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Verificando...';
+    try {
+      const r = await fetch(API_BASE + '/verify-account?id=' + encodeURIComponent(accountId) + '&token=' + encodeURIComponent(newToken));
+      const data = await r.json();
+      if (data.error) { alert('Erro: ' + (data.details?.message || data.error)); this.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i> Verificar Token'; return; }
+      validUser = data.username;
+      validPic = data.profilePictureUrl;
+      document.getElementById('modal-preview-name').innerText = '@' + validUser;
+      previewBox.style.display = 'flex';
+      if (validPic) {
+        const avatar = previewBox.querySelector('div:first-child');
+        if (avatar) { avatar.innerHTML = '<img src="' + validPic + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">'; avatar.style.background = 'none'; }
+      }
+      btnConfirm.disabled = false;
+      btnConfirm.style.opacity = '1';
+      this.innerHTML = '<i class="fa-solid fa-check"></i> Token Válido!';
+      this.className = 'btn btn-primary';
+      this.style.width = '100%';
+    } catch (err) {
+      alert('Erro de conexão: ' + err.message);
+      this.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i> Verificar Token';
+    }
+  };
 
-  try {
-    const res = await fetch(`${API_BASE}/verify-account?id=${encodeURIComponent(accountId)}&token=${encodeURIComponent(newToken)}`);
-    const data = await res.json();
+  btnConfirm.onclick = async function() {
+    if (!validUser) return;
+    const newToken = document.getElementById('update-new-token').value.trim();
+    this.innerText = 'Salvando...';
+    this.disabled = true;
+    try {
+      const res = await fetch(API_BASE + '/save-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountId: accountId, username: validUser, accessToken: newToken, profilePictureUrl: validPic || '' })
+      });
+      if (res.ok) {
+        modal.style.display = 'none';
+        showToast('Token de @' + validUser + ' atualizado com sucesso!', 'success');
+        await loadData();
+      } else {
+        const data = await res.json();
+        throw new Error(data.error || 'Erro desconhecido.');
+      }
+    } catch (e) {
+      alert('Erro ao salvar: ' + e.message);
+      this.innerText = 'Salvar Token';
+      this.disabled = false;
+    }
+  };
 
-    if (!res.ok || !data.username) throw new Error(data.error || 'Token inválido ou sem permissão.');
-
-    statusEl.innerHTML = `<span style="color:#10b981;"><i class="fa-solid fa-circle-check" style="margin-right:4px;"></i>Token válido! Conta: @${data.username}</span>`;
-    btn.innerHTML = '<i class="fa-solid fa-floppy-disk" style="margin-right:8px;"></i>SALVANDO...';
-
-    await fetch(`${API_BASE}/save-account`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ accountId, username: data.username, accessToken: newToken, profilePictureUrl: data.profilePictureUrl || '' })
-    });
-
-    document.getElementById('custom-modal')?.classList.remove('active');
-    showToast(`Token de @${data.username} atualizado com sucesso!`, 'success');
-    await loadData();
-  } catch (err) {
-    statusEl.innerHTML = `<span style="color:#ef4444;"><i class="fa-solid fa-circle-xmark" style="margin-right:4px;"></i>${err.message}</span>`;
-    btn.disabled = false;
-    btn.innerHTML = '<i class="fa-solid fa-rotate" style="margin-right:8px;"></i>VERIFICAR E SALVAR';
-  }
+  btnCancel.onclick = () => { modal.style.display = 'none'; };
 }
 
 function updateHeaderUI() {
