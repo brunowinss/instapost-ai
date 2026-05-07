@@ -65,8 +65,8 @@ const IG_APP_SECRET = process.env.IG_APP_SECRET || process.env.APP_SECRET;
 const REDIRECT_URI = process.env.REDIRECT_URI || 'https://instapost.brunowins.com/auth/callback';
 
 app.get('/auth/instagram', (req, res) => {
-  if (!IG_APP_ID) return res.status(500).send('IG_APP_ID não configurado.');
-  const url = `https://api.instagram.com/oauth/authorize?client_id=${IG_APP_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=instagram_basic,instagram_content_publish,instagram_manage_comments&response_type=code`;
+  if (!IG_APP_ID) return res.status(500).send('APP_ID não configurado no servidor.');
+  const url = `https://www.instagram.com/oauth/authorize?enable_fb_login=0&force_authentication=1&client_id=${IG_APP_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=instagram_business_basic%2Cinstagram_business_content_publish%2Cinstagram_business_manage_comments`;
   res.redirect(url);
 });
 
