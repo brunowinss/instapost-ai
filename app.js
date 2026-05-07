@@ -279,12 +279,86 @@ function renderSettingsAccounts() {
       </div>
       <div style="display:flex; align-items:center; gap:10px;">
         <span style="font-size:0.6rem; padding:3px 8px; border-radius:6px; background:rgba(16,185,129,0.1); color:var(--success); border:1px solid rgba(16,185,129,0.2); font-weight:800; letter-spacing:0.5px;">ATIVO</span>
+        <button class="btn btn-sm btn-ghost" onclick="updateAccountToken('${acc.accountId}', '${acc.username}')" title="Atualizar Token" style="padding:0.5rem; width:32px; height:32px; color:#f59e0b; border-color:rgba(245,158,11,0.2);">
+          <i class="fa-solid fa-key"></i>
+        </button>
         <button class="btn btn-sm btn-ghost btn-delete" onclick="deleteAccount('${acc.accountId}')" style="padding:0.5rem; width:32px; height:32px; color:var(--error); border-color:rgba(239,68,68,0.2);">
           <i class="fa-solid fa-trash-can"></i>
         </button>
       </div>
     </div>
   `).join('');
+}
+
+async function updateAccountToken(accountId, username) {
+  // Build update-token modal content
+  const modal = document.getElementById('custom-modal');
+  const modalTitle = document.getElementById('modal-title');
+  const modalBody = document.getElementById('modal-body');
+  if (!modal || !modalTitle || !modalBody) return;
+
+  modalTitle.innerHTML = `<i class="fa-solid fa-key" style="color:#f59e0b;margin-right:8px;"></i>Atualizar Token — @${username}`;
+  modalBody.innerHTML = `
+    <p style="font-size:0.82rem; color:var(--text-dim); margin-bottom:1.2rem; line-height:1.5;">
+      Cole o novo <strong style="color:var(--text-main);">Access Token</strong> do Instagram/Meta abaixo.<br>
+      O token antigo será substituído imediatamente.
+    </p>
+    <div style="position:relative;">
+      <input id="update-token-input" type="text" placeholder="EAABsbCS..."
+        style="width:100%; padding:0.9rem 1rem; background:rgba(255,255,255,0.04); border:1px solid var(--glass-border); border-radius:12px; color:var(--text-main); font-size:0.85rem; font-family:monospace; outline:none; box-sizing:border-box;"
+        oninput="this.style.borderColor=this.value.length>20?'#f59e0b':'var(--glass-border)'"
+      />
+    </div>
+    <div id="update-token-status" style="margin-top:0.8rem; font-size:0.78rem; min-height:20px;"></div>
+    <button id="update-token-btn" onclick="confirmUpdateToken('${accountId}','${username}')"
+      style="margin-top:1.2rem; width:100%; padding:0.9rem; background:linear-gradient(135deg,#f59e0b,#ef4444); border:none; border-radius:12px; color:white; font-weight:800; font-size:0.9rem; letter-spacing:1px; cursor:pointer; transition:opacity 0.2s;"
+      onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">
+      <i class="fa-solid fa-rotate" style="margin-right:8px;"></i>VERIFICAR E SALVAR
+    </button>
+  `;
+
+  modal.classList.add('active');
+  setTimeout(() => document.getElementById('update-token-input')?.focus(), 100);
+}
+
+async function confirmUpdateToken(accountId, username) {
+  const tokenInput = document.getElementById('update-token-input');
+  const statusEl = document.getElementById('update-token-status');
+  const btn = document.getElementById('update-token-btn');
+  const newToken = tokenInput?.value?.trim();
+
+  if (!newToken || newToken.length < 20) {
+    statusEl.innerHTML = '<span style="color:#ef4444;"><i class="fa-solid fa-circle-xmark" style="margin-right:4px;"></i>Token inválido ou muito curto.</span>';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="margin-right:8px;"></i>VERIFICANDO...';
+  statusEl.innerHTML = '<span style="color:#f59e0b;">Validando token com a Meta...</span>';
+
+  try {
+    const res = await fetch(`${API_BASE}/verify-account?id=${encodeURIComponent(accountId)}&token=${encodeURIComponent(newToken)}`);
+    const data = await res.json();
+
+    if (!res.ok || !data.username) throw new Error(data.error || 'Token inválido ou sem permissão.');
+
+    statusEl.innerHTML = `<span style="color:#10b981;"><i class="fa-solid fa-circle-check" style="margin-right:4px;"></i>Token válido! Conta: @${data.username}</span>`;
+    btn.innerHTML = '<i class="fa-solid fa-floppy-disk" style="margin-right:8px;"></i>SALVANDO...';
+
+    await fetch(`${API_BASE}/save-account`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accountId, username: data.username, accessToken: newToken, profilePictureUrl: data.profilePictureUrl || '' })
+    });
+
+    document.getElementById('custom-modal')?.classList.remove('active');
+    showToast(`Token de @${data.username} atualizado com sucesso!`, 'success');
+    await loadData();
+  } catch (err) {
+    statusEl.innerHTML = `<span style="color:#ef4444;"><i class="fa-solid fa-circle-xmark" style="margin-right:4px;"></i>${err.message}</span>`;
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-rotate" style="margin-right:8px;"></i>VERIFICAR E SALVAR';
+  }
 }
 
 function updateHeaderUI() {
