@@ -161,6 +161,17 @@ function initApp() {
   loadData();
   setupPushNotifications();
   setInterval(loadData, 30000);
+
+  // Detecta retorno do OAuth
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('connected')) {
+    showToast('@' + params.get('connected') + ' conectado com sucesso!', 'success');
+    history.replaceState({}, '', '/');
+    setTimeout(() => { navigateTo('settings'); }, 600);
+  } else if (params.get('error')) {
+    showToast('Erro ao conectar: ' + params.get('error'), 'error');
+    history.replaceState({}, '', '/');
+  }
 }
 
 function logout() {

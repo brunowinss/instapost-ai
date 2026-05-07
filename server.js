@@ -59,6 +59,63 @@ app.use(cors());
 app.use(express.json({ limit: '60mb' }));
 app.use(express.static(__dirname));
 
+// ── OAuth Instagram Login ──────────────────────────────────────────────────
+const IG_APP_ID = process.env.IG_APP_ID || process.env.APP_ID;
+const IG_APP_SECRET = process.env.IG_APP_SECRET || process.env.APP_SECRET;
+const REDIRECT_URI = process.env.REDIRECT_URI || 'https://instapost.brunowins.com/auth/callback';
+
+app.get('/auth/instagram', (req, res) => {
+  if (!IG_APP_ID) return res.status(500).send('IG_APP_ID não configurado.');
+  const url = `https://api.instagram.com/oauth/authorize?client_id=${IG_APP_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=instagram_basic,instagram_content_publish,instagram_manage_comments&response_type=code`;
+  res.redirect(url);
+});
+
+app.get('/auth/callback', async (req, res) => {
+  const { code, error } = req.query;
+  if (error || !code) return res.redirect('/?error=' + encodeURIComponent(error || 'sem_codigo'));
+
+  try {
+    // 1. Trocar code por short-lived token
+    const tokenRes = await fetch('https://api.instagram.com/oauth/access_token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ client_id: IG_APP_ID, client_secret: IG_APP_SECRET, grant_type: 'authorization_code', redirect_uri: REDIRECT_URI, code })
+    });
+    const tokenData = await tokenRes.json();
+    if (!tokenData.access_token) throw new Error(JSON.stringify(tokenData));
+
+    const shortToken = tokenData.access_token;
+    const igUserId = tokenData.user_id;
+
+    // 2. Trocar por long-lived token (60 dias)
+    const llRes = await fetch(`https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_id=${IG_APP_ID}&client_secret=${IG_APP_SECRET}&access_token=${shortToken}`);
+    const llData = await llRes.json();
+    const finalToken = llData.access_token || shortToken;
+
+    // 3. Buscar username e foto
+    const profileRes = await fetch(`https://graph.instagram.com/v21.0/${igUserId}?fields=username,profile_picture_url&access_token=${finalToken}`);
+    const profile = await profileRes.json();
+    if (!profile.username) throw new Error('Não foi possível obter perfil: ' + JSON.stringify(profile));
+
+    // 4. Salvar conta no banco
+    const db = await getDB();
+    const isPostgres = !!process.env.DATABASE_URL;
+    const params = [String(igUserId), profile.username, finalToken, profile.profile_picture_url || '', new Date().toISOString()];
+    if (isPostgres) {
+      await db.run('INSERT INTO accounts ("accountId","username","accessToken","profilePictureUrl","createdAt") VALUES (?,?,?,?,?) ON CONFLICT ("accountId") DO UPDATE SET "username"=EXCLUDED."username","accessToken"=EXCLUDED."accessToken","profilePictureUrl"=EXCLUDED."profilePictureUrl"', params);
+    } else {
+      await db.run('INSERT OR REPLACE INTO accounts ("accountId","username","accessToken","profilePictureUrl","createdAt") VALUES (?,?,?,?,?)', params);
+    }
+
+    console.log(`[OAUTH] ✅ @${profile.username} conectado via OAuth.`);
+    res.redirect('/?connected=' + encodeURIComponent(profile.username));
+  } catch (err) {
+    console.error('[OAUTH ERROR]', err.message);
+    res.redirect('/?error=' + encodeURIComponent(err.message));
+  }
+});
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
  * 📡 API Endpoints
  */
