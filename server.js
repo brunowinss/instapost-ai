@@ -142,21 +142,49 @@ app.get('/api/data', async (req, res) => {
   }
 });
 
+// Troca token curta duração → longa duração (60 dias) via Meta OAuth
+async function exchangeForLongLivedToken(shortToken) {
+  const appId = process.env.APP_ID || process.env.META_APP_ID;
+  const appSecret = process.env.APP_SECRET || process.env.META_APP_SECRET;
+  if (!appId || !appSecret) {
+    console.log('[TOKEN-EXCHANGE] APP_ID ou APP_SECRET não configurados — salvando token original.');
+    return shortToken;
+  }
+  try {
+    const url = `https://graph.facebook.com/v21.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${shortToken}`;
+    const r = await fetch(url);
+    const data = await r.json();
+    if (data.access_token) {
+      console.log('[TOKEN-EXCHANGE] ✅ Token trocado para longa duração (60 dias).');
+      return data.access_token;
+    }
+    console.warn('[TOKEN-EXCHANGE] Falha na troca:', data.error?.message || JSON.stringify(data));
+    return shortToken;
+  } catch (err) {
+    console.warn('[TOKEN-EXCHANGE] Erro ao trocar token:', err.message);
+    return shortToken;
+  }
+}
+
 app.post('/api/save-account', async (req, res) => {
   const { accountId, username, accessToken, profilePictureUrl } = req.body;
   console.log(`[SAVE-ACCOUNT] Tentando salvar conta: ${username} (${accountId})`);
   const db = await getDB();
   const isPostgres = !!process.env.DATABASE_URL;
-  
+
   try {
-    const params = [accountId, username, accessToken, profilePictureUrl, new Date().toISOString()];
+    // Tenta trocar para token longa duração automaticamente
+    const finalToken = await exchangeForLongLivedToken(accessToken);
+
+    const params = [accountId, username, finalToken, profilePictureUrl, new Date().toISOString()];
     if (isPostgres) {
       await db.run('INSERT INTO accounts ("accountId", "username", "accessToken", "profilePictureUrl", "createdAt") VALUES (?, ?, ?, ?, ?) ON CONFLICT ("accountId") DO UPDATE SET "username"=EXCLUDED."username", "accessToken"=EXCLUDED."accessToken", "profilePictureUrl"=EXCLUDED."profilePictureUrl"', params);
     } else {
       await db.run('INSERT OR REPLACE INTO accounts ("accountId", "username", "accessToken", "profilePictureUrl", "createdAt") VALUES (?, ?, ?, ?, ?)', params);
     }
     console.log(`[SAVE-ACCOUNT SUCCESS] Conta @${username} salva.`);
-    res.json({ success: true });
+    const isLongLived = finalToken !== accessToken;
+    res.json({ success: true, longLived: isLongLived });
   } catch (err) {
     console.error(`[SAVE-ACCOUNT ERROR] ${err.message}`);
     res.status(500).json({ error: err.message });
