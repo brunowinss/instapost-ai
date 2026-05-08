@@ -154,12 +154,27 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
 });
 
+async function checkInstagramConfig() {
+  try {
+    const res = await fetch('/api/instagram-status');
+    const data = await res.json();
+    const warning = document.getElementById('ig-config-warning');
+    const btn = document.getElementById('connect-instagram-btn');
+    if (warning) warning.style.display = data.configured ? 'none' : 'block';
+    if (btn && !data.configured) {
+      btn.style.opacity = '0.5';
+      btn.title = 'IG_APP_ID e IG_APP_SECRET não configurados no servidor.';
+    }
+  } catch (e) { /* silently ignore */ }
+}
+
 function initApp() {
   setupNavigation();
   setupForms();
   setupUIEvents();
   loadData();
   setupPushNotifications();
+  checkInstagramConfig();
   setInterval(loadData, 30000);
 
   // Detecta retorno do OAuth

@@ -296,8 +296,13 @@
         <!-- Accounts Card -->
         <div class="card">
           <h3 class="card-title"><i class="fa-solid fa-user-gear"></i> Contas Conectadas</h3>
+          <div id="ig-config-warning" style="display:none; background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.4); border-radius:8px; padding:12px 14px; margin-bottom:1rem; font-size:0.82rem; color:#fca5a5;">
+            <b><i class="fa-solid fa-triangle-exclamation"></i> App Instagram não configurado</b><br>
+            As variáveis <code>IG_APP_ID</code> e <code>IG_APP_SECRET</code> não estão definidas no servidor.<br>
+            Configure-as no painel do Render (Environment) e reinicie. Veja o <code>.env.example</code>.
+          </div>
           <div id="accounts-list-settings" style="display:flex; flex-direction:column; gap:12px; margin-bottom:1.5rem;"></div>
-          <a href="/auth/instagram" class="btn btn-ghost" style="width:100%; text-decoration:none; display:flex; align-items:center; justify-content:center; gap:8px;">
+          <a href="/auth/instagram" id="connect-instagram-btn" class="btn btn-ghost" style="width:100%; text-decoration:none; display:flex; align-items:center; justify-content:center; gap:8px;">
             <i class="fa-brands fa-instagram"></i> Conectar Nova Conta
           </a>
         </div>

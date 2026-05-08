@@ -63,39 +63,97 @@ app.use(express.static(__dirname));
 const IG_APP_ID = process.env.IG_APP_ID || process.env.APP_ID;
 const IG_APP_SECRET = process.env.IG_APP_SECRET || process.env.APP_SECRET;
 const REDIRECT_URI = process.env.REDIRECT_URI || 'https://instapost.brunowins.com/auth/callback';
+const IG_API_VERSION = 'v22.0';
+
+// Endpoint para verificar se as credenciais do Instagram estão configuradas
+app.get('/api/instagram-status', (req, res) => {
+  res.json({
+    configured: !!(IG_APP_ID && IG_APP_SECRET),
+    hasAppId: !!IG_APP_ID,
+    hasAppSecret: !!IG_APP_SECRET,
+    redirectUri: REDIRECT_URI
+  });
+});
 
 app.get('/auth/instagram', (req, res) => {
-  if (!IG_APP_ID) return res.status(500).send('APP_ID não configurado no servidor.');
-  const url = `https://www.instagram.com/oauth/authorize?enable_fb_login=0&force_authentication=1&client_id=${IG_APP_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=instagram_business_basic%2Cinstagram_business_content_publish%2Cinstagram_business_manage_comments`;
+  if (!IG_APP_ID) {
+    return res.status(500).send(`
+      <html><body style="font-family:sans-serif;padding:40px;background:#111;color:#fff;">
+        <h2>⚠️ App Instagram não configurado</h2>
+        <p>As variáveis de ambiente <code>IG_APP_ID</code> e <code>IG_APP_SECRET</code> não estão definidas no servidor.</p>
+        <p>Configure-as no painel do Render (ou no arquivo <code>.env</code>) e reinicie o servidor.</p>
+        <p>Veja o <code>.env.example</code> para instruções.</p>
+        <a href="/" style="color:#a78bfa;">← Voltar</a>
+      </body></html>
+    `);
+  }
+  if (!IG_APP_SECRET) {
+    return res.status(500).send(`
+      <html><body style="font-family:sans-serif;padding:40px;background:#111;color:#fff;">
+        <h2>⚠️ App Secret não configurado</h2>
+        <p>A variável <code>IG_APP_SECRET</code> não está definida.</p>
+        <a href="/" style="color:#a78bfa;">← Voltar</a>
+      </body></html>
+    `);
+  }
+  const scopes = 'instagram_business_basic,instagram_business_content_publish,instagram_business_manage_comments';
+  const url = `https://www.instagram.com/oauth/authorize?enable_fb_login=0&force_authentication=1&client_id=${IG_APP_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=${encodeURIComponent(scopes)}`;
+  console.log(`[OAUTH] Iniciando login. redirect_uri=${REDIRECT_URI}`);
   res.redirect(url);
 });
 
+function parseIgError(data) {
+  if (data.error_message) return data.error_message;
+  if (data.error) {
+    if (typeof data.error === 'object') return data.error.error_user_msg || data.error.message || JSON.stringify(data.error);
+    return data.error;
+  }
+  return JSON.stringify(data);
+}
+
 app.get('/auth/callback', async (req, res) => {
-  const { code, error } = req.query;
-  if (error || !code) return res.redirect('/?error=' + encodeURIComponent(error || 'sem_codigo'));
+  const { code, error, error_description } = req.query;
+  if (error || !code) {
+    const msg = error_description || error || 'Autorização cancelada ou código ausente.';
+    console.error('[OAUTH] Erro no callback do Instagram:', msg);
+    return res.redirect('/?error=' + encodeURIComponent(msg));
+  }
 
   try {
     // 1. Trocar code por short-lived token
+    console.log('[OAUTH] Trocando code por token...');
     const tokenRes = await fetch('https://api.instagram.com/oauth/access_token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ client_id: IG_APP_ID, client_secret: IG_APP_SECRET, grant_type: 'authorization_code', redirect_uri: REDIRECT_URI, code })
     });
     const tokenData = await tokenRes.json();
-    if (!tokenData.access_token) throw new Error(JSON.stringify(tokenData));
+    if (!tokenData.access_token) {
+      const errMsg = parseIgError(tokenData);
+      console.error('[OAUTH] Falha ao obter token:', errMsg);
+      throw new Error('Falha ao obter token: ' + errMsg);
+    }
 
     const shortToken = tokenData.access_token;
     const igUserId = tokenData.user_id;
+    console.log(`[OAUTH] Token obtido para user_id=${igUserId}`);
 
     // 2. Trocar por long-lived token (60 dias)
     const llRes = await fetch(`https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_id=${IG_APP_ID}&client_secret=${IG_APP_SECRET}&access_token=${shortToken}`);
     const llData = await llRes.json();
+    if (llData.error) {
+      console.warn('[OAUTH] Aviso: falha ao obter long-lived token, usando short-lived.', parseIgError(llData));
+    }
     const finalToken = llData.access_token || shortToken;
 
     // 3. Buscar username e foto
-    const profileRes = await fetch(`https://graph.instagram.com/v21.0/${igUserId}?fields=username,profile_picture_url&access_token=${finalToken}`);
+    const profileRes = await fetch(`https://graph.instagram.com/${IG_API_VERSION}/${igUserId}?fields=username,profile_picture_url&access_token=${finalToken}`);
     const profile = await profileRes.json();
-    if (!profile.username) throw new Error('Não foi possível obter perfil: ' + JSON.stringify(profile));
+    if (!profile.username) {
+      const errMsg = parseIgError(profile);
+      console.error('[OAUTH] Falha ao obter perfil:', errMsg);
+      throw new Error('Não foi possível obter perfil do Instagram: ' + errMsg);
+    }
 
     // 4. Salvar conta no banco
     const db = await getDB();
