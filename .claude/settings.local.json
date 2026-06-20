@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find . -maxdepth 2 -type d ! -name 'node_modules' -exec basename {} \\\\;)",
+      "Bash(npm ls *)",
+      "Bash(npm --version)"
+    ]
+  }
+}

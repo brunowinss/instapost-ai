@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: instascheduler-ai
+    env: node
+    buildCommand: npm install --omit=optional
+    startCommand: npm start
+    healthCheckPath: /api/instagram-status
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false # OBRIGATÓRIO: defina no painel do Render com a URL do PostgreSQL
+      - key: PORT
+        value: 10000

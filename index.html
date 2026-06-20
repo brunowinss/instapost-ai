@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Insta Post — Gestão Profissional</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <meta name="apple-mobile-web-app-title" content="Insta Post">
+  <link rel="manifest" href="manifest.json?v=2">
+  <link rel="apple-touch-icon" href="/icon-512.png?v=2">
+  <link rel="icon" type="image/png" href="/icon-192.png?v=2">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Animated Background -->
+  <div class="bg-ambient"></div>
+
+  <!-- Loading Overlay -->
+  <div id="loading-overlay" class="modal-overlay" style="display:none; z-index:11000;">
+    <div style="text-align:center;">
+      <div class="spinner"></div>
+      <span style="font-weight:600; font-size:1rem; margin-top:1.5rem; display:block;">Aguarde...</span>
+    </div>
+  </div>
+
+  <!-- Login Screen -->
+  <div id="login-screen">
+    <div class="bg-ambient"></div>
+    <div class="login-card">
+      <div class="login-logo"><i class="fa-solid fa-calendar-check"></i></div>
+      <h1 class="login-title">Insta Post</h1>
+      <p class="login-subtitle">Gestão Elite de Conteúdo</p>
+      
+      <form id="login-form" style="text-align:left;">
+        <div class="form-group">
+          <label class="label"><i class="fa-solid fa-user"></i> Usuário</label>
+          <input type="text" class="input" id="login-user" placeholder="Seu usuário" autocomplete="username" autocapitalize="none" autocorrect="off" required>
+        </div>
+        <div class="form-group">
+          <label class="label"><i class="fa-solid fa-lock"></i> Senha</label>
+          <input type="password" class="input" id="login-pass" placeholder="Sua senha" autocomplete="current-password" required>
+        </div>
+        <p id="login-error" style="color:var(--error); font-size:0.85rem; font-weight:600; display:none; margin-bottom:1rem; text-align:center;"></p>
+        <button type="submit" class="btn btn-primary" style="width:100%;">
+          <i class="fa-solid fa-right-to-bracket"></i> Entrar
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <a href="/" class="logo-container">
+      <div class="logo-icon"><i class="fa-solid fa-bolt"></i></div>
+      <span class="logo-text">Insta Post</span>
+    </a>
+    <nav class="nav-links">
+      <a href="#" class="nav-item active" data-section="dashboard">
+        <i class="fa-solid fa-chart-pie"></i>
+        <span>Dashboard</span>
+      </a>
+      <a href="#" class="nav-item" data-section="new-post">
+        <i class="fa-solid fa-circle-plus"></i>
+        <span>Novo Post</span>
+      </a>
+      <a href="#" class="nav-item" data-section="schedule">
+        <i class="fa-solid fa-calendar-days"></i>
+        <span>Calendário</span>
+      </a>
+      <a href="#" class="nav-item" data-section="settings">
+        <i class="fa-solid fa-sliders"></i>
+        <span>Configurações</span>
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="status-badge">
+        <div class="status-badge-title">Motor</div>
+        <div class="status-indicator">
+          <div class="status-dot"></div>
+          <span class="status-text">CRON ATIVO</span>
+        </div>
+      </div>
+      <button class="btn btn-ghost" onclick="logout()" style="width:100%; border-color: rgba(239, 68, 68, 0.2); color: var(--error);">
+        <i class="fa-solid fa-right-from-bracket"></i> Sair
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main-wrapper">
+    <header class="header">
+      <div class="header-left">
+        <h1 id="page-title">Dashboard</h1>
+        <p id="page-subtitle">Visão geral do seu sistema de publicação.</p>
+      </div>
+      <div class="header-right">
+        <button class="btn btn-ghost" id="btn-sync-local">
+          <i class="fa-solid fa-arrows-rotate"></i> Sincronizar
+        </button>
+        <div class="account-badge">
+          <div class="status-dot" id="auth-status"></div>
+          <span id="active-account-name">Carregando...</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- ═══════════════ DASHBOARD ═══════════════ -->
+    <section id="section-dashboard" class="section active">
+      <div class="dashboard-grid">
+        <!-- Stat: Total Posts -->
+        <div class="card">
+          <div class="card-title"><i class="fa-solid fa-paper-plane" style="color:var(--primary);"></i> Entregas</div>
+          <div class="stat-value" id="stat-total">0</div>
+          <p class="stat-desc">Posts publicados com sucesso</p>
+          <div class="progress-bar"><div class="progress-fill" id="progress-total" style="width:0%"></div></div>
+        </div>
+        <!-- Stat: Scheduled -->
+        <div class="card">
+          <div class="card-title"><i class="fa-solid fa-clock" style="color:var(--success);"></i> Agendados</div>
+          <div class="stat-value" id="stat-scheduled">0</div>
+          <p class="stat-desc" id="stat-next-label">Próximo: --:--</p>
+          <div class="progress-bar"><div class="progress-fill" id="progress-scheduled" style="width:0%; background:var(--success);"></div></div>
+        </div>
+        <!-- Stat: Accounts -->
+        <div class="card">
+          <div class="card-title"><i class="fa-solid fa-users" style="color:var(--warning);"></i> Contas Ativas</div>
+          <div class="stat-value" id="stat-accounts">0</div>
+          <p class="stat-desc">Perfis conectados ao sistema</p>
+          <div class="progress-bar"><div class="progress-fill" style="width:100%; background:var(--warning);"></div></div>
+        </div>
+      </div>
+
+      <!-- Activity & Weekly Summary -->
+      <div class="dashboard-grid dashboard-grid-activity">
+        <div class="card">
+          <div class="card-title"><i class="fa-solid fa-bolt-lightning"></i> Atividade Recente</div>
+          <div id="recent-activity-list" style="margin-top:0.5rem;">
+            <p style="text-align:center; padding:2.5rem; color:var(--text-dim); font-size:0.9rem;">Aguardando primeira atividade...</p>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title"><i class="fa-solid fa-chart-line" style="color:var(--primary);"></i> Meta Semanal</div>
+          <div style="text-align:center; padding:1.5rem 0;">
+            <div style="font-size:3.5rem; font-weight:700; color:var(--text-main);">0<span style="color:var(--text-dim); font-size:2rem;">/7</span></div>
+            <p style="color:var(--text-dim); font-size:0.85rem; margin-top:0.5rem;">Publicações esta semana</p>
+          </div>
+          <div class="progress-bar"><div class="progress-fill" style="width:5%;"></div></div>
+          <button class="btn btn-primary" style="width:100%; margin-top:1.5rem;" onclick="switchSection('new-post')">
+            <i class="fa-solid fa-plus"></i> Criar Publicação
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════ NEW POST ═══════════════ -->
+    <section id="section-new-post" class="section">
+      <div class="dashboard-grid dashboard-grid-new-post">
+        <div class="card">
+          <form id="post-form">
+            <!-- Account Selector -->
+            <div class="form-group">
+              <label class="label"><i class="fa-solid fa-user-circle"></i> Postar na Conta</label>
+              <select id="post-account-select" class="input">
+                <option>Carregando contas...</option>
+              </select>
+            </div>
+            <!-- Media Type -->
+            <div class="form-group">
+              <label class="label"><i class="fa-solid fa-photo-film"></i> Tipo de Mídia</label>
+              <div style="display:flex; gap:12px;">
+                <button type="button" class="btn btn-primary btn-media active" data-type="IMAGE" style="flex:1;">📸 Foto</button>
+                <button type="button" class="btn btn-ghost btn-media" data-type="REELS" style="flex:1;">🎬 Reels</button>
+              </div>
+            </div>
+            <!-- Dropzone -->
+            <div class="form-group">
+              <div class="dropzone" id="dropzone">
+                <i class="fa-solid fa-cloud-arrow-up" style="font-size:2rem; color:var(--primary); margin-bottom:1rem;"></i>
+                <p style="font-weight:600; color:var(--text-main);">Arraste ou clique para enviar</p>
+                <p style="font-size:0.85rem; color:var(--text-dim); margin-top:0.5rem;">JPG, PNG ou MP4 (max 50MB)</p>
+                <input type="file" id="file-input" hidden>
+                <div id="file-preview-container" style="display:none; margin-top:1.5rem;">
+                  <img id="file-preview" style="max-height:180px; border-radius:var(--radius-sm); border:1px solid var(--border-color); object-fit:contain; width:100%;">
+                </div>
+              </div>
+            </div>
+            <!-- Caption -->
+            <div class="form-group">
+              <label class="label"><i class="fa-solid fa-pen-fancy"></i> Legenda</label>
+              <textarea class="textarea" id="post-caption" placeholder="Escreva sua legenda aqui..."></textarea>
+            </div>
+            <!-- Schedule Mode -->
+            <div class="form-group">
+              <label class="label"><i class="fa-solid fa-clock-rotate-left"></i> Agendamento</label>
+              <div style="display:flex; gap:12px; margin-bottom:1rem;">
+                <button type="button" class="btn btn-primary schedule-mode active" data-mode="auto" style="flex:1;" onclick="setScheduleMode('auto')">
+                  <i class="fa-solid fa-wand-magic-sparkles"></i> Auto
+                </button>
+                <button type="button" class="btn btn-ghost schedule-mode" data-mode="manual" style="flex:1;" onclick="setScheduleMode('manual')">
+                  <i class="fa-solid fa-pen"></i> Manual
+                </button>
+              </div>
+              <!-- Auto Mode -->
+              <div id="schedule-auto" style="display:block;">
+                <input type="date" class="input" id="post-date">
+                <p style="font-size:0.8rem; color:var(--text-dim); margin-top:0.8rem;">
+                  Horários automáticos: <strong>10h</strong>, <strong>15h</strong> e <strong>20h</strong>. Distribuídos sequencialmente.
+                </p>
+              </div>
+              <!-- Manual Mode -->
+              <div id="schedule-manual" style="display:none;">
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                  <div>
+                    <label class="label" style="font-size:0.7rem;">Data</label>
+                    <input type="date" class="input" id="post-date-manual">
+                  </div>
+                  <div>
+                    <label class="label" style="font-size:0.7rem;">Hora</label>
+                    <input type="time" class="input" id="post-time-manual">
+                  </div>
+                </div>
+              </div>
+              <input type="hidden" id="post-time" value="10:00">
+            </div>
+            <button type="submit" class="btn btn-primary" style="width:100%; padding:1.2rem; font-size:1rem;">
+              <i class="fa-solid fa-calendar-check"></i> Agendar Publicação
+            </button>
+          </form>
+        </div>
+        <!-- Instagram Preview -->
+        <div class="card" style="padding:0; overflow:hidden;">
+          <div style="padding:1.2rem 1.5rem; border-bottom:1px solid var(--border-color); font-weight:600; font-size:0.8rem; text-transform:uppercase; color:var(--text-dim);">
+            <i class="fa-brands fa-instagram" style="color:var(--primary); margin-right:8px;"></i> Pré-visualização
+          </div>
+          <div id="instagram-preview" style="background:var(--bg-app); min-height:480px; padding:1.5rem;">
+            <div style="display:flex; align-items:center; gap:12px; margin-bottom:1rem;">
+              <div id="preview-user-avatar" style="width:36px; height:36px; border-radius:50%; background:var(--border-color); background-size:cover; background-position:center;"></div>
+              <div style="font-size:0.9rem; font-weight:600;" id="preview-username">@seu_perfil</div>
+            </div>
+            <div id="preview-image-box" style="width:100%; aspect-ratio:1/1; background:rgba(255,255,255,0.02); border-radius:var(--radius-sm); border:1px solid var(--border-color); display:flex; align-items:center; justify-content:center; color:var(--text-dim); font-size:0.9rem;">
+              Aguardando mídia...
+            </div>
+            <div id="preview-caption" style="margin-top:1rem; font-size:0.9rem; line-height:1.6; color:var(--text-secondary);">Sua legenda aparecerá aqui...</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════ CALENDAR ═══════════════ -->
+    <section id="section-schedule" class="section">
+      <div class="card" style="padding:1.2rem 2rem; margin-bottom:1.5rem;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+          <div style="display:flex; align-items:center; gap:12px; overflow-x:auto;">
+            <span style="font-size:0.75rem; font-weight:600; color:var(--text-dim); text-transform:uppercase;">Filtrar Conta:</span>
+            <div id="account-filter-tabs" style="display:flex; gap:8px;"></div>
+          </div>
+          <div style="display:flex; gap:10px;">
+            <button id="btn-toggle-selection" class="btn btn-ghost btn-sm" onclick="toggleSelectionMode()">
+              <i class="fa-solid fa-check-double"></i> Selecionar
+            </button>
+            <button class="btn btn-ghost btn-sm" onclick="transferAllPosts()">
+              <i class="fa-solid fa-shuffle"></i> Transferir
+            </button>
+            <button class="btn btn-danger btn-sm" onclick="clearAllPending()">
+              <i class="fa-solid fa-eraser"></i> Limpar Tudo
+            </button>
+          </div>
+        </div>
+      </div>
+      <!-- Calendar View -->
+      <div class="card" style="margin-bottom:2rem;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-calendar-days"></i> Calendário</div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button class="btn btn-ghost btn-sm" style="padding:0.5rem;" id="cal-prev"><i class="fa-solid fa-chevron-left"></i></button>
+            <span id="cal-month-label" style="font-weight:600; font-size:1rem; min-width:140px; text-align:center;"></span>
+            <button class="btn btn-ghost btn-sm" style="padding:0.5rem;" id="cal-next"><i class="fa-solid fa-chevron-right"></i></button>
+          </div>
+        </div>
+        <div id="calendar-grid" style="margin-top:1.5rem;"></div>
+      </div>
+      <!-- Posts List -->
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-list-check"></i> Fila de Agendamentos</div>
+        <div id="scheduled-posts-container" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:1.5rem; margin-top:1rem;"></div>
+      </div>
+    </section>
+
+    <!-- ═══════════════ SETTINGS ═══════════════ -->
+    <section id="section-settings" class="section">
+      <div class="dashboard-grid" style="grid-template-columns:1fr 1fr;">
+        <!-- Accounts Card -->
+        <div class="card">
+          <h3 class="card-title"><i class="fa-solid fa-user-gear"></i> Contas Conectadas</h3>
+          <div id="ig-config-warning" style="display:none; background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.4); border-radius:8px; padding:12px 14px; margin-bottom:1rem; font-size:0.82rem; color:#fca5a5;">
+            <b><i class="fa-solid fa-triangle-exclamation"></i> App Instagram não configurado</b><br>
+            As variáveis <code>IG_APP_ID</code> e <code>IG_APP_SECRET</code> não estão definidas no servidor.<br>
+            Configure-as no painel do Render (Environment) e reinicie. Veja o <code>.env.example</code>.
+          </div>
+          <div id="accounts-list-settings" style="display:flex; flex-direction:column; gap:12px; margin-bottom:1.5rem;"></div>
+          <a href="/auth/instagram" id="connect-instagram-btn" class="btn btn-ghost" style="width:100%; text-decoration:none; display:flex; align-items:center; justify-content:center; gap:8px;">
+            <i class="fa-brands fa-instagram"></i> Conectar Nova Conta
+          </a>
+        </div>
+        <!-- API Keys Card -->
+        <div class="card">
+          <h3 class="card-title"><i class="fa-solid fa-key"></i> Integrações</h3>
+          <form id="settings-form">
+            <div class="form-group">
+              <label class="label">ImgBB API Key</label>
+              <input type="password" class="input" id="imgbb-key-input" placeholder="Chave para upload de imagens">
+            </div>
+            <div class="form-group">
+              <label class="label">Cloudinary Cloud Name</label>
+              <input type="text" class="input" id="cloudinary-name-input" placeholder="Cloud Name para vídeos">
+            </div>
+            <div class="form-group">
+              <label class="label">Cloudinary Upload Preset</label>
+              <input type="text" class="input" id="cloudinary-preset-input" placeholder="Preset de upload não-assinado">
+            </div>
+            <button type="submit" class="btn btn-primary" style="width:100%;"><i class="fa-solid fa-floppy-disk"></i> Salvar Configurações</button>
+          </form>
+        </div>
+        <!-- Password Change Card -->
+        <div class="card">
+          <h3 class="card-title"><i class="fa-solid fa-shield-halved"></i> Alterar Credenciais</h3>
+          <p style="font-size:0.85rem; color:var(--text-dim); margin-bottom:1.5rem;">
+            Altere o usuário e senha usados na tela de login.
+          </p>
+          <form id="password-form">
+            <div class="form-group">
+              <label class="label">Novo Usuário</label>
+              <input type="text" class="input" id="new-login-user" placeholder="Novo nome de usuário" autocomplete="username">
+            </div>
+            <div class="form-group">
+              <label class="label">Nova Senha</label>
+              <input type="password" class="input" id="new-login-pass" placeholder="Mínimo de 6 caracteres" autocomplete="new-password">
+            </div>
+            <div class="form-group">
+              <label class="label">Confirmar Senha</label>
+              <input type="password" class="input" id="new-login-pass-confirm" placeholder="Repita a nova senha" autocomplete="new-password">
+            </div>
+            <button type="submit" class="btn btn-ghost" style="width:100%;"><i class="fa-solid fa-lock"></i> Atualizar Credenciais</button>
+          </form>
+        </div>
+        <!-- Telegram Notifications Card -->
+        <div class="card" style="grid-column:1/-1;">
+          <h3 class="card-title"><i class="fa-brands fa-telegram"></i> Notificações (Telegram)</h3>
+          <p style="font-size:0.85rem; color:var(--text-dim); margin-bottom:1.5rem;">
+            Receba um alerta no Telegram quando um post for publicado com sucesso ou falhar.
+          </p>
+          <form id="telegram-form">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; margin-bottom:1.5rem;">
+              <div>
+                <label class="label">Bot Token</label>
+                <input type="text" class="input" id="telegram-token-input" placeholder="123456:ABC-DEF...">
+              </div>
+              <div>
+                <label class="label">Chat ID</label>
+                <input type="text" class="input" id="telegram-chatid-input" placeholder="Seu Chat ID">
+              </div>
+            </div>
+            <div style="display:flex; gap:12px;">
+              <button type="submit" class="btn btn-primary" style="flex:1;"><i class="fa-solid fa-floppy-disk"></i> Salvar</button>
+              <button type="button" class="btn btn-ghost" id="test-telegram-btn"><i class="fa-solid fa-paper-plane"></i> Testar</button>
+            </div>
+          </form>
+        </div>
+        
+        <!-- Push Notifications Card -->
+        <div class="card" style="grid-column:1/-1;">
+          <h3 class="card-title"><i class="fa-solid fa-bell"></i> Notificações de Tela (App)</h3>
+          <p style="font-size:0.85rem; color:var(--text-dim); margin-bottom:1.5rem;">
+            Receba notificações na tela do seu computador ou celular. No iPhone, adicione este site à Tela de Início primeiro.
+          </p>
+          <div style="display:flex; gap:12px;">
+            <button type="button" class="btn btn-primary" id="btn-enable-push" style="flex:1;">
+              <i class="fa-solid fa-bell-ring"></i> Ativar Notificações neste Dispositivo
+            </button>
+            <button type="button" class="btn btn-ghost" id="btn-test-push">
+              <i class="fa-solid fa-paper-plane"></i> Testar
+            </button>
+          </div>
+          <p id="push-status-msg" style="color:var(--text-dim); font-size:0.85rem; margin-top:1rem; text-align:center;"></p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <div id="toast-container"></div>
+
+  <!-- Modal Conexão -->
+  <div id="custom-modal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="card-title" id="modal-title" style="margin-bottom:1rem; font-size:1rem; color:var(--text-main);">
+        <i class="fa-solid fa-circle-info" style="color:var(--primary);"></i>
+        <span>CONEXÃO BUSINESS</span>
+      </div>
+      <p id="modal-msg" style="color:var(--text-dim); font-size:0.9rem; margin-bottom:1.5rem; line-height:1.6;"></p>
+      
+      <div id="modal-inputs-container"></div>
+      
+      <div id="modal-account-preview" style="display:none; margin-top:1.5rem; padding:1rem; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:rgba(255,255,255,0.02); align-items:center; gap:12px;">
+        <div style="width:40px; height:40px; border-radius:50%; background:var(--primary); display:flex; align-items:center; justify-content:center; color:#000;">
+          <i class="fa-solid fa-user"></i>
+        </div>
+        <div>
+          <div style="font-weight:600; color:var(--text-main);" id="modal-preview-name">@username</div>
+          <div style="font-size:0.75rem; color:var(--success); font-weight:600;">CONTA ENCONTRADA</div>
+        </div>
+      </div>
+      
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-top:2rem;">
+        <button class="btn btn-ghost" id="modal-cancel">Cancelar</button>
+        <button class="btn btn-primary" id="modal-confirm" disabled style="opacity:0.5;">Conectar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ FLOATING SELECTION BAR ═══════════════ -->
+  <div id="selection-bar" class="selection-bar">
+    <div id="selection-count" class="selection-count">0 selecionados</div>
+    <div style="display:flex; gap:12px; flex-wrap:wrap;">
+      <button class="btn btn-ghost btn-sm" onclick="selectAllPosts()">Selecionar Tudo</button>
+      <button class="btn btn-ghost btn-sm" onclick="copySelectedToAccount()" style="color:#a78bfa; border-color:#a78bfa;">
+        <i class="fa-solid fa-copy"></i> Copiar para conta
+      </button>
+      <button class="btn btn-ghost btn-sm" onclick="moveSelectedToAccount()" style="color:#f59e0b; border-color:#f59e0b;">
+        <i class="fa-solid fa-shuffle"></i> Mover para conta
+      </button>
+      <button class="btn btn-danger btn-sm" onclick="deleteSelectedPosts()">
+        <i class="fa-solid fa-trash-can"></i> Excluir
+      </button>
+      <button class="btn btn-ghost btn-sm" onclick="toggleSelectionMode()">Fechar</button>
+    </div>
+  </div>
+
+  <script src="app.js?v=52"></script>
+
+  <!-- Inline Login Logic -->
+  <script>
+    (function() {
+      const btnAdd = document.getElementById('SUPER-BTN-V20');
+      if (!btnAdd) return;
+
+      btnAdd.onclick = function(e) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+
+        const modal = document.getElementById('custom-modal');
+        const container = document.getElementById('modal-inputs-container');
+        const title = document.querySelector('#modal-title span');
+        const msg = document.getElementById('modal-msg');
+        const previewBox = document.getElementById('modal-account-preview');
+        const btnConfirm = document.getElementById('modal-confirm');
+
+        title.innerText = 'CONEXÃO BUSINESS';
+        msg.innerText = 'Insira o ID Numérico do Instagram Business e o Access Token da Meta.';
+        
+        container.innerHTML = `
+          <input type="text" id="v20-id" class="input" placeholder="Instagram Business ID" style="margin-bottom:12px;">
+          <input type="password" id="v20-token" class="input" placeholder="Access Token (IGAA... ou EAAB...)" style="margin-bottom:12px;">
+          <button id="v20-search-btn" class="btn btn-ghost" style="width:100%;"><i class="fa-solid fa-magnifying-glass"></i> Buscar Conta</button>
+        `;
+
+        previewBox.style.display = 'none';
+        btnConfirm.disabled = true;
+        btnConfirm.style.opacity = '0.5';
+        modal.style.display = 'flex';
+
+        let validUser = null;
+        let validPic = null;
+
+        document.getElementById('v20-search-btn').onclick = async function(ev) {
+          ev.preventDefault();
+          const id = document.getElementById('v20-id').value.trim();
+          const token = document.getElementById('v20-token').value.trim();
+          if (!id || !token) { alert('Preencha os dois campos.'); return; }
+
+          this.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Validando...';
+          try {
+            const r = await fetch('/api/verify-account?id=' + encodeURIComponent(id) + '&token=' + encodeURIComponent(token));
+            const data = await r.json();
+            if (data.error) { alert('Erro: ' + (data.details?.message || data.error)); return; }
+
+            validUser = data.username;
+            validPic = data.profilePictureUrl;
+            
+            document.getElementById('modal-preview-name').innerText = '@' + validUser;
+            previewBox.style.display = 'flex';
+            
+            if (validPic) {
+              const avatar = previewBox.querySelector('div:first-child');
+              if (avatar) {
+                avatar.innerHTML = '<img src="' + validPic + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">';
+                avatar.style.background = 'none';
+              }
+            }
+            
+            btnConfirm.disabled = false;
+            btnConfirm.style.opacity = '1';
+            this.innerHTML = '<i class="fa-solid fa-check"></i> Conta Localizada!';
+            this.className = 'btn btn-primary';
+            this.style.width = '100%';
+          } catch (err) {
+            alert('Erro de conexão: ' + err.message);
+          } finally {
+            if (!validUser) {
+              this.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i> Buscar Conta';
+            }
+          }
+        };
+
+        btnConfirm.onclick = async function() {
+          if (!validUser) return;
+          const id = document.getElementById('v20-id').value.trim();
+          const token = document.getElementById('v20-token').value.trim();
+          this.innerText = 'Salvando...';
+          this.disabled = true;
+
+          try {
+            const res = await fetch('/api/save-account', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                accountId: id, 
+                username: validUser, 
+                accessToken: token,
+                profilePictureUrl: validPic
+              })
+            });
+
+            if (res.ok) { 
+              modal.style.display = 'none'; 
+              location.reload(); 
+            } else {
+              const data = await res.json();
+              throw new Error(data.error || 'Erro desconhecido no servidor.');
+            }
+          } catch (e) { 
+            alert('Erro ao salvar: ' + e.message);
+            this.innerText = 'Conectar';
+            this.disabled = false;
+          }
+        };
+
+        document.getElementById('modal-cancel').onclick = () => { modal.style.display = 'none'; };
+      };
+    })();
+  </script>
+</body>
+</html>
