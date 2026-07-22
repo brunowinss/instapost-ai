@@ -816,37 +816,46 @@ app.get('/*splat', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Initialization with error tracking for Render/Cloud
+// Bind the port first so Render's health check passes even if the DB is slow,
+// then finish initialization in the background.
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 [ENGINE] Insta Post online on port ${PORT}`);
+  console.log(`🌐 [ENV] Database: ${process.env.DATABASE_URL ? 'PostgreSQL (Cloud)' : 'SQLite (Local)'}`);
+});
+
 initDB()
   .then(async () => {
     await initWebPush();
-    app.listen(PORT, '0.0.0.0', async () => {
-      console.log(`🚀 [ENGINE] Insta Post online on port ${PORT}`);
-      console.log(`🌐 [ENV] Database: ${process.env.DATABASE_URL ? 'PostgreSQL (Cloud)' : 'SQLite (Local)'}`);
-      
-      // Auto-import on startup and every 5 minutes
-      let isImporting = false;
-      const autoImport = async () => {
-        if (isImporting) return;
-        isImporting = true;
-        try {
-          await runAutoImporter();
-        } catch (e) {
-          console.error('Auto-import periodic failure:', e.message);
-        } finally {
-          isImporting = false;
-        }
-      };
 
-      autoImport(); // Run once at start
-      setInterval(autoImport, 300000); // Run every 5 mins
-    });
+    // Auto-import on startup and every 5 minutes
+    let isImporting = false;
+    const autoImport = async () => {
+      if (isImporting) return;
+      isImporting = true;
+      try {
+        await runAutoImporter();
+      } catch (e) {
+        console.error('Auto-import periodic failure:', e.message);
+      } finally {
+        isImporting = false;
+      }
+    };
+
+    autoImport(); // Run once at start
+    setInterval(autoImport, 300000); // Run every 5 mins
   })
   .catch(err => {
     console.error('####################################################');
-    console.error('❌ CRITICAL: SYSTEM FAILED TO START');
+    console.error('❌ CRITICAL: DATABASE INITIALIZATION FAILED');
     console.error('Reason:', err.message);
     if (err.stack) console.error('Stack:', err.stack);
     console.error('####################################################');
-    process.exit(1);
   });
+
+// Never let an unexpected async error kill the process on Render
+process.on('unhandledRejection', err => {
+  console.error('⚠️ [UNHANDLED REJECTION]', err && err.message ? err.message : err);
+});
+process.on('uncaughtException', err => {
+  console.error('⚠️ [UNCAUGHT EXCEPTION]', err && err.message ? err.message : err);
+});
