@@ -5,38 +5,77 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 :root {
-  --bg-app: #000000;
-  --bg-sidebar: rgba(10, 10, 10, 0.95);
-  --bg-card: #0a0a0a;
-  --bg-card-hover: #121212;
-  --border-color: rgba(255, 255, 255, 0.1);
-  --border-hover: rgba(255, 255, 255, 0.2);
-  --glass-bg: rgba(255, 255, 255, 0.03);
-  
-  --text-main: #ffffff;
-  --text-secondary: #a1a1aa; /* zinc-400 */
-  --text-dim: #71717a; /* zinc-500 */
-  
-  --primary: #e879f9; /* fuchsia-400 */
-  --primary-hover: #f0abfc; /* fuchsia-300 */
-  --primary-bg: rgba(232, 121, 249, 0.1);
-  --primary-glow: rgba(232, 121, 249, 0.3);
+  /* ── Escala primária ── */
+  --primary-50:  #DDF8FF;
+  --primary-100: #B8F0FF;
+  --primary-200: #87E6FF;
+  --primary-300: #56D9FF;
+  --primary-400: #2CC9FF;
+  --primary-500: #10B8F5;
+  --primary-600: #0D9DD5;
+  --primary-700: #0A7DB0;
+  --primary-800: #085B84;
+  --primary-900: #063D59;
 
-  --success: #10b981;
-  --error: #ef4444;
-  --warning: #f59e0b;
+  --primary: var(--primary-500);
+  --primary-hover: var(--primary-400);
+  --primary-dark: var(--primary-700);
+  --primary-bg: rgba(16, 184, 245, 0.1);
+  --primary-glow: rgba(16, 184, 245, 0.3);
 
-  /* Acentos usados para distinguir cada métrica do dashboard */
-  --violet: #8b5cf6;
-  --cyan: #22d3ee;
-  --amber: #fbbf24;
-  --emerald: #34d399;
-  
-  --radius-sm: 8px;
+  --accent: #4CE7FF;
+  --accent-600: #3ED4F8;
+
+  /* ── Fundos ── */
+  --bg-app: #04070C;
+  --bg-secondary: #08111B;
+  --bg-tertiary: #0D1724;
+  --bg-card: #0F1824;
+  --bg-card-hover: #14202F;
+  --bg-sidebar: rgba(8, 17, 27, 0.95);
+
+  /* ── Superfícies ── */
+  --glass-bg: rgba(17, 30, 45, 0.65);
+  --border-color: #16324B;
+  --border-hover: #1F4A66;
+
+  /* ── Texto ── */
+  --text-main: #FFFFFF;
+  --text-secondary: #B5C7D6;
+  --text-dim: #73889B;
+  --text-disabled: #516170;
+
+  /* ── Estado ── */
+  --success: #29D17C;
+  --warning: #FFB648;
+  --error: #FF6262;
+
+  /* ── Raios ── */
+  --radius-sm: 10px;
   --radius-md: 12px;
-  --radius-lg: 16px;
+  --radius-lg: 18px;
   --radius-xl: 24px;
-  --transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  --radius-pill: 999px;
+
+  /* ── Sombras ── */
+  --shadow-card: 0 10px 40px rgba(0, 0, 0, 0.45);
+  --shadow-glow: 0 0 24px rgba(16, 184, 245, 0.30);
+
+  /* ── Espaçamento ── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 32px;
+  --space-6: 48px;
+  --space-7: 64px;
+  --space-8: 96px;
+
+  /* ── Transições ── */
+  --transition-fast: 200ms;
+  --transition-base: 400ms;
+  --transition-slow: 600ms;
+  --transition: all var(--transition-fast) cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* ── Reset ── */
@@ -68,8 +107,8 @@ body {
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(circle at 20% 0%, rgba(139, 92, 246, 0.07) 0%, transparent 45%),
-    radial-gradient(circle at 80% 10%, rgba(232, 121, 249, 0.05) 0%, transparent 45%);
+    radial-gradient(circle at 20% 0%, rgba(16, 184, 245, 0.08) 0%, transparent 45%),
+    radial-gradient(circle at 80% 10%, rgba(76, 231, 255, 0.05) 0%, transparent 45%);
   animation: ambientDrift 28s ease-in-out infinite;
 }
 .bg-ambient::after {
@@ -119,15 +158,21 @@ p { line-height: 1.6; }
 .logo-icon {
   width: 36px;
   height: 36px;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   background: var(--primary);
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 800;
   font-size: 1rem;
-  color: #000;
-  box-shadow: 0 0 20px var(--primary-glow);
+  color: #04070C;
+  box-shadow: var(--shadow-glow);
+  animation: glowBreath 10s ease-in-out infinite;
+}
+/* Respiração do glow: 70% → 100% → 70%, loop infinito */
+@keyframes glowBreath {
+  0%, 100% { box-shadow: 0 0 24px rgba(16, 184, 245, 0.21); }
+  50% { box-shadow: 0 0 24px rgba(16, 184, 245, 0.30); }
 }
 .logo-text {
   font-weight: 700;
@@ -194,7 +239,7 @@ p { line-height: 1.6; }
   width: 8px; height: 8px;
   border-radius: 50%;
   background: var(--success);
-  box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+  box-shadow: 0 0 10px rgba(41, 209, 124, 0.4);
   position: relative;
 }
 .status-dot::after {
@@ -227,9 +272,12 @@ p { line-height: 1.6; }
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 3rem;
-  animation: fadeIn 0.5s ease;
+  margin-bottom: var(--space-6);
 }
+/* Sequência da spec: título → texto → botões, 80ms entre cada um */
+.header-left h1 { animation: cardIn var(--transition-slow) ease-out both; }
+.header-left p { animation: cardIn var(--transition-slow) ease-out 80ms both; }
+.header-right { animation: cardIn var(--transition-slow) ease-out 160ms both; }
 .header-left h1 {
   font-size: 2.2rem;
   color: var(--text-main);
@@ -266,9 +314,9 @@ p { line-height: 1.6; }
 /* A cor de cada card vive só no ícone e na barra de progresso — o dado é que
    manda, não a decoração. */
 .dashboard-grid > .card:nth-child(1) { --card-i: 0; --accent-solid: var(--primary); }
-.dashboard-grid > .card:nth-child(2) { --card-i: 1; --accent-solid: var(--emerald); }
-.dashboard-grid > .card:nth-child(3) { --card-i: 2; --accent-solid: var(--amber); }
-.dashboard-grid > .card:nth-child(4) { --card-i: 3; --accent-solid: var(--cyan); }
+.dashboard-grid > .card:nth-child(2) { --card-i: 1; --accent-solid: var(--success); }
+.dashboard-grid > .card:nth-child(3) { --card-i: 2; --accent-solid: var(--warning); }
+.dashboard-grid > .card:nth-child(4) { --card-i: 3; --accent-solid: var(--accent); }
 
 .card {
   background: var(--bg-card);
@@ -278,18 +326,20 @@ p { line-height: 1.6; }
   transition: var(--transition);
   position: relative;
   overflow: hidden;
-  animation: cardIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
-  animation-delay: calc(var(--card-i, 0) * 70ms);
+  box-shadow: var(--shadow-card);
+  animation: cardIn var(--transition-slow) ease-out both;
+  animation-delay: calc(var(--card-i, 0) * 80ms); /* 80ms entre elementos */
 }
 .card:hover {
   border-color: var(--border-hover);
   background: var(--bg-card-hover);
-  transform: translateY(-2px);
-  box-shadow: 0 16px 32px -20px rgba(0, 0, 0, 0.7);
+  transform: translateY(-6px);
+  box-shadow: var(--shadow-card), 0 0 24px rgba(16, 184, 245, 0.18);
 }
+/* Entrada padrão do design system: opacity 0→1, translateY 24px→0, 600ms ease-out */
 @keyframes cardIn {
-  from { opacity: 0; transform: translateY(16px) scale(0.98); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .card-title {
@@ -401,11 +451,14 @@ select.input option { background: var(--bg-card); color: var(--text-main); }
   position: relative;
   overflow: hidden;
 }
-.btn:hover { background: #e4e4e7; transform: translateY(-1px); }
-.btn:active { transform: translateY(0) scale(0.98); }
+/* Botões: escala 1.00 → 1.03 com o glow aumentando */
+.btn:hover { background: #e4e4e7; transform: scale(1.03); }
+.btn:active { transform: scale(0.99); }
+.btn i { transition: transform var(--transition-fast) ease-out; }
+.btn:hover i { transform: scale(1.08); }
 
-.btn-primary { background: var(--primary); color: #000; }
-.btn-primary:hover { background: var(--primary-hover); box-shadow: 0 4px 20px var(--primary-glow); }
+.btn-primary { background: var(--primary); color: #04070C; }
+.btn-primary:hover { background: var(--primary-hover); box-shadow: var(--shadow-glow); }
 
 .btn-ghost {
   background: transparent;
@@ -418,8 +471,8 @@ select.input option { background: var(--bg-card); color: var(--text-main); }
 }
 
 .btn-sm { padding: 0.6rem 1rem; font-size: 0.85rem; }
-.btn-danger { background: rgba(239, 68, 68, 0.1); color: var(--error); border: 1px solid rgba(239, 68, 68, 0.2); }
-.btn-danger:hover { background: rgba(239, 68, 68, 0.15); }
+.btn-danger { background: rgba(255, 98, 98, 0.1); color: var(--error); border: 1px solid rgba(255, 98, 98, 0.2); }
+.btn-danger:hover { background: rgba(255, 98, 98, 0.15); }
 
 /* ── Dropzone ── */
 .dropzone {
@@ -517,10 +570,14 @@ select.input option { background: var(--bg-card); color: var(--text-main); }
   transition: var(--transition);
 }
 .sched-card {
-  animation: cardIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
-  animation-delay: calc(var(--card-i, 0) * 50ms);
+  animation: cardIn var(--transition-slow) ease-out both;
+  animation-delay: calc(var(--card-i, 0) * 80ms);
 }
-.sched-card:hover { border-color: var(--border-hover); transform: translateY(-4px); box-shadow: 0 16px 32px -18px rgba(0, 0, 0, 0.6); }
+.sched-card:hover {
+  border-color: var(--border-hover);
+  transform: translateY(-6px);
+  box-shadow: var(--shadow-card), 0 0 24px rgba(16, 184, 245, 0.18);
+}
 .sched-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
 .sched-account { font-size: 0.8rem; font-weight: 600; color: var(--text-main); }
 .sched-badge {
@@ -530,9 +587,9 @@ select.input option { background: var(--bg-card); color: var(--text-main); }
   padding: 4px 8px;
   border-radius: 4px;
 }
-.sched-badge.pending { background: rgba(245, 158, 11, 0.1); color: var(--warning); }
-.sched-badge.success { background: rgba(16, 185, 129, 0.1); color: var(--success); }
-.sched-badge.error { background: rgba(239, 68, 68, 0.1); color: var(--error); }
+.sched-badge.pending { background: rgba(255, 182, 72, 0.1); color: var(--warning); }
+.sched-badge.success { background: rgba(41, 209, 124, 0.1); color: var(--success); }
+.sched-badge.error { background: rgba(255, 98, 98, 0.1); color: var(--error); }
 .sched-img-container { width: 100%; height: 180px; border-radius: var(--radius-sm); overflow: hidden; background: #000; }
 .sched-thumb { width: 100%; height: 100%; object-fit: cover; opacity: 0.9; transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
 .sched-card:hover .sched-thumb { opacity: 1; transform: scale(1.06); }
