@@ -428,6 +428,32 @@ function getTimeRemaining(dateStr) {
   return 'Agora mesmo';
 }
 
+/**
+ * Anima um número de 0 até o valor final.
+ * Só roda quando o valor muda, senão cada re-render reinicia a contagem.
+ */
+function animateCount(el, target) {
+  if (!el) return;
+  const current = Number(el.dataset.value ?? -1);
+  if (current === target) return;
+  el.dataset.value = target;
+
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduced || target === 0) { el.innerText = target; return; }
+
+  const duration = 800;
+  const start = performance.now();
+  const from = Number(el.innerText) || 0;
+
+  const step = (now) => {
+    const p = Math.min((now - start) / duration, 1);
+    const eased = 1 - Math.pow(1 - p, 3); // easeOutCubic
+    el.innerText = Math.round(from + (target - from) * eased);
+    if (p < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
 function renderDashboard() {
   const successCount = STATE.history.filter(h => h.status === 'success').length;
   const scheduledCount = STATE.scheduledPosts.length;
@@ -438,9 +464,9 @@ function renderDashboard() {
   const weeklyGoal = 7;
   const weeklyPercent = Math.min((weeklyCount / weeklyGoal) * 100, 100);
 
-  document.getElementById('stat-total').innerText = successCount;
-  document.getElementById('stat-scheduled').innerText = scheduledCount;
-  document.getElementById('stat-accounts').innerText = STATE.accounts.length;
+  animateCount(document.getElementById('stat-total'), successCount);
+  animateCount(document.getElementById('stat-scheduled'), scheduledCount);
+  animateCount(document.getElementById('stat-accounts'), STATE.accounts.length);
   
   const ptEl = document.getElementById('progress-total');
   if (ptEl) ptEl.style.width = `${Math.min(successCount * 5, 100)}%`;
@@ -591,7 +617,7 @@ function renderScheduleCards() {
     document.getElementById('btn-toggle-selection').style.borderColor = '';
   }
 
-  container.innerHTML = posts.map(p => {
+  container.innerHTML = posts.map((p, i) => {
     const acc = STATE.accounts.find(a => a.accountId === p.accountId);
     const accName = acc ? `@${acc.username}` : p.accountId;
     const date = new Date(p.scheduledAt);
@@ -602,7 +628,7 @@ function renderScheduleCards() {
     const isSelected = STATE.selectedPostIds.includes(p.id);
     
     return `
-    <div class="sched-card ${isSelected ? 'selected' : ''}" onclick="${STATE.selectionMode ? `togglePostSelection('${p.id}')` : ''}">
+    <div class="sched-card ${isSelected ? 'selected' : ''}" style="--card-i:${i % 12}" onclick="${STATE.selectionMode ? `togglePostSelection('${p.id}')` : ''}">
       ${STATE.selectionMode ? `
         <div class="selection-checkbox ${isSelected ? 'checked' : ''}">
           <i class="fa-solid fa-check"></i>
