@@ -1,11 +1,75 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const crypto = require('crypto');
 const fetch = require('node-fetch');
 const webpush = require('web-push');
 const { getDB, initDB } = require('./database');
 const { runAutoImporter } = require('./auto_importer');
 require('dotenv').config();
+
+/**
+ * 🔐 Autenticação
+ *
+ * O token antigo era base64(usuario:data) — sem assinatura e sem validacão,
+ * ou seja, qualquer um podia forjar um. Agora é um HMAC-SHA256 com segredo,
+ * usando apenas o crypto nativo do Node (nenhuma dependência nova, para não
+ * arriscar o build no Render).
+ */
+
+// Sem SESSION_SECRET definido, gera um em memória: continua seguro, mas os
+// logins caem a cada reinício do serviço.
+const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
+if (!process.env.SESSION_SECRET) {
+  console.warn('⚠️ [AUTH] SESSION_SECRET não definido — sessões vão cair a cada restart.');
+}
+
+const TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 dias
+
+function sign(payload) {
+  return crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest('base64url');
+}
+
+function createToken(username) {
+  const payload = Buffer.from(JSON.stringify({ u: username, exp: Date.now() + TOKEN_TTL_MS })).toString('base64url');
+  return `${payload}.${sign(payload)}`;
+}
+
+function verifyToken(token) {
+  if (typeof token !== 'string' || !token.includes('.')) return null;
+  const [payload, signature] = token.split('.');
+  const expected = sign(payload);
+
+  // Comparação em tempo constante evita vazar a assinatura por timing.
+  if (signature.length !== expected.length) return null;
+  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
+
+  try {
+    const data = JSON.parse(Buffer.from(payload, 'base64url').toString());
+    if (!data.exp || Date.now() > data.exp) return null;
+    return data;
+  } catch (e) {
+    return null;
+  }
+}
+
+/** Compara dois segredos sem vazar o tamanho nem o conteúdo por timing. */
+function safeEqual(a, b) {
+  const ha = crypto.createHash('sha256').update(String(a)).digest();
+  const hb = crypto.createHash('sha256').update(String(b)).digest();
+  return crypto.timingSafeEqual(ha, hb);
+}
+
+/** Middleware: exige um token válido no header Authorization. */
+function requireAuth(req, res, next) {
+  const header = req.headers.authorization || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+
+  if (!token || !verifyToken(token)) {
+    return res.status(401).json({ error: 'Não autorizado.' });
+  }
+  next();
+}
 
 let vapidKeys = { publicKey: '', privateKey: '' };
 async function initWebPush() {
@@ -40,8 +104,8 @@ const PORT = process.env.PORT || 10000; // Render uses 10000 by default
 const loginAttempts = new Map();
 function checkLoginRateLimit(ip) {
   const now = Date.now();
-  const WINDOW = 1 * 60 * 1000; // 1 minuto
-  const MAX = 100; // 100 tentativas
+  const WINDOW = 15 * 60 * 1000; // 15 minutos
+  const MAX = 10; // 10 tentativas
   let entry = loginAttempts.get(ip);
   if (!entry || now > entry.resetAt) entry = { count: 0, resetAt: now + WINDOW };
   entry.count++;
@@ -202,7 +266,7 @@ app.get('/auth/callback', async (req, res) => {
  * 📡 API Endpoints
  */
 
-app.get('/api/verify-account', async (req, res) => {
+app.get('/api/verify-account', requireAuth, async (req, res) => {
   const { id, token } = req.query;
   if (!id || !token) return res.status(400).json({ error: 'ID e Token são obrigatórios.' });
 
@@ -241,23 +305,28 @@ app.post('/api/login', async (req, res) => {
   try {
     const userRow = await db.get('SELECT value FROM global_config WHERE key = \'loginUser\'');
     const passRow = await db.get('SELECT value FROM global_config WHERE key = \'loginPass\'');
-    
-    // Default credentials if none set
-    const savedUser = userRow ? JSON.parse(userRow.value) : (process.env.LOGIN_USER || 'admin');
-    const savedPass = passRow ? JSON.parse(passRow.value) : (process.env.LOGIN_PASS || 'admin123');
-    
-    if ((username === savedUser && password === savedPass) || (username === 'master' && password === 'recuperar123')) {
-      const token = Buffer.from(`${username}:${Date.now()}`).toString('base64');
-      res.json({ success: true, token });
-    } else {
-      res.status(401).json({ error: 'Usuário ou senha incorretos.' });
+
+    // Credenciais salvas no banco têm prioridade; senão, as variáveis de ambiente.
+    // Não existe mais valor padrão: sem credencial configurada, ninguém entra.
+    const savedUser = userRow ? JSON.parse(userRow.value) : process.env.LOGIN_USER;
+    const savedPass = passRow ? JSON.parse(passRow.value) : process.env.LOGIN_PASS;
+
+    if (!savedUser || !savedPass) {
+      console.error('❌ [AUTH] LOGIN_USER/LOGIN_PASS não configurados — login bloqueado.');
+      return res.status(503).json({ error: 'Login não configurado no servidor.' });
     }
+
+    if (!username || !password || !safeEqual(username, savedUser) || !safeEqual(password, savedPass)) {
+      return res.status(401).json({ error: 'Usuário ou senha incorretos.' });
+    }
+
+    res.json({ success: true, token: createToken(username) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.get('/api/data', async (req, res) => {
+app.get('/api/data', requireAuth, async (req, res) => {
   try {
     const db = await getDB();
     const accounts = await db.all('SELECT * FROM accounts');
@@ -275,7 +344,17 @@ app.get('/api/data', async (req, res) => {
       }
     });
 
-    res.json({ accounts, scheduledPosts, history, globalConfig });
+    // Segredos nunca saem do servidor: o accessToken do Instagram permite
+    // publicar na conta, e a chave VAPID privada permite forjar notificações.
+    // O frontend não precisa de nenhum dos dois.
+    const safeAccounts = accounts.map(({ accessToken, ...rest }) => ({
+      ...rest,
+      hasToken: !!accessToken
+    }));
+    delete globalConfig.vapidPrivateKey;
+    delete globalConfig.loginPass;
+
+    res.json({ accounts: safeAccounts, scheduledPosts, history, globalConfig });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -305,7 +384,7 @@ async function exchangeForLongLivedToken(shortToken) {
   }
 }
 
-app.post('/api/save-account', async (req, res) => {
+app.post('/api/save-account', requireAuth, async (req, res) => {
   const { accountId, username, accessToken, profilePictureUrl } = req.body;
   console.log(`[SAVE-ACCOUNT] Tentando salvar conta: ${username} (${accountId})`);
   const db = await getDB();
@@ -330,7 +409,7 @@ app.post('/api/save-account', async (req, res) => {
   }
 });
 
-app.delete('/api/accounts/:id', async (req, res) => {
+app.delete('/api/accounts/:id', requireAuth, async (req, res) => {
   const { id } = req.params;
   const db = await getDB();
   try {
@@ -343,7 +422,7 @@ app.delete('/api/accounts/:id', async (req, res) => {
   }
 });
 
-app.post('/api/save-config', async (req, res) => {
+app.post('/api/save-config', requireAuth, async (req, res) => {
   const db = await getDB();
   const isPostgres = !!process.env.DATABASE_URL;
   
@@ -370,7 +449,7 @@ app.post('/api/save-config', async (req, res) => {
   }
 });
 
-app.post('/api/save-post', async (req, res) => {
+app.post('/api/save-post', requireAuth, async (req, res) => {
   const post = req.body;
   const db = await getDB();
   const isPostgres = !!process.env.DATABASE_URL;
@@ -402,7 +481,7 @@ app.post('/api/save-post', async (req, res) => {
   }
 });
 
-app.delete('/api/posts/:id', async (req, res) => {
+app.delete('/api/posts/:id', requireAuth, async (req, res) => {
   const { id } = req.params;
   const db = await getDB();
   try {
@@ -413,7 +492,7 @@ app.delete('/api/posts/:id', async (req, res) => {
   }
 });
 
-app.post('/api/posts/bulk-delete', async (req, res) => {
+app.post('/api/posts/bulk-delete', requireAuth, async (req, res) => {
   const { ids } = req.body;
   if (!ids || !Array.isArray(ids) || ids.length === 0) {
     return res.status(400).json({ error: 'IDs inválidos.' });
@@ -428,7 +507,7 @@ app.post('/api/posts/bulk-delete', async (req, res) => {
   }
 });
 
-app.post('/api/posts/transfer-all', async (req, res) => {
+app.post('/api/posts/transfer-all', requireAuth, async (req, res) => {
   const { fromAccountId, toAccountId } = req.body;
   const db = await getDB();
   try {
@@ -440,7 +519,7 @@ app.post('/api/posts/transfer-all', async (req, res) => {
 });
 
 // Copiar posts selecionados para outra conta (mantém originais)
-app.post('/api/posts/copy-selected', async (req, res) => {
+app.post('/api/posts/copy-selected', requireAuth, async (req, res) => {
   const { postIds, toAccountId } = req.body;
   if (!postIds?.length || !toAccountId) return res.status(400).json({ error: 'postIds e toAccountId são obrigatórios.' });
   const db = await getDB();
@@ -470,7 +549,7 @@ app.post('/api/posts/copy-selected', async (req, res) => {
 });
 
 // Mover posts selecionados para outra conta
-app.post('/api/posts/move-selected', async (req, res) => {
+app.post('/api/posts/move-selected', requireAuth, async (req, res) => {
   const { postIds, toAccountId } = req.body;
   if (!postIds?.length || !toAccountId) return res.status(400).json({ error: 'postIds e toAccountId são obrigatórios.' });
   const db = await getDB();
@@ -483,7 +562,7 @@ app.post('/api/posts/move-selected', async (req, res) => {
   }
 });
 
-app.delete('/api/posts/clear-pending/:accountId', async (req, res) => {
+app.delete('/api/posts/clear-pending/:accountId', requireAuth, async (req, res) => {
   const { accountId } = req.params;
   const db = await getDB();
   try {
@@ -494,7 +573,7 @@ app.delete('/api/posts/clear-pending/:accountId', async (req, res) => {
   }
 });
 
-app.post('/api/publish-now', async (req, res) => {
+app.post('/api/publish-now', requireAuth, async (req, res) => {
   const { post } = req.body;
   const db = await getDB();
   try {
@@ -523,7 +602,7 @@ app.get('/api/push/public-key', (req, res) => {
   res.json({ publicKey: vapidKeys.publicKey });
 });
 
-app.post('/api/push/subscribe', async (req, res) => {
+app.post('/api/push/subscribe', requireAuth, async (req, res) => {
   const subscription = req.body;
   if (!subscription || !subscription.endpoint) return res.status(400).json({ error: 'Inscrição inválida' });
   
@@ -541,7 +620,7 @@ app.post('/api/push/subscribe', async (req, res) => {
   }
 });
 
-app.post('/api/push/test', async (req, res) => {
+app.post('/api/push/test', requireAuth, async (req, res) => {
   try {
     await sendWebPushNotification('✅ Notificação de Teste', 'Tudo certo! As notificações Web Push estão funcionando perfeitamente no seu dispositivo.');
     res.json({ success: true });
@@ -550,7 +629,7 @@ app.post('/api/push/test', async (req, res) => {
   }
 });
 
-app.post('/api/push/test', async (req, res) => {
+app.post('/api/push/test', requireAuth, async (req, res) => {
   try {
     await sendWebPushNotification('✅ Notificação de Teste', 'Tudo certo! As notificações Web Push estão funcionando perfeitamente no seu dispositivo.');
     res.json({ success: true });
@@ -804,7 +883,7 @@ const SCHEDULER_MINUTES = Number(process.env.SCHEDULER_MINUTES) || 15;
 /**
  * 📁 Manual Import Trigger
  */
-app.get('/api/import-local', async (req, res) => {
+app.get('/api/import-local', requireAuth, async (req, res) => {
   try {
     await runAutoImporter();
     res.json({ success: true, message: 'Importação concluída.' });

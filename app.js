@@ -2,6 +2,47 @@
  * InstaScheduler AI — Master Frontend Logic
  * ============================================================ */
 
+/**
+ * 🔐 Envia o token de sessão em toda chamada à própria API.
+ *
+ * O token já era guardado no localStorage, mas nunca era enviado — então o
+ * backend não tinha como saber quem estava chamando. Em vez de alterar as ~20
+ * chamadas espalhadas pelo arquivo, interceptamos o fetch num ponto só.
+ *
+ * Só mexe em requisições para a nossa API: chamadas externas (Cloudinary,
+ * imgbb, Telegram) passam intactas, para não vazar o token para terceiros.
+ */
+(function attachAuthHeader() {
+  const originalFetch = window.fetch;
+
+  const isOwnApi = (url) => {
+    const u = String(url);
+    return u.startsWith('/api') || u.startsWith(window.location.origin + '/api');
+  };
+
+  window.fetch = async (input, init = {}) => {
+    const url = typeof input === 'string' ? input : input?.url;
+
+    if (isOwnApi(url)) {
+      const token = localStorage.getItem('insta_auth_token');
+      if (token) {
+        init.headers = { ...(init.headers || {}), Authorization: `Bearer ${token}` };
+      }
+    }
+
+    const res = await originalFetch(input, init);
+
+    // Token expirado ou inválido: derruba a sessão em vez de deixar a tela
+    // quebrada com erros silenciosos.
+    if (res.status === 401 && isOwnApi(url)) {
+      localStorage.removeItem('insta_auth_token');
+      window.location.reload();
+    }
+
+    return res;
+  };
+})();
+
 const STATE = {
   activeSection: 'dashboard',
   accounts: [],
