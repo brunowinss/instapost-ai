@@ -107,8 +107,9 @@ body {
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(circle at 20% 0%, rgba(16, 184, 245, 0.08) 0%, transparent 45%),
-    radial-gradient(circle at 80% 10%, rgba(76, 231, 255, 0.05) 0%, transparent 45%);
+    radial-gradient(ellipse 80% 50% at 15% -5%, rgba(16, 184, 245, 0.28) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 90% 20%, rgba(76, 231, 255, 0.16) 0%, transparent 60%),
+    radial-gradient(ellipse 70% 40% at 50% 105%, rgba(13, 157, 213, 0.18) 0%, transparent 60%);
   animation: ambientDrift 28s ease-in-out infinite;
 }
 .bg-ambient::after {
@@ -203,8 +204,8 @@ p { line-height: 1.6; }
 }
 .nav-item:hover i { transform: translateX(2px) scale(1.1); }
 .nav-item.active {
-  background: var(--primary-bg);
-  color: var(--primary);
+  background: linear-gradient(90deg, rgba(16, 184, 245, 0.20) 0%, rgba(16, 184, 245, 0.04) 100%);
+  color: var(--accent);
   font-weight: 600;
   animation: navActiveIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -215,8 +216,9 @@ p { line-height: 1.6; }
   left: 0; top: 50%;
   width: 3px; height: 60%;
   transform: translateY(-50%);
-  background: var(--primary);
+  background: var(--accent);
   border-radius: 0 4px 4px 0;
+  box-shadow: 0 0 12px var(--accent);
 }
 @keyframes navActiveIn {
   from { background: transparent; transform: translateX(-4px); }
@@ -229,8 +231,8 @@ p { line-height: 1.6; }
 .status-badge {
   padding: 1rem;
   border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid var(--border-color);
+  background: linear-gradient(135deg, rgba(41, 209, 124, 0.10) 0%, transparent 70%), rgba(4, 7, 12, 0.5);
+  border: 1px solid color-mix(in srgb, var(--success) 28%, var(--border-color));
   margin-bottom: 12px;
 }
 .status-badge-title { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
@@ -294,10 +296,10 @@ p { line-height: 1.6; }
 }
 
 .account-badge {
-  background: var(--bg-card);
+  background: linear-gradient(135deg, rgba(16, 184, 245, 0.12) 0%, transparent 70%), var(--bg-card);
   padding: 0.6rem 1.2rem;
-  border-radius: 100px;
-  border: 1px solid var(--border-color);
+  border-radius: var(--radius-pill);
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, var(--border-color));
   display: flex;
   align-items: center;
   gap: 10px;
@@ -319,7 +321,9 @@ p { line-height: 1.6; }
 .dashboard-grid > .card:nth-child(4) { --card-i: 3; --accent-solid: var(--accent); }
 
 .card {
-  background: var(--bg-card);
+  background:
+    linear-gradient(160deg, rgba(76, 231, 255, 0.05) 0%, transparent 45%),
+    var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   padding: 1.8rem;
@@ -331,10 +335,12 @@ p { line-height: 1.6; }
   animation-delay: calc(var(--card-i, 0) * 80ms); /* 80ms entre elementos */
 }
 .card:hover {
-  border-color: var(--border-hover);
-  background: var(--bg-card-hover);
+  border-color: color-mix(in srgb, var(--accent-solid, var(--primary)) 45%, var(--border-color));
+  background:
+    linear-gradient(160deg, color-mix(in srgb, var(--accent-solid, var(--primary)) 10%, transparent) 0%, transparent 50%),
+    var(--bg-card-hover);
   transform: translateY(-6px);
-  box-shadow: var(--shadow-card), 0 0 24px rgba(16, 184, 245, 0.18);
+  box-shadow: var(--shadow-card), 0 0 28px color-mix(in srgb, var(--accent-solid, var(--primary)) 25%, transparent);
 }
 /* Entrada padrão do design system: opacity 0→1, translateY 24px→0, 600ms ease-out */
 @keyframes cardIn {
@@ -351,18 +357,38 @@ p { line-height: 1.6; }
   margin-bottom: 1.2rem;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
-.card-title i { color: var(--text-main); font-size: 1rem; }
+/* O ícone ganha um bloco tingido com a cor da métrica: dá presença à cor sem
+   pintar o número, que precisa continuar legível. */
+.card-title i {
+  font-size: 0.95rem;
+  width: 32px; height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  color: var(--accent-solid, var(--primary));
+  background: color-mix(in srgb, var(--accent-solid, var(--primary)) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-solid, var(--primary)) 30%, transparent);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--accent-solid, var(--primary)) 22%, transparent);
+  transition: var(--transition);
+}
+.card:hover .card-title i {
+  transform: scale(1.08) rotate(4deg);
+  box-shadow: 0 0 24px color-mix(in srgb, var(--accent-solid, var(--primary)) 40%, transparent);
+}
 
 .stat-value {
-  font-size: 3rem;
+  font-size: 3.2rem;
   font-weight: 700;
   color: var(--text-main);
   line-height: 1;
   margin-bottom: 8px;
   letter-spacing: -1.5px;
   font-variant-numeric: tabular-nums; /* evita o número "dançar" durante a contagem */
+  /* Branco para continuar legível, com o halo da métrica atrás para dar vida. */
+  text-shadow: 0 0 28px color-mix(in srgb, var(--accent-solid, var(--primary)) 45%, transparent);
 }
 .stat-desc {
   color: var(--text-dim);
@@ -371,18 +397,21 @@ p { line-height: 1.6; }
 
 .progress-bar {
   width: 100%;
-  height: 4px;
-  background: var(--glass-bg);
-  border-radius: 4px;
+  height: 6px;
+  background: rgba(4, 7, 12, 0.6);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-pill);
   margin-top: 1.5rem;
   overflow: hidden;
 }
 .progress-fill {
   height: 100%;
-  background: var(--accent-solid, var(--primary));
-  border-radius: 4px;
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--accent-solid, var(--primary)) 70%, transparent),
+    var(--accent-solid, var(--primary)));
+  border-radius: var(--radius-pill);
   transition: width 1s cubic-bezier(0.16, 1, 0.3, 1);
-  opacity: 0.85;
+  box-shadow: 0 0 14px color-mix(in srgb, var(--accent-solid, var(--primary)) 55%, transparent);
 }
 
 @keyframes statPop {
@@ -407,7 +436,7 @@ p { line-height: 1.6; }
 
 .input, .textarea, select.input {
   width: 100%;
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(4, 7, 12, 0.55);
   border: 1px solid var(--border-color);
   padding: 1rem;
   border-radius: var(--radius-sm);
@@ -416,11 +445,12 @@ p { line-height: 1.6; }
   transition: var(--transition);
 }
 .input::placeholder, .textarea::placeholder { color: var(--text-dim); }
+.input:hover, .textarea:hover, select.input:hover { border-color: var(--border-hover); }
 .input:focus, .textarea:focus, select.input:focus {
   border-color: var(--primary);
   outline: none;
-  background: rgba(255, 255, 255, 0.04);
-  box-shadow: 0 0 0 2px var(--primary-bg);
+  background: rgba(4, 7, 12, 0.75);
+  box-shadow: 0 0 0 3px var(--primary-bg), var(--shadow-glow);
 }
 select.input {
   appearance: none;
@@ -587,9 +617,9 @@ select.input option { background: var(--bg-card); color: var(--text-main); }
   padding: 4px 8px;
   border-radius: 4px;
 }
-.sched-badge.pending { background: rgba(255, 182, 72, 0.1); color: var(--warning); }
-.sched-badge.success { background: rgba(41, 209, 124, 0.1); color: var(--success); }
-.sched-badge.error { background: rgba(255, 98, 98, 0.1); color: var(--error); }
+.sched-badge.pending { background: rgba(255, 182, 72, 0.16); color: var(--warning); border: 1px solid rgba(255, 182, 72, 0.35); }
+.sched-badge.success { background: rgba(41, 209, 124, 0.16); color: var(--success); border: 1px solid rgba(41, 209, 124, 0.35); }
+.sched-badge.error { background: rgba(255, 98, 98, 0.16); color: var(--error); border: 1px solid rgba(255, 98, 98, 0.35); }
 .sched-img-container { width: 100%; height: 180px; border-radius: var(--radius-sm); overflow: hidden; background: #000; }
 .sched-thumb { width: 100%; height: 100%; object-fit: cover; opacity: 0.9; transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
 .sched-card:hover .sched-thumb { opacity: 1; transform: scale(1.06); }
