@@ -792,8 +792,14 @@ async function cron() {
   }
 }
 
-// Check every minute
-setInterval(cron, 60000);
+// Intervalo do agendador, em minutos.
+//
+// Cada consulta ao banco acorda o compute do Neon, que só volta a hibernar
+// após 5 min ocioso. Consultar a cada 1 min mantinha o banco ligado 24/7 e
+// estourava a cota de 100 CU-hrs/mês do plano free. A 15 min o banco fica
+// acordado ~8h/dia (~60 CU-hrs/mês), ao custo de publicar um post com até
+// 15 min de atraso em relação ao horário agendado.
+const SCHEDULER_MINUTES = Number(process.env.SCHEDULER_MINUTES) || 15;
 
 /**
  * 📁 Manual Import Trigger
@@ -827,22 +833,29 @@ initDB()
   .then(async () => {
     await initWebPush();
 
-    // Auto-import on startup and every 5 minutes
-    let isImporting = false;
-    const autoImport = async () => {
-      if (isImporting) return;
-      isImporting = true;
+    // Publicação e importação rodam no mesmo tick de propósito: assim as duas
+    // compartilham a mesma janela em que o banco já está acordado, em vez de
+    // criarem dois despertares separados. O import roda a cada 2 ticks.
+    let isRunning = false;
+    let tick = 0;
+
+    const runScheduler = async () => {
+      if (isRunning) return;
+      isRunning = true;
       try {
-        await runAutoImporter();
+        await cron();
+        if (tick % 2 === 0) await runAutoImporter();
       } catch (e) {
-        console.error('Auto-import periodic failure:', e.message);
+        console.error('Scheduler failure:', e.message);
       } finally {
-        isImporting = false;
+        tick++;
+        isRunning = false;
       }
     };
 
-    autoImport(); // Run once at start
-    setInterval(autoImport, 300000); // Run every 5 mins
+    console.log(`⏱️ [SCHEDULER] Rodando a cada ${SCHEDULER_MINUTES} min`);
+    runScheduler(); // Roda uma vez no start
+    setInterval(runScheduler, SCHEDULER_MINUTES * 60 * 1000);
   })
   .catch(err => {
     console.error('####################################################');
