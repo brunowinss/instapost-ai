@@ -16,6 +16,9 @@
  * Rode com --dry-run para só contar as linhas, sem escrever nada.
  */
 
+// Credenciais ficam em .env.migration (ignorado pelo git), nunca na linha de comando.
+require('dotenv').config({ path: '.env.migration' });
+
 const { Pool } = require('pg');
 
 // Ordem importa: accounts antes de posts por causa da referência accountId.
