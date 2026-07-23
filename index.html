@@ -77,12 +77,13 @@
       </a>
     </nav>
     <div class="sidebar-footer">
-      <div class="status-badge">
+      <div class="status-badge" id="scheduler-badge">
         <div class="status-badge-title">Motor</div>
         <div class="status-indicator">
-          <div class="status-dot"></div>
-          <span class="status-text">CRON ATIVO</span>
+          <div class="status-dot" id="scheduler-dot"></div>
+          <span class="status-text" id="scheduler-text">VERIFICANDO...</span>
         </div>
+        <div class="status-detail" id="scheduler-detail">—</div>
       </div>
       <button class="btn btn-ghost" onclick="logout()" style="width:100%; border-color: rgba(239, 68, 68, 0.2); color: var(--error);">
         <i class="fa-solid fa-right-from-bracket"></i> Sair

@@ -302,10 +302,52 @@ async function loadData() {
     }
     
     updateHeaderUI();
+    updateSchedulerStatus(data.scheduler);
     populateAccountSelector();
     renderActiveSection();
   } catch (err) {
     console.error('Sync Error:', err);
+    updateSchedulerStatus(null); // servidor fora do ar
+  }
+}
+
+/**
+ * Reflete o estado real do agendador na barra lateral.
+ *
+ * Antes o "CRON ATIVO" era texto fixo no HTML — ficava verde mesmo com o
+ * motor travado. Agora compara a última execução com o intervalo esperado.
+ */
+function updateSchedulerStatus(info) {
+  const dot = document.getElementById('scheduler-dot');
+  const text = document.getElementById('scheduler-text');
+  const detail = document.getElementById('scheduler-detail');
+  if (!dot || !text || !detail) return;
+
+  const set = (color, label, note) => {
+    dot.style.background = color;
+    dot.style.boxShadow = `0 0 10px ${color}`;
+    text.style.color = color;
+    text.innerText = label;
+    detail.innerText = note;
+  };
+
+  const ok = 'var(--success)', warn = 'var(--warning)', bad = 'var(--error)';
+
+  if (!info || !info.lastRun) {
+    set(bad, 'SEM RESPOSTA', 'Servidor não respondeu');
+    return;
+  }
+
+  const minutosAtras = Math.floor((Date.now() - info.lastRun) / 60000);
+  const limite = info.intervalMinutes * 2; // dois ciclos de tolerância
+  const quando = minutosAtras < 1 ? 'agora há pouco' : `há ${minutosAtras} min`;
+
+  if (info.hasError) {
+    set(warn, 'COM FALHA', `Último ciclo ${quando} deu erro`);
+  } else if (minutosAtras > limite) {
+    set(warn, 'ATRASADO', `Sem rodar ${quando}`);
+  } else {
+    set(ok, 'ATIVO', `Rodou ${quando}`);
   }
 }
 

@@ -354,7 +354,17 @@ app.get('/api/data', requireAuth, async (req, res) => {
     delete globalConfig.vapidPrivateKey;
     delete globalConfig.loginPass;
 
-    res.json({ accounts: safeAccounts, scheduledPosts, history, globalConfig });
+    res.json({
+      accounts: safeAccounts,
+      scheduledPosts,
+      history,
+      globalConfig,
+      scheduler: {
+        lastRun: scheduler.lastRun,
+        intervalMinutes: SCHEDULER_MINUTES,
+        hasError: !!scheduler.lastError
+      }
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -881,6 +891,18 @@ async function cron() {
 const SCHEDULER_MINUTES = Number(process.env.SCHEDULER_MINUTES) || 15;
 
 /**
+ * Estado real do agendador, exposto no /api/data.
+ *
+ * O painel mostrava "CRON ATIVO" escrito fixo no HTML: a luz ficava verde
+ * mesmo com o agendador travado. Agora ela reflete a última execução de fato.
+ */
+const scheduler = {
+  lastRun: null,   // quando o ciclo terminou pela última vez
+  lastError: null, // mensagem do último ciclo que falhou
+  running: false
+};
+
+/**
  * 📁 Manual Import Trigger
  */
 app.get('/api/import-local', requireAuth, async (req, res) => {
@@ -915,20 +937,23 @@ initDB()
     // Publicação e importação rodam no mesmo tick de propósito: assim as duas
     // compartilham a mesma janela em que o banco já está acordado, em vez de
     // criarem dois despertares separados. O import roda a cada 2 ticks.
-    let isRunning = false;
     let tick = 0;
 
     const runScheduler = async () => {
-      if (isRunning) return;
-      isRunning = true;
+      if (scheduler.running) return;
+      scheduler.running = true;
       try {
         await cron();
         if (tick % 2 === 0) await runAutoImporter();
+        scheduler.lastError = null;
       } catch (e) {
         console.error('Scheduler failure:', e.message);
+        scheduler.lastError = e.message;
       } finally {
+        // Marca mesmo em caso de erro: o ciclo rodou, ainda que com falha.
+        scheduler.lastRun = Date.now();
         tick++;
-        isRunning = false;
+        scheduler.running = false;
       }
     };
 
