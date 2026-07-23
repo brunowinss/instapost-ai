@@ -1498,22 +1498,49 @@ function urlB64ToUint8Array(base64String) {
   return outputArray;
 }
 
+/** iPhone/iPad? (inclui iPad moderno, que se identifica como Mac com toque) */
+function isIOS() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+/** O site foi aberto pelo ícone da Tela de Início (modo app), não pela aba? */
+function isStandalone() {
+  return window.matchMedia('(display-mode: standalone)').matches ||
+         window.navigator.standalone === true;
+}
+
 async function setupPushNotifications() {
   const msgEl = document.getElementById('push-status-msg');
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-    if (msgEl) msgEl.innerText = 'Notificações Push não suportadas neste navegador.';
+  const btn = document.getElementById('btn-enable-push');
+  const iosHelp = document.getElementById('ios-push-help');
+
+  // No iPhone, a Apple só permite notificação web quando o site está instalado
+  // na Tela de Início. Na aba do Safari o botão até funciona, mas nada chega —
+  // então explicamos e travamos o botão em vez de dar falsa sensação de sucesso.
+  if (isIOS() && !isStandalone()) {
+    if (iosHelp) iosHelp.style.display = 'block';
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-mobile-screen"></i> Instale o app primeiro';
+    }
+    if (msgEl) msgEl.innerText = 'No iPhone: só funciona com o app na Tela de Início (passos acima).';
     return;
   }
-  
+
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    if (msgEl) msgEl.innerText = 'Notificações não são suportadas neste navegador.';
+    if (btn) btn.disabled = true;
+    return;
+  }
+
   try {
     const swReg = await navigator.serviceWorker.register('/sw.js');
     console.log('[PWA] Service Worker registrado', swReg);
-    
-    // Check permission
+
     if (Notification.permission === 'granted') {
       if (msgEl) msgEl.innerText = 'Notificações já estão ativas neste dispositivo.';
-      const btn = document.getElementById('btn-enable-push');
-      if(btn) {
+      if (btn) {
          btn.disabled = true;
          btn.innerHTML = '<i class="fa-solid fa-check"></i> Ativado';
       }
@@ -1525,6 +1552,12 @@ async function setupPushNotifications() {
 
 async function subscribeToPush() {
   const msgEl = document.getElementById('push-status-msg');
+
+  if (isIOS() && !isStandalone()) {
+    showToast('No iPhone, adicione o app à Tela de Início antes de ativar.', 'warning');
+    return;
+  }
+
   try {
     showLoading(true, 'SOLICITANDO PERMISSÃO...');
     const permission = await Notification.requestPermission();

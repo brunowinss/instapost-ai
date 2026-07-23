@@ -8,6 +8,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <meta name="apple-mobile-web-app-title" content="Insta Post">
+  <!-- Sem isto o iOS abre o atalho como aba comum e o push nunca funciona -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="manifest.json?v=2">
   <link rel="apple-touch-icon" href="/icon-512.png?v=2">
   <link rel="icon" type="image/png" href="/icon-192.png?v=2">
@@ -221,7 +224,7 @@
               </div>
               <!-- Manual Mode -->
               <div id="schedule-manual" style="display:none;">
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                <div class="col-2" style="gap:12px;">
                   <div>
                     <label class="label" style="font-size:0.7rem;">Data</label>
                     <input type="date" class="input" id="post-date-manual">
@@ -300,7 +303,7 @@
 
     <!-- ═══════════════ SETTINGS ═══════════════ -->
     <section id="section-settings" class="section">
-      <div class="dashboard-grid" style="grid-template-columns:1fr 1fr;">
+      <div class="dashboard-grid settings-grid">
         <!-- Accounts Card -->
         <div class="card">
           <h3 class="card-title"><i class="fa-solid fa-user-gear"></i> Contas Conectadas</h3>
@@ -362,7 +365,7 @@
             Receba um alerta no Telegram quando um post for publicado com sucesso ou falhar.
           </p>
           <form id="telegram-form">
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; margin-bottom:1.5rem;">
+            <div class="col-2" style="gap:1.5rem; margin-bottom:1.5rem;">
               <div>
                 <label class="label">Bot Token</label>
                 <input type="text" class="input" id="telegram-token-input" placeholder="123456:ABC-DEF...">
@@ -383,8 +386,19 @@
         <div class="card" style="grid-column:1/-1;">
           <h3 class="card-title"><i class="fa-solid fa-bell"></i> Notificações de Tela (App)</h3>
           <p style="font-size:0.85rem; color:var(--text-dim); margin-bottom:1.5rem;">
-            Receba notificações na tela do seu computador ou celular. No iPhone, adicione este site à Tela de Início primeiro.
+            Receba notificações na tela do seu computador ou celular quando um post for publicado.
           </p>
+          <!-- Instruções específicas do iPhone, exibidas só quando necessário -->
+          <div id="ios-push-help" style="display:none; background:rgba(16,184,245,0.10); border:1px solid rgba(16,184,245,0.35); border-radius:var(--radius-sm); padding:14px 16px; margin-bottom:1.5rem; font-size:0.85rem; color:var(--text-secondary); line-height:1.7;">
+            <b style="color:var(--accent);"><i class="fa-brands fa-apple"></i> No iPhone é preciso instalar o app antes</b><br>
+            A Apple só entrega notificações quando o site está na Tela de Início. Faça uma vez:
+            <ol style="margin:8px 0 0 18px; padding:0;">
+              <li>Abra este site no <b>Safari</b> (não funciona em outro navegador no iPhone)</li>
+              <li>Toque no botão <b>Compartilhar</b> <i class="fa-solid fa-arrow-up-from-bracket"></i> (embaixo)</li>
+              <li>Escolha <b>Adicionar à Tela de Início</b></li>
+              <li>Abra o app pelo <b>ícone novo</b> e volte aqui para ativar</li>
+            </ol>
+          </div>
           <div style="display:flex; gap:12px;">
             <button type="button" class="btn btn-primary" id="btn-enable-push" style="flex:1;">
               <i class="fa-solid fa-bell-ring"></i> Ativar Notificações neste Dispositivo
@@ -423,7 +437,7 @@
         </div>
       </div>
       
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-top:2rem;">
+      <div class="col-2" style="gap:1rem; margin-top:2rem;">
         <button class="btn btn-ghost" id="modal-cancel">Cancelar</button>
         <button class="btn btn-primary" id="modal-confirm" disabled style="opacity:0.5;">Conectar</button>
       </div>
