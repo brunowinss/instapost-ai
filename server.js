@@ -883,12 +883,14 @@ async function cron() {
 
 // Intervalo do agendador, em minutos.
 //
-// Cada consulta ao banco acorda o compute do Neon, que só volta a hibernar
-// após 5 min ocioso. Consultar a cada 1 min mantinha o banco ligado 24/7 e
-// estourava a cota de 100 CU-hrs/mês do plano free. A 15 min o banco fica
-// acordado ~8h/dia (~60 CU-hrs/mês), ao custo de publicar um post com até
-// 15 min de atraso em relação ao horário agendado.
-const SCHEDULER_MINUTES = Number(process.env.SCHEDULER_MINUTES) || 15;
+// O valor era 15 por causa do Neon, que cobrava por hora de compute e ligava
+// o banco a cada consulta. No Supabase essa restrição não existe, então dá
+// para consultar com mais frequência e publicar mais perto do horário marcado.
+//
+// O limite real agora é o Render: no plano grátis ele hiberna após 15 min sem
+// tráfego, e processo hibernado não executa agendador nenhum. Quem resolve
+// isso é o ping do .github/workflows/keep-alive.yml.
+const SCHEDULER_MINUTES = Number(process.env.SCHEDULER_MINUTES) || 5;
 
 /**
  * Estado real do agendador, exposto no /api/data.

@@ -1,0 +1,31 @@
+name: Mantém o serviço acordado
+
+# O plano grátis do Render hiberna o serviço após 15 min sem tráfego, e um
+# processo hibernado não executa o agendador — posts marcados para a madrugada
+# só sairiam quando alguém abrisse o site. Este ping mantém o Render de pé para
+# que a publicação automática aconteça na hora certa.
+#
+# Usa o endpoint de health check, que responde sem consultar o banco.
+
+on:
+  schedule:
+    - cron: '*/10 * * * *' # a cada 10 minutos
+  workflow_dispatch: {}     # permite disparar manualmente pela aba Actions
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Acorda o serviço
+        run: |
+          # --max-time cobre o cold start do Render, que pode passar de 50s.
+          codigo=$(curl -s -o /dev/null -w '%{http_code}' --max-time 90 \
+            https://instapost.brunowins.com/api/instagram-status)
+
+          echo "Resposta do servidor: $codigo"
+
+          if [ "$codigo" != "200" ]; then
+            echo "::error::O serviço respondeu $codigo em vez de 200"
+            exit 1
+          fi
