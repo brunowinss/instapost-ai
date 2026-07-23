@@ -313,7 +313,7 @@ p { line-height: 1.6; }
 /* ── Cards ── */
 .dashboard-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 1.5rem;
 }
 /* A cor de cada card vive só no ícone e na barra de progresso — o dado é que

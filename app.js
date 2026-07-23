@@ -305,6 +305,7 @@ async function loadData() {
     updateSchedulerStatus(data.scheduler);
     populateAccountSelector();
     renderActiveSection();
+    loadAccountStats();
   } catch (err) {
     console.error('Sync Error:', err);
     updateSchedulerStatus(null); // servidor fora do ar
@@ -349,6 +350,71 @@ function updateSchedulerStatus(info) {
   } else {
     set(ok, 'ATIVO', `Rodou ${quando}`);
   }
+}
+
+/**
+ * Busca seguidores/publicações do perfil ativo direto na API do Instagram.
+ *
+ * O servidor guarda o resultado por 10 min: os proprios numeros da Meta ja vem
+ * com atraso, entao consultar mais que isso so gasta cota sem ganhar precisao.
+ */
+async function loadAccountStats() {
+  const valueEl = document.getElementById('stat-followers');
+  const labelEl = document.getElementById('stat-followers-label');
+  const barEl = document.getElementById('progress-followers');
+  if (!valueEl || !labelEl) return;
+
+  const accountId = STATE.activeAccountId;
+  if (!accountId) {
+    valueEl.innerText = '—';
+    labelEl.innerText = 'Nenhuma conta conectada';
+    if (barEl) barEl.style.width = '0%';
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/account-stats?accountId=${encodeURIComponent(accountId)}`);
+    const s = await res.json();
+
+    if (s.unavailable || s.followersCount === null || s.followersCount === undefined) {
+      valueEl.innerText = '—';
+      labelEl.innerText = 'Instagram não retornou o número';
+      if (barEl) barEl.style.width = '0%';
+      return;
+    }
+
+    animateNumber(valueEl, s.followersCount);
+    const acc = STATE.accounts.find(a => a.accountId === accountId);
+    const nome = acc ? `@${acc.username}` : '';
+    labelEl.innerText = `${nome} • ${s.mediaCount ?? '?'} publicações`;
+    if (barEl) barEl.style.width = '100%';
+  } catch (err) {
+    console.error('Stats Error:', err);
+    valueEl.innerText = '—';
+    labelEl.innerText = 'Não foi possível consultar';
+  }
+}
+
+/** Conta de 0 até o valor, respeitando quem prefere menos movimento. */
+function animateNumber(el, alvo) {
+  const fmt = (n) => n.toLocaleString('pt-BR');
+
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    el.innerText = fmt(alvo);
+    return;
+  }
+
+  const duracao = 800;
+  const inicio = performance.now();
+
+  const passo = (agora) => {
+    const p = Math.min((agora - inicio) / duracao, 1);
+    const eased = 1 - Math.pow(1 - p, 3); // ease-out
+    el.innerText = fmt(Math.round(alvo * eased));
+    if (p < 1) requestAnimationFrame(passo);
+  };
+
+  requestAnimationFrame(passo);
 }
 
 function renderActiveSection() {
@@ -448,6 +514,7 @@ function populateAccountSelector() {
   sel.onchange = () => {
     STATE.activeAccountId = sel.value;
     updateHeaderUI();
+    loadAccountStats(); // os seguidores são de outra conta agora
   };
 
   if (!prev && STATE.accounts.length > 0) {

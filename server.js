@@ -293,6 +293,61 @@ app.get('/api/verify-account', requireAuth, async (req, res) => {
   }
 });
 
+/**
+ * 📊 Estatísticas do perfil (seguidores, seguindo, publicações)
+ *
+ * A Meta limita chamadas por hora, e o painel consulta a cada recarga. O cache
+ * evita repetir a mesma pergunta: os números do Instagram já vêm com atraso de
+ * alguns minutos do lado deles, então 10 min aqui não piora a atualidade.
+ */
+const statsCache = new Map(); // accountId -> { data, ts }
+const STATS_TTL_MS = 10 * 60 * 1000;
+
+app.get('/api/account-stats', requireAuth, async (req, res) => {
+  const { accountId } = req.query;
+  if (!accountId) return res.status(400).json({ error: 'accountId é obrigatório.' });
+
+  const cached = statsCache.get(accountId);
+  if (cached && Date.now() - cached.ts < STATS_TTL_MS) {
+    return res.json({ ...cached.data, cached: true });
+  }
+
+  try {
+    const db = await getDB();
+    const account = await db.get('SELECT "accessToken" FROM accounts WHERE "accountId" = ?', [accountId]);
+    if (!account || !account.accessToken) {
+      return res.status(404).json({ error: 'Conta não encontrada.' });
+    }
+
+    const token = account.accessToken;
+    const baseUrl = token.startsWith('IGAA') ? 'https://graph.instagram.com/v21.0' : 'https://graph.facebook.com/v21.0';
+    const fields = 'followers_count,follows_count,media_count,username';
+
+    const r = await fetch(`${baseUrl}/${accountId}?fields=${fields}&access_token=${token}`);
+    const data = await r.json();
+
+    if (data.error) {
+      console.error('[STATS] Erro da Meta:', data.error.message);
+      // 200 de propósito: o painel trata como "indisponível" em vez de quebrar.
+      return res.json({ unavailable: true, reason: data.error.message });
+    }
+
+    const stats = {
+      followersCount: data.followers_count ?? null,
+      followsCount: data.follows_count ?? null,
+      mediaCount: data.media_count ?? null,
+      username: data.username,
+      fetchedAt: Date.now()
+    };
+
+    statsCache.set(accountId, { data: stats, ts: Date.now() });
+    res.json(stats);
+  } catch (err) {
+    console.error('[STATS] Falha:', err.message);
+    res.json({ unavailable: true, reason: err.message });
+  }
+});
+
 // Login
 app.post('/api/login', async (req, res) => {
   const ip = req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress || 'unknown';
