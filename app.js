@@ -584,6 +584,52 @@ function animateCount(el, target) {
   requestAnimationFrame(step);
 }
 
+/**
+ * Painel "Seguidores por Conta" do Dashboard: um cartão por conta com o número
+ * de seguidores, buscado por conta e protegido pelo cache de 10 min do servidor.
+ */
+function renderDashboardFollowers() {
+  const container = document.getElementById('dashboard-followers-list');
+  if (!container) return;
+
+  if (STATE.accounts.length === 0) {
+    container.innerHTML = '<p style="color:var(--text-dim); font-size:0.85rem; grid-column:1/-1;">Nenhuma conta conectada ainda.</p>';
+    return;
+  }
+
+  container.innerHTML = STATE.accounts.map(acc => `
+    <div style="display:flex; align-items:center; gap:12px; padding:0.9rem 1rem; background:rgba(4,7,12,0.5); border:1px solid var(--border-color); border-radius:var(--radius-sm);">
+      <div style="width:38px; height:38px; border-radius:50%; background:linear-gradient(45deg,#f09433,#dc2743,#bc1888); display:flex; align-items:center; justify-content:center; color:#fff; overflow:hidden; flex-shrink:0;">
+        ${acc.profilePictureUrl ? `<img src="${acc.profilePictureUrl}" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fa-brands fa-instagram"></i>'}
+      </div>
+      <div style="min-width:0;">
+        <div style="font-weight:700; font-size:0.85rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">@${acc.username}</div>
+        <div style="font-size:1.15rem; font-weight:700; color:var(--accent); line-height:1.2;" id="dash-fol-${acc.accountId}">…</div>
+        <div style="font-size:0.68rem; color:var(--text-dim);">seguidores</div>
+      </div>
+    </div>
+  `).join('');
+
+  STATE.accounts.forEach(async (acc) => {
+    const el = document.getElementById(`dash-fol-${acc.accountId}`);
+    if (!el) return;
+    try {
+      const res = await fetch(`${API_BASE}/account-stats?accountId=${encodeURIComponent(acc.accountId)}`);
+      const s = await res.json();
+      if (s.unavailable || s.followersCount === null || s.followersCount === undefined) {
+        el.innerText = '—';
+        el.style.color = 'var(--text-dim)';
+        el.parentElement.querySelector('div:last-child').innerText = 'indisponível';
+      } else {
+        el.innerText = s.followersCount.toLocaleString('pt-BR');
+      }
+    } catch {
+      el.innerText = '—';
+      el.style.color = 'var(--text-dim)';
+    }
+  });
+}
+
 function renderDashboard() {
   const successCount = STATE.history.filter(h => h.status === 'success').length;
   const scheduledCount = STATE.scheduledPosts.length;
@@ -597,6 +643,8 @@ function renderDashboard() {
   animateCount(document.getElementById('stat-total'), successCount);
   animateCount(document.getElementById('stat-scheduled'), scheduledCount);
   animateCount(document.getElementById('stat-accounts'), STATE.accounts.length);
+
+  renderDashboardFollowers();
   
   const ptEl = document.getElementById('progress-total');
   if (ptEl) ptEl.style.width = `${Math.min(successCount * 5, 100)}%`;
