@@ -454,17 +454,38 @@ function renderSettingsAccounts() {
         </div>
         <div>
           <div style="font-weight:700; font-size:0.95rem;">@${acc.username}</div>
-          <div style="font-size:0.7rem; color:var(--text-dim);">ID: ${acc.accountId}</div>
+          <div style="font-size:0.72rem; color:var(--text-secondary); margin-top:2px;">
+            <i class="fa-solid fa-heart" style="color:var(--accent); font-size:0.7rem;"></i>
+            <span id="followers-${acc.accountId}">carregando…</span>
+          </div>
         </div>
       </div>
       <div style="display:flex; align-items:center; gap:10px;">
-        <span style="font-size:0.6rem; padding:3px 8px; border-radius:6px; background:rgba(16,185,129,0.1); color:var(--success); border:1px solid rgba(16,185,129,0.2); font-weight:800; letter-spacing:0.5px;">ATIVO</span>
         <button class="btn btn-sm btn-ghost btn-delete" onclick="deleteAccount('${acc.accountId}')" style="padding:0.5rem; width:32px; height:32px; color:var(--error); border-color:rgba(239,68,68,0.2);">
           <i class="fa-solid fa-trash-can"></i>
         </button>
       </div>
     </div>
   `).join('');
+
+  // Busca os seguidores de cada conta separadamente. O cache de 10 min no
+  // servidor evita martelar a API da Meta quando há muitas contas.
+  STATE.accounts.forEach(async (acc) => {
+    const el = document.getElementById(`followers-${acc.accountId}`);
+    if (!el) return;
+    try {
+      const res = await fetch(`${API_BASE}/account-stats?accountId=${encodeURIComponent(acc.accountId)}`);
+      const s = await res.json();
+      if (s.unavailable || s.followersCount === null || s.followersCount === undefined) {
+        el.innerText = 'seguidores indisponíveis';
+        el.parentElement.style.color = 'var(--text-dim)';
+      } else {
+        el.innerText = `${s.followersCount.toLocaleString('pt-BR')} seguidores · ${(s.mediaCount ?? '?')} posts`;
+      }
+    } catch {
+      el.innerText = '—';
+    }
+  });
 }
 
 
