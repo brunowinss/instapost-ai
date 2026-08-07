@@ -1367,27 +1367,51 @@ window.publishNow = async (postId) => {
  * 📡 API Helpers
  */
 async function uploadToImgbb(file) {
+  const key = (STATE.globalConfig.imgbbKey || '').trim();
+  if (!key) {
+    throw new Error('Chave do ImgBB não configurada. Vá em Configurações → ImgBB API Key.');
+  }
+
   const fd = new FormData();
   fd.append('image', file);
-  const r = await fetch(`https://api.imgbb.com/1/upload?key=${STATE.globalConfig.imgbbKey}`, {
-    method: 'POST',
-    body: fd
-  });
-  const data = await r.json();
-  if (data.error) throw new Error(data.error.message);
+
+  let r;
+  try {
+    r = await fetch(`https://api.imgbb.com/1/upload?key=${key}`, { method: 'POST', body: fd });
+  } catch {
+    throw new Error('Sem conexão com o ImgBB. Verifique a internet.');
+  }
+
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || data.error) {
+    const msg = data.error?.message || `ImgBB retornou ${r.status}`;
+    throw new Error(/invalid.*key/i.test(msg) ? 'Chave do ImgBB inválida.' : msg);
+  }
   return data.data.url;
 }
 
 async function uploadToCloudinary(file) {
+  const nome = (STATE.globalConfig.cloudinaryName || '').trim();
+  const preset = (STATE.globalConfig.cloudinaryPreset || '').trim();
+  if (!nome || !preset) {
+    throw new Error('Cloudinary não configurado. Preencha Cloud Name e Upload Preset em Configurações.');
+  }
+
   const fd = new FormData();
   fd.append('file', file);
-  fd.append('upload_preset', STATE.globalConfig.cloudinaryPreset);
-  const r = await fetch(`https://api.cloudinary.com/v1_1/${STATE.globalConfig.cloudinaryName}/auto/upload`, {
-    method: 'POST',
-    body: fd
-  });
-  const data = await r.json();
-  if (data.error) throw new Error(data.error.message);
+  fd.append('upload_preset', preset);
+
+  let r;
+  try {
+    r = await fetch(`https://api.cloudinary.com/v1_1/${nome}/auto/upload`, { method: 'POST', body: fd });
+  } catch {
+    throw new Error('Sem conexão com o Cloudinary. Verifique a internet.');
+  }
+
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || data.error) {
+    throw new Error(data.error?.message || `Cloudinary retornou ${r.status}`);
+  }
   return data.secure_url;
 }
 
