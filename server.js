@@ -760,7 +760,12 @@ async function publishToInstagram(post) {
         await new Promise(r => setTimeout(r, waitMs));
         return graphReq(path, method, body, retries - 1);
       }
-      throw new Error(`[IG ${data.error.code || '?'}] ${data.error.message}`);
+      // A Meta costuma pôr o motivo real no error_user_msg / error_subcode,
+      // não na message genérica. Juntamos tudo para o erro ser diagnosticável.
+      const e = data.error;
+      const partes = [`[IG ${e.code || '?'}${e.error_subcode ? '/' + e.error_subcode : ''}]`, e.message];
+      if (e.error_user_msg && e.error_user_msg !== e.message) partes.push('—', e.error_user_msg);
+      throw new Error(partes.filter(Boolean).join(' '));
     }
     return data;
   };
