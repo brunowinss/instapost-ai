@@ -5,7 +5,21 @@ const { getDB } = require('./database');
 require('dotenv').config();
 
 const VIDEOS_DIR = path.join(__dirname, 'vídeos_para_postar');
-const SLOTS = [10, 15, 20]; // 10h, 15h, 20h
+
+/**
+ * Gera os horários do dia a partir da quantidade de posts/dia desejada.
+ * 1 → [15h]; 3 → [10,15,20] (padrão histórico); espalha entre 10h e 20h.
+ * Limitado entre 1 e 6 para não sobrecarregar a conta.
+ */
+function slotsForCount(n) {
+  const count = Math.max(1, Math.min(6, parseInt(n, 10) || 3));
+  if (count === 1) return [15];
+  const slots = [];
+  for (let i = 0; i < count; i++) {
+    slots.push(Math.round(10 + (20 - 10) * i / (count - 1)));
+  }
+  return slots;
+}
 
 /**
  * Main function to import and schedule videos from the local folder.
@@ -84,7 +98,7 @@ async function runAutoImporter() {
         const videoUrl = result.secure_url;
         
         // b) Calculate Next Slot (Sequential)
-        const scheduledAt = await calculateNextSlotFromDate(currentBasis);
+        const scheduledAt = await calculateNextSlotFromDate(currentBasis, slotsForCount(config.postsPerDay));
         currentBasis = new Date(scheduledAt); // Update basis for next file
 
         // c) Save to DB
@@ -118,8 +132,7 @@ async function runAutoImporter() {
 /**
  * Finds the next available time slot (10h, 15h, 20h) after a specific date.
  */
-async function calculateNextSlotFromDate(baseDate) {
-  const SLOTS = [10, 15, 20];
+async function calculateNextSlotFromDate(baseDate, SLOTS = [10, 15, 20]) {
   let nextDate = new Date(baseDate);
   let found = false;
 

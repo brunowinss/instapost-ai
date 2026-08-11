@@ -493,7 +493,7 @@ app.post('/api/save-config', requireAuth, async (req, res) => {
   
   try {
     // Accept any config keys that are sent
-    const allowedKeys = ['imgbbKey', 'cloudinaryName', 'cloudinaryPreset', 'telegramToken', 'telegramChatId', 'loginUser', 'loginPass'];
+    const allowedKeys = ['imgbbKey', 'cloudinaryName', 'cloudinaryPreset', 'telegramToken', 'telegramChatId', 'loginUser', 'loginPass', 'postsPerDay'];
     const configs = [];
     for (const key of allowedKeys) {
       if (req.body[key] !== undefined) {

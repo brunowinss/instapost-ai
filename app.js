@@ -435,6 +435,7 @@ function renderSettings() {
   setVal('cloudinary-preset-input', c.cloudinaryPreset);
   setVal('telegram-token-input', c.telegramToken);
   setVal('telegram-chatid-input', c.telegramChatId);
+  setVal('posts-per-day-input', String(c.postsPerDay || 3));
 }
 
 function renderSettingsAccounts() {
@@ -911,8 +912,22 @@ function autoFillNextSlot() {
   timeInput.value = `${hh}:${min}`;
 }
 
+/**
+ * Gera os horários do dia a partir da quantidade de posts/dia configurada.
+ * 1 → [15h]; 3 → [10,15,20] (padrão); espalha entre 10h e 20h. Máx. 6.
+ */
+function slotsForCount(n) {
+  const count = Math.max(1, Math.min(6, parseInt(n, 10) || 3));
+  if (count === 1) return [15];
+  const slots = [];
+  for (let i = 0; i < count; i++) {
+    slots.push(Math.round(10 + (20 - 10) * i / (count - 1)));
+  }
+  return slots;
+}
+
 function calculateNextSlot(lastDate) {
-  const SLOTS = [10, 15, 20];
+  const SLOTS = slotsForCount(STATE.globalConfig.postsPerDay);
   const minTime = new Date(Date.now() + 30 * 60000);
   let baseDate = lastDate ? new Date(lastDate) : new Date();
   let nextDate = new Date(baseDate);
@@ -1460,6 +1475,30 @@ function setupUIEvents() {
         });
         if (!res.ok) throw new Error('Falha ao salvar configurações.');
         showToast('CONFIGURAÇÕES SALVAS!', 'success');
+        await loadData();
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        showLoading(false);
+      }
+    };
+  }
+
+  // 1b. Formulário de agendamento (vídeos por dia)
+  const schedulingForm = document.getElementById('scheduling-form');
+  if (schedulingForm) {
+    schedulingForm.onsubmit = async (e) => {
+      e.preventDefault();
+      const postsPerDay = parseInt(document.getElementById('posts-per-day-input').value, 10) || 3;
+      showLoading(true, 'SALVANDO AGENDAMENTO...');
+      try {
+        const res = await fetch(`${API_BASE}/save-config`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ postsPerDay })
+        });
+        if (!res.ok) throw new Error('Falha ao salvar.');
+        showToast('AGENDAMENTO SALVO!', 'success');
         await loadData();
       } catch (err) {
         showToast(err.message, 'error');
