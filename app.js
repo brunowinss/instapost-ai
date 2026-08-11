@@ -1015,7 +1015,10 @@ function setupForms() {
     if (!accountId) return showToast('Selecione uma conta!', 'warning');
     
     const caption = document.getElementById('post-caption').value;
-    
+    // Variações separadas por uma linha "---": cada post recebe uma versão
+    // diferente, evitando a legenda idêntica que o Instagram penaliza.
+    const captionVariations = parseCaptionVariations(caption);
+
     showLoading(true, `PROCESSANDO 0/${files.length}...`);
     
     let successCount = 0;
@@ -1084,7 +1087,7 @@ function setupForms() {
           accountId,
           mediaType: type,
           imageUrl: url,
-          caption: caption || '',
+          caption: pickVariation(captionVariations, i),
           scheduledAt: scheduledAt.toISOString()
         };
         
@@ -1366,6 +1369,27 @@ window.publishNow = async (postId) => {
 /**
  * 📡 API Helpers
  */
+/**
+ * Divide a legenda em variações separadas por uma linha contendo só "---".
+ * Sem separador, retorna a legenda inteira como única variação.
+ */
+function parseCaptionVariations(raw) {
+  const texto = (raw || '').trim();
+  if (!texto) return [''];
+  const partes = texto.split(/\n\s*---+\s*\n/).map(p => p.trim()).filter(Boolean);
+  return partes.length ? partes : [''];
+}
+
+/**
+ * Escolhe uma variação para o post de índice i, alternando em sequência.
+ * Começa num ponto aleatório para duas cargas seguidas não saírem iguais.
+ */
+let _variationOffset = Math.floor(Math.random() * 1000);
+function pickVariation(variations, i) {
+  if (variations.length <= 1) return variations[0] || '';
+  return variations[(i + _variationOffset) % variations.length];
+}
+
 async function uploadToImgbb(file) {
   const key = (STATE.globalConfig.imgbbKey || '').trim();
   if (!key) {
