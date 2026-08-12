@@ -306,10 +306,23 @@ async function loadData() {
     populateAccountSelector();
     renderActiveSection();
     loadAccountStats();
+    clearDataError();
   } catch (err) {
     console.error('Sync Error:', err);
     updateSchedulerStatus(null); // servidor fora do ar
+    showDataError();
   }
+}
+
+function clearDataError() {
+  const el = document.getElementById('data-error-banner');
+  if (el) el.style.display = 'none';
+}
+
+function showDataError() {
+  const el = document.getElementById('data-error-banner');
+  if (!el) return;
+  el.style.display = 'flex';
 }
 
 /**
@@ -622,13 +635,93 @@ function renderDashboardFollowers() {
         el.style.color = 'var(--text-dim)';
         el.parentElement.querySelector('div:last-child').innerText = 'indisponível';
       } else {
-        el.innerText = s.followersCount.toLocaleString('pt-BR');
+        animateCount(el, s.followersCount);
       }
     } catch {
       el.innerText = '—';
       el.style.color = 'var(--text-dim)';
     }
   });
+}
+
+/* Gráficos do Dashboard: barras por dia, donut de tipos e sparkline de sucesso. */
+function renderDashboardCharts() {
+  const barsEl = document.getElementById('chart-weekly-bars');
+  if (barsEl) renderWeeklyBars(barsEl);
+  const typesEl = document.getElementById('chart-media-types');
+  if (typesEl) renderMediaTypes(typesEl);
+  const sparkEl = document.getElementById('chart-success-spark');
+  if (sparkEl) renderSuccessSpark(sparkEl);
+}
+
+function renderWeeklyBars(el) {
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const key = d.toDateString();
+    const count = STATE.history.filter(h =>
+      h.status === 'success' && new Date(h.publishedAt).toDateString() === key
+    ).length;
+    days.push({ label: d.toLocaleDateString('pt-BR', { weekday: 'short' }).slice(0, 3), count });
+  }
+  const max = Math.max(1, ...days.map(d => d.count));
+  el.innerHTML = days.map((d, i) => `
+    <div class="chart-bar" style="height:${Math.max(6, (d.count / max) * 100)}%; animation-delay:${i * 60}ms;" data-label="${d.count}">
+    </div>
+  `).join('');
+}
+
+function renderMediaTypes(el) {
+  const successPosts = STATE.history.filter(h => h.status === 'success');
+  const images = successPosts.filter(h => h.mediaType !== 'REELS').length;
+  const reels = successPosts.filter(h => h.mediaType === 'REELS').length;
+  const total = images + reels;
+  if (total === 0) {
+    el.innerHTML = '<p style="color:var(--text-dim); font-size:0.85rem;">Sem publicações ainda.</p>';
+    return;
+  }
+  const imgPct = (images / total) * 100;
+  const reelsPct = 100 - imgPct;
+  const R = 54, C = 2 * Math.PI * R;
+  const imgArc = (imgPct / 100) * C;
+  const reelsArc = (reelsPct / 100) * C;
+  el.innerHTML = `
+    <div class="chart-donut-wrap">
+      <svg width="120" height="120" viewBox="0 0 120 120">
+        <circle cx="60" cy="60" r="${R}" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="14"/>
+        <circle cx="60" cy="60" r="${R}" fill="none" stroke="var(--accent)" stroke-width="14"
+          stroke-linecap="round" stroke-dasharray="${imgArc} ${C}"
+          transform="rotate(-90 60 60)" style="transition: stroke-dasharray 0.8s cubic-bezier(0.16,1,0.3,1);"/>
+        <circle cx="60" cy="60" r="${R}" fill="none" stroke="var(--primary-600)" stroke-width="14"
+          stroke-linecap="round" stroke-dasharray="${reelsArc} ${C}"
+          stroke-dashoffset="${-imgArc}"
+          transform="rotate(-90 60 60)" style="transition: stroke-dasharray 0.8s cubic-bezier(0.16,1,0.3,1);"/>
+      </svg>
+      <div class="chart-donut-center">${total}</div>
+    </div>
+    <div class="legend-list">
+      <div class="legend-item"><span class="legend-dot" style="background:var(--accent);"></span> Fotos <span class="legend-value">${images}</span></div>
+      <div class="legend-item"><span class="legend-dot" style="background:var(--primary-600);"></span> Reels <span class="legend-value">${reels}</span></div>
+    </div>
+  `;
+}
+
+function renderSuccessSpark(el) {
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const key = d.toDateString();
+    const total = STATE.history.filter(h => new Date(h.publishedAt).toDateString() === key).length;
+    const ok = STATE.history.filter(h => h.status === 'success' && new Date(h.publishedAt).toDateString() === key).length;
+    days.push(total === 0 ? 0 : (ok / total) * 100);
+  }
+  const max = Math.max(10, ...days.map(d => d));
+  el.innerHTML = days.map((pct, i) => `
+    <div class="chart-bar" style="height:${Math.max(4, (pct / max) * 100)}%; background:linear-gradient(180deg, var(--success) 0%, color-mix(in srgb, var(--success) 35%, transparent) 100%); animation-delay:${i * 60}ms;" data-label="${pct === 0 ? '—' : pct.toFixed(0) + '%'}">
+    </div>
+  `).join('');
 }
 
 function renderDashboard() {
@@ -646,6 +739,7 @@ function renderDashboard() {
   animateCount(document.getElementById('stat-accounts'), STATE.accounts.length);
 
   renderDashboardFollowers();
+  renderDashboardCharts();
   
   const ptEl = document.getElementById('progress-total');
   if (ptEl) ptEl.style.width = `${Math.min(successCount * 5, 100)}%`;
@@ -676,11 +770,13 @@ function renderDashboard() {
     const dateStr = h.publishedAt ? new Date(h.publishedAt).toLocaleString('pt-BR') : new Date(h.scheduledAt).toLocaleString('pt-BR');
     const statusColor = h.status === 'success' ? 'var(--success)' : h.status === 'pending' ? 'var(--warning)' : 'var(--error)';
     const statusBg = h.status === 'success' ? 'rgba(16,185,129,0.1)' : h.status === 'pending' ? 'rgba(245,158,11,0.1)' : 'rgba(239,68,68,0.1)';
+    const thumbUrl = getThumbnailUrl(h.imageUrl);
+    const thumb = thumbUrl
+      ? `<img class="activity-thumb" src="${thumbUrl}" loading="lazy" onerror="this.style.display='none';">`
+      : `<div class="activity-thumb" style="display:flex; align-items:center; justify-content:center;"><i class="fa-solid ${h.mediaType === 'REELS' ? 'fa-film' : 'fa-image'}" style="color:var(--accent);"></i></div>`;
     return `
     <div class="activity-item">
-      <div style="width:46px; height:46px; border-radius:12px; background:rgba(139,92,246,0.1); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
-        <i class="fa-solid ${h.mediaType === 'REELS' ? 'fa-film' : 'fa-image'}" style="color:var(--purple-main);"></i>
-      </div>
+      ${thumb}
       <div style="flex:1; min-width:0;">
         <div style="font-weight:700; font-size:0.85rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${h.caption || 'Sem legenda'}</div>
         <div style="font-size:0.72rem; color:var(--text-dim); margin-top:2px;">${accName} • ${dateStr}</div>
@@ -745,11 +841,12 @@ function renderCalendar() {
 
   // Get dates with scheduled posts (filtered by account)
   const filteredPosts = getFilteredPosts();
-  const postDates = new Set();
+  const postsByDay = new Map();
   filteredPosts.forEach(p => {
     const d = new Date(p.scheduledAt);
     if (d.getMonth() === month && d.getFullYear() === year) {
-      postDates.add(d.getDate());
+      if (!postsByDay.has(d.getDate())) postsByDay.set(d.getDate(), []);
+      postsByDay.get(d.getDate()).push(p);
     }
   });
 
@@ -762,14 +859,32 @@ function renderCalendar() {
 
   for (let day = 1; day <= daysInMonth; day++) {
     const isToday = today.getDate() === day && today.getMonth() === month && today.getFullYear() === year;
-    const hasPosts = postDates.has(day);
+    const dayPosts = postsByDay.get(day) || [];
     const classes = ['cal-day'];
     if (isToday) classes.push('today');
-    if (hasPosts) classes.push('has-posts');
-    html += `<div class="${classes.join(' ')}">${day}</div>`;
+    if (dayPosts.length > 0) classes.push('has-posts');
+
+    let thumbs = '';
+    if (dayPosts.length > 0) {
+      const shown = dayPosts.slice(0, 2).map(p => {
+        const u = getThumbnailUrl(p.imageUrl);
+        return u
+          ? `<img class="cal-day-thumb" src="${u}" loading="lazy" onerror="this.style.display='none';" data-tip="${p.status}">`
+          : `<div class="cal-day-thumb" style="display:flex;align-items:center;justify-content:center;background:rgba(16,184,245,0.15);" data-tip="${p.status}"><i class="fa-solid fa-${p.mediaType === 'REELS' ? 'film' : 'image'}" style="font-size:0.5rem;color:var(--accent);"></i></div>`;
+      }).join('');
+      const overflow = dayPosts.length > 2 ? `<div class="cal-day-thumb-overflow">+${dayPosts.length - 2}</div>` : '';
+      thumbs = `<div class="cal-day-thumbs">${shown}${overflow}</div>`;
+    }
+
+    html += `<div class="${classes.join(' ')}">${day}${thumbs}</div>`;
   }
 
   html += '</div>';
+  html += `<div class="cal-legend">
+    <span><span class="cal-legend-dot" style="background:var(--warning);"></span> Pendente</span>
+    <span><span class="cal-legend-dot" style="background:var(--success);"></span> Sucesso</span>
+    <span><span class="cal-legend-dot" style="background:var(--error);"></span> Falhou</span>
+  </div>`;
   grid.innerHTML = html;
 }
 
@@ -835,10 +950,10 @@ function renderScheduleCards() {
         </div>
         <div style="display:flex; gap:8px;">
           ${!STATE.selectionMode ? `
-            <button class="btn btn-sm btn-ghost btn-delete" onclick="deletePost('${p.id}')" style="font-size:0.7rem; padding:0.5rem 0.8rem; color:var(--error);">
+            <button class="btn btn-sm btn-ghost btn-delete" onclick="deletePost('${p.id}')" data-tip="Excluir agendamento" style="font-size:0.7rem; padding:0.5rem 0.8rem; color:var(--error);">
               <i class="fa-solid fa-trash"></i>
             </button>
-            <button class="btn btn-sm btn-ghost" onclick="publishNow('${p.id}')" style="font-size:0.7rem; padding:0.5rem 0.8rem;">
+            <button class="btn btn-sm btn-ghost" onclick="publishNow('${p.id}')" data-tip="Publicar agora" style="font-size:0.7rem; padding:0.5rem 0.8rem;">
               <i class="fa-solid fa-paper-plane"></i> Publicar
             </button>
           ` : '<span style="font-size:0.65rem; color:var(--purple-main); font-weight:700;">MODO SELEÇÃO</span>'}
