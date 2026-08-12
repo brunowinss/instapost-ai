@@ -157,19 +157,18 @@ p { line-height: 1.6; }
   text-decoration: none;
 }
 .logo-icon {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border-radius: var(--radius-sm);
-  background: var(--primary);
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 800;
-  font-size: 1rem;
-  color: #04070C;
+  overflow: hidden;
   box-shadow: var(--shadow-glow);
   animation: glowBreath 10s ease-in-out infinite;
 }
+.logo-icon img { width: 100%; height: 100%; object-fit: cover; }
 /* Respiração do glow: 70% → 100% → 70%, loop infinito */
 @keyframes glowBreath {
   0%, 100% { box-shadow: 0 0 24px rgba(16, 184, 245, 0.21); }
@@ -649,14 +648,15 @@ select.input option { background: var(--bg-card); color: var(--text-main); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 .login-logo {
-  width: 64px; height: 64px;
-  background: var(--primary);
-  border-radius: 16px;
+  width: 88px; height: 88px;
+  background: transparent;
+  border-radius: 20px;
   display: inline-flex; align-items: center; justify-content: center;
-  font-size: 1.8rem; color: #000;
+  overflow: hidden;
   margin-bottom: 1.5rem;
   box-shadow: 0 0 30px var(--primary-glow);
 }
+.login-logo img { width: 100%; height: 100%; object-fit: cover; }
 .login-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem; color: var(--text-main); }
 .login-subtitle { color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 2.5rem; }
 
