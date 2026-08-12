@@ -321,7 +321,7 @@ app.get('/api/account-stats', requireAuth, async (req, res) => {
 
     const token = account.accessToken;
     const baseUrl = token.startsWith('IGAA') ? 'https://graph.instagram.com/v21.0' : 'https://graph.facebook.com/v21.0';
-    const fields = 'followers_count,follows_count,media_count,username';
+    const fields = 'followers_count,follows_count,media_count,username,profile_picture_url';
 
     const r = await fetch(`${baseUrl}/${accountId}?fields=${fields}&access_token=${token}`);
     const data = await r.json();
@@ -332,11 +332,20 @@ app.get('/api/account-stats', requireAuth, async (req, res) => {
       return res.json({ unavailable: true, reason: data.error.message });
     }
 
+    // A foto de perfil do Instagram muda e sua URL expira. Sempre que a API
+    // devolve uma nova, guardamos no banco — assim o usuário não precisa mais
+    // reconectar a conta só para atualizar a foto.
+    const pic = data.profile_picture_url || null;
+    if (pic) {
+      await db.run('UPDATE accounts SET "profilePictureUrl" = ? WHERE "accountId" = ?', [pic, accountId]);
+    }
+
     const stats = {
       followersCount: data.followers_count ?? null,
       followsCount: data.follows_count ?? null,
       mediaCount: data.media_count ?? null,
       username: data.username,
+      profilePictureUrl: pic,
       fetchedAt: Date.now()
     };
 

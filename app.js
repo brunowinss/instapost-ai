@@ -451,6 +451,30 @@ function renderSettings() {
   setVal('posts-per-day-input', String(c.postsPerDay || 3));
 }
 
+/**
+ * Troca a foto de perfil de uma conta em todos os lugares que a mostram, sem
+ * precisar recarregar. Chamado quando a API do Instagram devolve uma foto nova
+ * (o usuário trocou a foto lá, ou a URL antiga expirou).
+ */
+function updateAvatar(accountId, url) {
+  if (!url) return;
+  const acc = STATE.accounts.find(a => a.accountId === accountId);
+  if (acc) acc.profilePictureUrl = url;
+
+  document.querySelectorAll(`[data-avatar="${accountId}"]`).forEach(box => {
+    box.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;">`;
+  });
+
+  // Avatar do cabeçalho, se for a conta ativa
+  if (accountId === STATE.activeAccountId) {
+    const headerAvatar = document.getElementById('preview-user-avatar');
+    if (headerAvatar) {
+      headerAvatar.innerHTML = `<img src="${url}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+      headerAvatar.style.background = 'none';
+    }
+  }
+}
+
 function renderSettingsAccounts() {
   const list = document.getElementById('accounts-list-settings');
   if (!list) return;
@@ -463,7 +487,7 @@ function renderSettingsAccounts() {
   list.innerHTML = STATE.accounts.map(acc => `
     <div style="display:flex; align-items:center; justify-content:space-between; padding:1rem; background:rgba(255,255,255,0.03); border-radius:14px; border:1px solid var(--glass-border); margin-bottom:0.8rem;">
       <div style="display:flex; align-items:center; gap:12px;">
-        <div style="width:36px; height:36px; border-radius:50%; background:linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888); display:flex; align-items:center; justify-content:center; color:white; overflow:hidden;">
+        <div data-avatar="${acc.accountId}" style="width:36px; height:36px; border-radius:50%; background:linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888); display:flex; align-items:center; justify-content:center; color:white; overflow:hidden;">
           ${acc.profilePictureUrl ? `<img src="${acc.profilePictureUrl}" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fa-brands fa-instagram"></i>'}
         </div>
         <div>
@@ -490,6 +514,7 @@ function renderSettingsAccounts() {
     try {
       const res = await fetch(`${API_BASE}/account-stats?accountId=${encodeURIComponent(acc.accountId)}`);
       const s = await res.json();
+      if (s.profilePictureUrl) updateAvatar(acc.accountId, s.profilePictureUrl);
       if (s.unavailable || s.followersCount === null || s.followersCount === undefined) {
         el.innerText = 'seguidores indisponíveis';
         el.parentElement.style.color = 'var(--text-dim)';
@@ -613,7 +638,7 @@ function renderDashboardFollowers() {
 
   container.innerHTML = STATE.accounts.map(acc => `
     <div style="display:flex; align-items:center; gap:12px; padding:0.9rem 1rem; background:rgba(4,7,12,0.5); border:1px solid var(--border-color); border-radius:var(--radius-sm);">
-      <div style="width:38px; height:38px; border-radius:50%; background:linear-gradient(45deg,#f09433,#dc2743,#bc1888); display:flex; align-items:center; justify-content:center; color:#fff; overflow:hidden; flex-shrink:0;">
+      <div data-avatar="${acc.accountId}" style="width:38px; height:38px; border-radius:50%; background:linear-gradient(45deg,#f09433,#dc2743,#bc1888); display:flex; align-items:center; justify-content:center; color:#fff; overflow:hidden; flex-shrink:0;">
         ${acc.profilePictureUrl ? `<img src="${acc.profilePictureUrl}" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fa-brands fa-instagram"></i>'}
       </div>
       <div style="min-width:0;">
@@ -630,6 +655,7 @@ function renderDashboardFollowers() {
     try {
       const res = await fetch(`${API_BASE}/account-stats?accountId=${encodeURIComponent(acc.accountId)}`);
       const s = await res.json();
+      if (s.profilePictureUrl) updateAvatar(acc.accountId, s.profilePictureUrl);
       if (s.unavailable || s.followersCount === null || s.followersCount === undefined) {
         el.innerText = '—';
         el.style.color = 'var(--text-dim)';
