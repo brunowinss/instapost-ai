@@ -154,17 +154,97 @@ function showCustomModal({ title, message, inputs }) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  const loginScreen = document.getElementById('login-screen');
+  const params = new URLSearchParams(window.location.search);
+  const tokenFromUrl = params.get('token') || params.get('magic');
+
+  // Login direto via URL (Link Mágico)
+  if (tokenFromUrl) {
+    try {
+      showLoading(true, 'VALIDANDO LINK MÁGICO...');
+      const res = await fetch(`${API_BASE}/auth/verify-token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: tokenFromUrl })
+      });
+      const data = await res.json();
+      if (res.ok && data.valid) {
+        localStorage.setItem('insta_auth_token', tokenFromUrl);
+        history.replaceState({}, '', window.location.pathname);
+        showLoading(false);
+        showToast('Login por Link Mágico realizado com sucesso!', 'success');
+        loginScreen.style.display = 'none';
+        initApp();
+        return;
+      } else {
+        showLoading(false);
+        showToast(data.error || 'Link mágico inválido ou expirado.', 'error');
+      }
+    } catch (e) {
+      showLoading(false);
+      showToast('Erro ao validar link de acesso.', 'error');
+    }
+  }
+
   // Check if already logged in
   const token = localStorage.getItem('insta_auth_token');
-  const loginScreen = document.getElementById('login-screen');
-  
   if (token) {
-    // Already logged in - hide login, show dashboard
     loginScreen.style.display = 'none';
     initApp();
   } else {
-    // Show login screen
     loginScreen.style.display = 'flex';
+  }
+
+  // Toggle Magic Login no Login Screen
+  const btnToggleMagic = document.getElementById('btn-toggle-magic-login');
+  const magicContainer = document.getElementById('magic-login-container');
+  if (btnToggleMagic && magicContainer) {
+    btnToggleMagic.onclick = () => {
+      const isHidden = magicContainer.style.display === 'none' || !magicContainer.style.display;
+      magicContainer.style.display = isHidden ? 'block' : 'none';
+    };
+  }
+
+  // Submit Magic Token no Login Screen
+  const btnSubmitMagic = document.getElementById('btn-submit-magic-token');
+  const magicInput = document.getElementById('magic-token-input');
+  if (btnSubmitMagic && magicInput) {
+    btnSubmitMagic.onclick = async () => {
+      let raw = magicInput.value.trim();
+      if (!raw) return showToast('Cole o token ou link de acesso.', 'warning');
+
+      if (raw.includes('token=')) {
+        try {
+          const u = new URL(raw);
+          raw = u.searchParams.get('token') || raw;
+        } catch (e) {
+          const match = raw.match(/token=([^&]+)/);
+          if (match) raw = match[1];
+        }
+      }
+
+      showLoading(true, 'VALIDANDO TOKEN...');
+      try {
+        const res = await fetch(`${API_BASE}/auth/verify-token`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: raw })
+        });
+        const data = await res.json();
+        if (res.ok && data.valid) {
+          localStorage.setItem('insta_auth_token', raw);
+          showToast('Acesso concedido com sucesso!', 'success');
+          loginScreen.style.display = 'none';
+          initApp();
+        } else {
+          showToast(data.error || 'Token inválido ou expirado.', 'error');
+        }
+      } catch (err) {
+        showToast('Erro ao conectar com o servidor.', 'error');
+      } finally {
+        showLoading(false);
+      }
+    };
   }
   
   // Login form handler
@@ -1792,7 +1872,71 @@ function setupUIEvents() {
     };
   }
 
-  // 4. Web Push Notification Enable Button
+  // 4. Magic Link Generator (Login por Link)
+  const btnGenMagic = document.getElementById('btn-gen-magic-link');
+  if (btnGenMagic) {
+    btnGenMagic.onclick = async () => {
+      const days = parseInt(document.getElementById('magic-duration-select')?.value, 10) || 30;
+      showLoading(true, 'GERANDO LINK MÁGICO...');
+      try {
+        const res = await fetch(`${API_BASE}/auth/magic-link`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ days })
+        });
+        const data = await res.json();
+        if (res.ok && data.url) {
+          document.getElementById('generated-magic-link-input').value = data.url;
+          document.getElementById('magic-link-exp-date').innerText = new Date(data.expiresAt).toLocaleDateString('pt-BR');
+          document.getElementById('magic-link-result-box').style.display = 'block';
+          showToast('Link de acesso gerado com sucesso!', 'success');
+        } else {
+          throw new Error(data.error || 'Erro ao gerar link');
+        }
+      } catch (err) {
+        showToast(`Erro: ${err.message}`, 'error');
+      } finally {
+        showLoading(false);
+      }
+    };
+  }
+
+  const btnCopyMagic = document.getElementById('btn-copy-magic-link');
+  if (btnCopyMagic) {
+    btnCopyMagic.onclick = () => {
+      const link = document.getElementById('generated-magic-link-input').value;
+      if (!link) return;
+      navigator.clipboard.writeText(link);
+      showToast('Link de acesso copiado para a área de transferência!', 'success');
+    };
+  }
+
+  const btnSendMagicTelegram = document.getElementById('btn-send-magic-telegram');
+  if (btnSendMagicTelegram) {
+    btnSendMagicTelegram.onclick = async () => {
+      const days = parseInt(document.getElementById('magic-duration-select')?.value, 10) || 30;
+      showLoading(true, 'ENVIANDO VIA TELEGRAM...');
+      try {
+        const res = await fetch(`${API_BASE}/auth/send-magic-telegram`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ days })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast('Link Mágico enviado para seu Telegram!', 'success');
+        } else {
+          throw new Error(data.error || 'Erro ao enviar para o Telegram');
+        }
+      } catch (err) {
+        showToast(`Erro: ${err.message}`, 'error');
+      } finally {
+        showLoading(false);
+      }
+    };
+  }
+
+  // 5. Web Push Notification Enable Button
   const btnPush = document.getElementById('btn-enable-push');
   if (btnPush) {
     btnPush.onclick = async () => {

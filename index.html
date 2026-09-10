@@ -64,6 +64,20 @@
           <i class="fa-solid fa-right-to-bracket"></i> Entrar
         </button>
       </form>
+
+      <!-- Magic Link Direct Login Toggle -->
+      <div style="margin-top:1.2rem; text-align:center; border-top:1px solid rgba(255,255,255,0.06); padding-top:1.2rem;">
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-magic-login" style="font-size:0.8rem; width:100%; color:var(--accent);">
+          <i class="fa-solid fa-wand-magic-sparkles"></i> Entrar com Link Mágico / Token
+        </button>
+        <div id="magic-login-container" style="display:none; margin-top:1rem; text-align:left;">
+          <label class="label" style="font-size:0.75rem;"><i class="fa-solid fa-key"></i> Cole seu Link Mágico ou Token</label>
+          <div style="display:flex; gap:8px;">
+            <input type="text" class="input" id="magic-token-input" placeholder="https://.../?token=... ou o token" style="font-size:0.8rem;">
+            <button type="button" class="btn btn-primary btn-sm" id="btn-submit-magic-token" style="padding:0 14px;">Entrar</button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -502,6 +516,55 @@
               <button type="button" class="btn btn-ghost" id="test-telegram-btn"><i class="fa-solid fa-paper-plane"></i> Testar</button>
             </div>
           </form>
+        </div>
+
+        <!-- Magic Link / Quick Access Card -->
+        <div class="card" style="grid-column:1/-1; background:linear-gradient(135deg, rgba(16,184,245,0.06), rgba(4,7,12,0.85)); border:1px solid rgba(16,184,245,0.25);">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:1rem;">
+            <div style="display:flex; gap:12px; align-items:center;">
+              <div style="width:38px; height:38px; border-radius:10px; background:rgba(16,184,245,0.15); color:var(--accent); display:flex; align-items:center; justify-content:center; font-size:1.1rem; border:1px solid rgba(16,184,245,0.3);">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+              </div>
+              <div>
+                <h3 class="card-title" style="margin-bottom:2px;"><i class="fa-solid fa-link"></i> Link Mágico de Acesso Rápido</h3>
+                <p style="font-size:0.78rem; color:var(--text-dim);">Gere um link autenticado para acessar o painel em qualquer dispositivo sem precisar digitar usuário e senha.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-2" style="gap:1.2rem; align-items:flex-end; margin-bottom:1.2rem;">
+            <div>
+              <label class="label"><i class="fa-solid fa-hourglass-half"></i> Validade do Link</label>
+              <select class="input" id="magic-duration-select">
+                <option value="7">7 Dias</option>
+                <option value="30" selected>30 Dias (Recomendado)</option>
+                <option value="90">90 Dias (3 Meses)</option>
+                <option value="365">1 Ano</option>
+                <option value="1825">Permanente (5 Anos)</option>
+              </select>
+            </div>
+            <div>
+              <button type="button" class="btn btn-primary" id="btn-gen-magic-link" style="width:100%; height:44px;">
+                <i class="fa-solid fa-bolt"></i> Gerar Link de Acesso
+              </button>
+            </div>
+          </div>
+
+          <div id="magic-link-result-box" style="display:none; background:rgba(0,0,0,0.35); border:1px solid rgba(16,184,245,0.3); border-radius:10px; padding:14px; margin-top:1rem;">
+            <label class="label" style="font-size:0.75rem; color:var(--accent);"><i class="fa-solid fa-check-circle"></i> Seu Link de Acesso Rápido:</label>
+            <div style="display:flex; gap:8px; margin-bottom:10px;">
+              <input type="text" class="input" id="generated-magic-link-input" readonly style="font-size:0.8rem; background:rgba(255,255,255,0.03); color:var(--text-main); font-family:monospace;">
+              <button type="button" class="btn btn-ghost" id="btn-copy-magic-link" style="white-space:nowrap; padding:0 14px;">
+                <i class="fa-solid fa-copy"></i> Copiar
+              </button>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.75rem; color:var(--text-dim); flex-wrap:wrap; gap:8px;">
+              <span><i class="fa-solid fa-shield-halved" style="color:var(--success);"></i> Assinatura HMAC válida até <b id="magic-link-exp-date" style="color:var(--text-main);">--/--/----</b></span>
+              <button type="button" class="btn btn-ghost btn-sm" id="btn-send-magic-telegram" style="color:#229ED9; border-color:rgba(34,158,217,0.3); font-size:0.75rem;">
+                <i class="fa-brands fa-telegram"></i> Enviar para meu Telegram
+              </button>
+            </div>
+          </div>
         </div>
         
         <!-- Push Notifications Card -->

@@ -30,8 +30,8 @@ function sign(payload) {
   return crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest('base64url');
 }
 
-function createToken(username) {
-  const payload = Buffer.from(JSON.stringify({ u: username, exp: Date.now() + TOKEN_TTL_MS })).toString('base64url');
+function createToken(username, ttlMs = TOKEN_TTL_MS) {
+  const payload = Buffer.from(JSON.stringify({ u: username, exp: Date.now() + ttlMs })).toString('base64url');
   return `${payload}.${sign(payload)}`;
 }
 
@@ -64,10 +64,12 @@ function safeEqual(a, b) {
 function requireAuth(req, res, next) {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  const decoded = token ? verifyToken(token) : null;
 
-  if (!token || !verifyToken(token)) {
+  if (!token || !decoded) {
     return res.status(401).json({ error: 'Não autorizado.' });
   }
+  req.user = decoded;
   next();
 }
 
@@ -388,6 +390,96 @@ app.post('/api/login', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+/**
+ * 🔑 Magic Link & Quick Access Authentication
+ */
+
+// Gerar Magic Link (Login por Link)
+app.post('/api/auth/magic-link', requireAuth, async (req, res) => {
+  try {
+    const days = parseInt(req.body.days, 10) || 30;
+    const ttlMs = days * 24 * 60 * 60 * 1000;
+    const user = req.user?.u || 'admin';
+    const token = createToken(user, ttlMs);
+    
+    const host = req.get('host');
+    const protocol = req.protocol === 'https' || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
+    const magicUrl = `${protocol}://${host}/?token=${token}`;
+
+    res.json({
+      success: true,
+      token,
+      url: magicUrl,
+      days,
+      expiresAt: new Date(Date.now() + ttlMs).toISOString()
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Validar Token / Magic Link
+app.post('/api/auth/verify-token', async (req, res) => {
+  const { token } = req.body;
+  if (!token) return res.status(400).json({ error: 'Token não fornecido' });
+  const decoded = verifyToken(token);
+  if (!decoded) return res.status(401).json({ valid: false, error: 'Token inválido ou expirado.' });
+  res.json({ valid: true, user: decoded.u, exp: decoded.exp });
+});
+
+// Enviar Magic Link via Telegram
+app.post('/api/auth/send-magic-telegram', requireAuth, async (req, res) => {
+  try {
+    const days = parseInt(req.body.days, 10) || 30;
+    const ttlMs = days * 24 * 60 * 60 * 1000;
+    const user = req.user?.u || 'admin';
+    const token = createToken(user, ttlMs);
+    
+    const host = req.get('host');
+    const protocol = req.protocol === 'https' || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
+    const magicUrl = `${protocol}://${host}/?token=${token}`;
+
+    const db = await getDB();
+    const tokenRow = await db.get('SELECT value FROM global_config WHERE key = \'telegramToken\'');
+    const chatRow = await db.get('SELECT value FROM global_config WHERE key = \'telegramChatId\'');
+
+    if (!tokenRow || !chatRow) {
+      return res.status(400).json({ error: 'Telegram não configurado nas Configurações.' });
+    }
+
+    const tToken = JSON.parse(tokenRow.value);
+    const chatId = JSON.parse(chatRow.value);
+
+    if (!tToken || !chatId) {
+      return res.status(400).json({ error: 'Preencha o Token e Chat ID do Telegram nas Configurações.' });
+    }
+
+    const expDate = new Date(Date.now() + ttlMs).toLocaleDateString('pt-BR');
+    const validityText = days >= 1825 ? 'Permanente (5 Anos)' : (days >= 365 ? '1 Ano' : `${days} dias`);
+    const msg = `🚀 *Insta Post AI — Link de Acesso Rápido*\n\n🔑 Use o link abaixo para entrar no painel instantaneamente sem digitar senha:\n\n👉 [Clique aqui para entrar direto](${magicUrl})\n\n⏳ *Validade:* ${validityText} (até ${expDate})\n🔒 _Dica: Guarde este link seguro. Quem tiver este link poderá acessar o painel._`;
+
+    const r = await fetch(`https://api.telegram.org/bot${tToken}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text: msg, parse_mode: 'Markdown' })
+    });
+    const data = await r.json();
+
+    if (!data.ok) throw new Error(data.description || 'Falha ao enviar mensagem no Telegram.');
+
+    res.json({ success: true, message: 'Link mágico enviado para o Telegram com sucesso!', url: magicUrl });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Redirecionamento amigável /auth/magic?token=...
+app.get('/auth/magic', (req, res) => {
+  const token = req.query.token;
+  if (!token) return res.redirect('/?error=' + encodeURIComponent('Token ausente'));
+  res.redirect(`/?token=${encodeURIComponent(token)}`);
 });
 
 app.get('/api/data', requireAuth, async (req, res) => {
