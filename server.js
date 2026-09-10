@@ -323,10 +323,15 @@ app.get('/auth/callback', async (req, res) => {
 
     const finalUserId = profile.id || igUserId;
 
+    // Garantir foto de perfil automaticamente via Instagram CDN caso não venha da Meta
+    if (!profilePictureUrl && profile.username && !profile.username.startsWith('instagram_')) {
+      profilePictureUrl = `https://unavatar.io/instagram/${profile.username}`;
+    }
+
     // 4. Salvar conta no banco
     const db = await getDB();
     const isPostgres = !!process.env.DATABASE_URL;
-    const params = [finalUserId, profile.username, finalToken, profilePictureUrl, new Date().toISOString()];
+    const params = [finalUserId, profile.username, finalToken, profilePictureUrl || '', new Date().toISOString()];
     if (isPostgres) {
       await db.run('INSERT INTO accounts ("accountId","username","accessToken","profilePictureUrl","createdAt") VALUES (?,?,?,?,?) ON CONFLICT ("accountId") DO UPDATE SET "username"=EXCLUDED."username","accessToken"=EXCLUDED."accessToken","profilePictureUrl"=EXCLUDED."profilePictureUrl"', params);
     } else {
@@ -641,7 +646,12 @@ app.get('/api/account-stats', requireAuth, async (req, res) => {
       if (d.profile_picture_url && !profilePictureUrl) profilePictureUrl = d.profile_picture_url;
     } catch (e) {}
 
-    // 4. Se encontrou dados mais recentes e atualizados, persiste no banco
+    // 4. Se a conta não tem foto mas tem um username válido, puxa a foto do Instagram automaticamente
+    if (!profilePictureUrl && username && !username.startsWith('instagram_')) {
+      profilePictureUrl = `https://unavatar.io/instagram/${username}`;
+    }
+
+    // Se encontrou dados mais recentes e atualizados, persiste no banco
     if (username !== account.username || (profilePictureUrl && profilePictureUrl !== account.profilePictureUrl)) {
       await db.run('UPDATE accounts SET "username" = ?, "profilePictureUrl" = ? WHERE "accountId" = ?', [username, profilePictureUrl || '', accountId]);
     }
@@ -670,10 +680,17 @@ app.post('/api/accounts/update-profile', requireAuth, async (req, res) => {
 
   try {
     const cleanUser = username.replace(/^@/, '').trim();
+    let finalPic = profilePictureUrl ? profilePictureUrl.trim() : '';
+
+    // Se não informou foto mas tem um username válido, busca avatar do Instagram
+    if (!finalPic && cleanUser && !cleanUser.startsWith('instagram_')) {
+      finalPic = `https://unavatar.io/instagram/${cleanUser}`;
+    }
+
     const db = await getDB();
-    await db.run('UPDATE accounts SET "username" = ?, "profilePictureUrl" = ? WHERE "accountId" = ?', [cleanUser, profilePictureUrl || '', accountId]);
+    await db.run('UPDATE accounts SET "username" = ?, "profilePictureUrl" = ? WHERE "accountId" = ?', [cleanUser, finalPic, accountId]);
     statsCache.delete(accountId);
-    res.json({ success: true, account: { accountId, username: cleanUser, profilePictureUrl } });
+    res.json({ success: true, account: { accountId, username: cleanUser, profilePictureUrl: finalPic } });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -723,12 +740,60 @@ app.post('/api/accounts/sync-meta', requireAuth, async (req, res) => {
     }
 
     if (foundUser) {
+      if (!foundPic && !foundUser.startsWith('instagram_')) {
+        foundPic = `https://unavatar.io/instagram/${foundUser}`;
+      }
       await db.run('UPDATE accounts SET "username" = ?, "profilePictureUrl" = ? WHERE "accountId" = ?', [foundUser, foundPic || account.profilePictureUrl || '', accountId]);
       statsCache.delete(accountId);
       return res.json({ success: true, username: foundUser, profilePictureUrl: foundPic || account.profilePictureUrl });
     }
 
-    res.json({ success: false, message: 'Meta não retornou o nome de usuário automaticamente. Você pode definir o nome diretamente no formulário.' });
+    // Fallback: se tem username salvo, gera foto via unavatar
+    if (account.username && !account.username.startsWith('instagram_')) {
+      const autoPic = `https://unavatar.io/instagram/${account.username}`;
+      await db.run('UPDATE accounts SET "profilePictureUrl" = ? WHERE "accountId" = ?', [autoPic, accountId]);
+      statsCache.delete(accountId);
+      return res.json({ success: true, username: account.username, profilePictureUrl: autoPic });
+    }
+
+    res.json({ success: false, message: 'Meta não retornou o nome de usuário automaticamente. Digite o seu @username no campo acima.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Upload de foto de perfil customizada
+app.post('/api/accounts/upload-avatar', requireAuth, async (req, res) => {
+  const { accountId, imageBase64 } = req.body;
+  if (!accountId || !imageBase64) return res.status(400).json({ error: 'accountId e imagem são obrigatórios.' });
+
+  try {
+    const db = await getDB();
+    const account = await db.get('SELECT * FROM accounts WHERE "accountId" = ?', [accountId]);
+    if (!account) return res.status(404).json({ error: 'Conta não encontrada.' });
+
+    let finalUrl = imageBase64;
+
+    // Se ImgBB estiver configurado, envia para ter URL pública permanente
+    const imgbbRow = await db.get('SELECT value FROM global_config WHERE key = \'imgbbKey\'');
+    const imgbbKey = imgbbRow ? JSON.parse(imgbbRow.value) : process.env.IMGBB_KEY;
+
+    if (imgbbKey) {
+      try {
+        const cleanBase64 = imageBase64.replace(/^data:image\/[a-z]+;base64,/, '');
+        const form = new URLSearchParams();
+        form.set('image', cleanBase64);
+        const r = await fetch(`https://api.imgbb.com/1/upload?key=${imgbbKey}`, { method: 'POST', body: form });
+        const d = await r.json();
+        if (d.data?.url) finalUrl = d.data.url;
+      } catch (e) {
+        console.warn('[AVATAR-UPLOAD] ImgBB upload falhou, usando payload direto:', e.message);
+      }
+    }
+
+    await db.run('UPDATE accounts SET "profilePictureUrl" = ? WHERE "accountId" = ?', [finalUrl, accountId]);
+    statsCache.delete(accountId);
+    res.json({ success: true, profilePictureUrl: finalUrl });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -861,6 +926,47 @@ app.get('/api/data', requireAuth, async (req, res) => {
   try {
     const db = await getDB();
     const accounts = await db.all('SELECT * FROM accounts');
+    
+    // Auto-resolução automática de contas com username ou foto pendentes
+    for (const acc of accounts) {
+      let changed = false;
+      let user = acc.username;
+      let pic = acc.profilePictureUrl;
+
+      // Se não tem foto e tem username real, define avatar oficial do Instagram automaticamente
+      if (!pic && user && !user.startsWith('instagram_')) {
+        pic = `https://unavatar.io/instagram/${user}`;
+        changed = true;
+      }
+
+      // Se tem username genérico (instagram_...) e tem token, tenta puxar da Meta
+      if (acc.accessToken && (user.startsWith('instagram_') || !pic)) {
+        try {
+          const r = await fetch(`https://graph.instagram.com/me?fields=id,username,profile_picture_url&access_token=${acc.accessToken}`);
+          const d = await r.json();
+          if (d.username && !d.username.startsWith('instagram_')) {
+            user = d.username;
+            changed = true;
+          }
+          if (d.profile_picture_url) {
+            pic = d.profile_picture_url;
+            changed = true;
+          }
+        } catch (e) {}
+
+        if (!pic && user && !user.startsWith('instagram_')) {
+          pic = `https://unavatar.io/instagram/${user}`;
+          changed = true;
+        }
+      }
+
+      if (changed) {
+        acc.username = user;
+        acc.profilePictureUrl = pic;
+        await db.run('UPDATE accounts SET "username" = ?, "profilePictureUrl" = ? WHERE "accountId" = ?', [user, pic || '', acc.accountId]);
+      }
+    }
+
     const scheduledPosts = await db.all('SELECT * FROM posts WHERE "status" IN (\'pending\', \'processing\') ORDER BY "scheduledAt" ASC');
     const history = await db.all('SELECT * FROM posts WHERE "status" != \'pending\' ORDER BY "publishedAt" DESC LIMIT 50');
     
