@@ -3448,4 +3448,82 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     };
   }
+
+  // Formulário de conexão de conta Instagram por Link / Token Manual
+  const connectLinkForm = document.getElementById('connect-by-link-form');
+  if (connectLinkForm) {
+    connectLinkForm.onsubmit = async (e) => {
+      e.preventDefault();
+      const linkOrToken = document.getElementById('ig-link-token-input').value.trim();
+      if (!linkOrToken) return showToast('Cole o link ou token do Instagram.', 'warning');
+
+      showLoading(true, 'CONECTANDO CONTA INSTAGRAM...');
+      try {
+        const res = await fetch(`${API_BASE}/accounts/connect-by-link`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ linkOrToken })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          showToast(`Conta @${data.account.username} conectada com sucesso!`, 'success');
+          closeConnectByLinkModal();
+          await loadData();
+        } else {
+          throw new Error(data.error || 'Falha ao conectar conta.');
+        }
+      } catch (err) {
+        showToast(`Erro na conexão: ${err.message}`, 'error');
+      } finally {
+        showLoading(false);
+      }
+    };
+  }
 });
+
+/**
+ * 10. CONEXÃO INSTAGRAM POR LINK & CONVITE PARA CLIENTES
+ */
+function openConnectByLinkModal() {
+  const modal = document.getElementById('modal-connect-link');
+  if (modal) {
+    document.getElementById('ig-link-token-input').value = '';
+    const preview = document.getElementById('ig-link-preview-box');
+    if (preview) preview.style.display = 'none';
+    modal.style.display = 'flex';
+  }
+}
+
+function closeConnectByLinkModal() {
+  const modal = document.getElementById('modal-connect-link');
+  if (modal) modal.style.display = 'none';
+}
+
+function openInviteClientModal() {
+  const modal = document.getElementById('modal-invite-client');
+  if (modal) {
+    const origin = window.location.origin;
+    const inviteUrl = `${origin}/connect-instagram`;
+    document.getElementById('invite-client-link-input').value = inviteUrl;
+    modal.style.display = 'flex';
+  }
+}
+
+function closeInviteClientModal() {
+  const modal = document.getElementById('modal-invite-client');
+  if (modal) modal.style.display = 'none';
+}
+
+function copyInviteClientLink() {
+  const input = document.getElementById('invite-client-link-input');
+  if (!input) return;
+  navigator.clipboard.writeText(input.value);
+  showToast('Link de convite copiado!', 'success');
+}
+
+function shareInviteWhatsApp() {
+  const input = document.getElementById('invite-client-link-input');
+  if (!input) return;
+  const msg = encodeURIComponent(`Olá! Por favor, acesse o link abaixo para conectar sua conta do Instagram ao painel de agendamento:\n\n${input.value}`);
+  window.open(`https://api.whatsapp.com/send?text=${msg}`, '_blank');
+}

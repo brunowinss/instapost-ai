@@ -262,6 +262,161 @@ app.get('/auth/callback', async (req, res) => {
     res.redirect('/?error=' + encodeURIComponent(err.message));
   }
 });
+// Landing page para clientes conectarem sua conta do Instagram via link
+app.get('/connect-instagram', (req, res) => {
+  if (!IG_APP_ID) {
+    return res.status(200).send(`
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+      <head><meta charset="UTF-8"><title>Conectar Instagram</title><style>body{background:#04070C;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}</style></head>
+      <body>
+        <div style="background:#0c121e;padding:2rem;border-radius:12px;border:1px solid rgba(255,255,255,0.1);max-width:400px;text-align:center;">
+          <h2>⚠️ Configuração do App Instagram Pendente</h2>
+          <p style="color:#94a3b8;font-size:0.9rem;margin-top:8px;">O <code>IG_APP_ID</code> e <code>IG_APP_SECRET</code> devem ser configurados no <code>.env</code> ou painel do Render para habilitar o fluxo OAuth.</p>
+        </div>
+      </body>
+      </html>
+    `);
+  }
+  const scopes = 'instagram_business_basic,instagram_business_content_publish,instagram_business_manage_comments';
+  const url = `https://www.instagram.com/oauth/authorize?enable_fb_login=0&force_authentication=1&client_id=${IG_APP_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=${encodeURIComponent(scopes)}`;
+  
+  res.send(`
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Conectar Instagram — Insta Post</title>
+      <link rel="preconnect" href="https://fonts.googleapis.com">
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+      <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+        body { background: #04070C; color: #F1F5F9; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 1.5rem; }
+        .card { background: #0c121e; border: 1px solid rgba(16,184,245,0.25); border-radius: 16px; padding: 2.5rem 2rem; max-width: 440px; width: 100%; text-align: center; box-shadow: 0 0 30px rgba(16,184,245,0.15); }
+        .icon-box { width: 64px; height: 64px; border-radius: 50%; background: rgba(16,184,245,0.15); color: #10B8F5; display: flex; align-items: center; justify-content: center; font-size: 2rem; margin: 0 auto 1.5rem auto; border: 1px solid rgba(16,184,245,0.3); }
+        h1 { font-size: 1.4rem; font-weight: 800; margin-bottom: 0.5rem; }
+        p { color: #94A3B8; font-size: 0.88rem; line-height: 1.5; margin-bottom: 1.8rem; }
+        .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 14px; background: linear-gradient(135deg, #10B8F5, #0088CC); color: #04070C; font-weight: 700; font-size: 0.95rem; text-decoration: none; border-radius: 10px; border: none; cursor: pointer; transition: transform 0.2s; }
+        .btn:hover { transform: translateY(-2px); }
+        .security-badge { font-size: 0.72rem; color: #64748B; margin-top: 1.5rem; display: flex; align-items: center; justify-content: center; gap: 6px; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <div class="icon-box">📸</div>
+        <h1>Conectar Conta Instagram</h1>
+        <p>Você foi convidado para conectar sua conta do Instagram ao painel de agendamento <b>Insta Post</b>.</p>
+        <a href="${url}" class="btn">Continuar com o Instagram</a>
+        <div class="security-badge">
+          🔒 Conexão segura via Meta Graph API Oficial
+        </div>
+      </div>
+    </body>
+    </html>
+  `);
+});
+
+/**
+ * 🔗 Conectar Conta do Instagram por Link ou Token Manual
+ */
+app.post('/api/accounts/connect-by-link', requireAuth, async (req, res) => {
+  const { linkOrToken } = req.body;
+  if (!linkOrToken) return res.status(400).json({ error: 'Insira o link ou token do Instagram.' });
+
+  try {
+    let token = linkOrToken.trim();
+    
+    // 1. Extrair token de URLs
+    if (token.includes('access_token=')) {
+      const match = token.match(/access_token=([^&#\s]+)/);
+      if (match) token = match[1];
+    } else if (token.includes('code=')) {
+      const match = token.match(/code=([^&#\s]+)/);
+      if (match && IG_APP_ID && IG_APP_SECRET) {
+        const code = match[1];
+        const tokenRes = await fetch('https://api.instagram.com/oauth/access_token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ client_id: IG_APP_ID, client_secret: IG_APP_SECRET, grant_type: 'authorization_code', redirect_uri: REDIRECT_URI, code })
+        });
+        const tokenData = await tokenRes.json();
+        if (tokenData.access_token) token = tokenData.access_token;
+      }
+    }
+
+    // 2. Tentar obter perfil na Meta API
+    let profile = null;
+    let finalToken = token;
+
+    try {
+      finalToken = await exchangeForLongLivedToken(token);
+    } catch (e) {
+      console.warn('[CONNECT-BY-LINK] Long lived token exchange error:', e.message);
+    }
+
+    const endpointsToTry = [
+      `https://graph.instagram.com/v21.0/me?fields=id,username,profile_picture_url&access_token=${finalToken}`,
+      `https://graph.facebook.com/v21.0/me?fields=id,name,accounts{id,name,instagram_business_account{id,username,profile_picture_url}}&access_token=${finalToken}`,
+      `https://graph.facebook.com/v21.0/me/accounts?fields=id,name,instagram_business_account{id,username,profile_picture_url},access_token&access_token=${finalToken}`,
+      `https://graph.instagram.com/me?fields=id,username&access_token=${finalToken}`
+    ];
+
+    for (const url of endpointsToTry) {
+      try {
+        const r = await fetch(url);
+        const data = await r.json();
+        if (data.username) {
+          profile = { id: data.id, username: data.username, profilePictureUrl: data.profile_picture_url || '' };
+          break;
+        }
+        if (data.accounts?.data?.length > 0) {
+          const igAcc = data.accounts.data.find(a => a.instagram_business_account)?.instagram_business_account;
+          if (igAcc) {
+            profile = { id: igAcc.id, username: igAcc.username, profilePictureUrl: igAcc.profile_picture_url || '' };
+            break;
+          }
+        }
+        if (Array.isArray(data.data) && data.data.length > 0) {
+          const igAcc = data.data.find(a => a.instagram_business_account)?.instagram_business_account;
+          if (igAcc) {
+            profile = { id: igAcc.id, username: igAcc.username, profilePictureUrl: igAcc.profile_picture_url || '' };
+            break;
+          }
+        }
+      } catch (e) {}
+    }
+
+    if (!profile || !profile.username) {
+      return res.status(400).json({ error: 'Não foi possível validar a conta do Instagram com este link/token. Verifique se o token tem permissões instagram_business_basic e instagram_business_content_publish.' });
+    }
+
+    // 3. Salvar no banco
+    const db = await getDB();
+    const isPostgres = !!process.env.DATABASE_URL;
+    const profilePic = profile.profilePictureUrl || '';
+    const params = [profile.id, profile.username, finalToken, profilePic, new Date().toISOString()];
+
+    if (isPostgres) {
+      await db.run('INSERT INTO accounts ("accountId","username","accessToken","profilePictureUrl","createdAt") VALUES (?,?,?,?,?) ON CONFLICT ("accountId") DO UPDATE SET "username"=EXCLUDED."username","accessToken"=EXCLUDED."accessToken","profilePictureUrl"=EXCLUDED."profilePictureUrl"', params);
+    } else {
+      await db.run('INSERT OR REPLACE INTO accounts ("accountId","username","accessToken","profilePictureUrl","createdAt") VALUES (?,?,?,?,?)', params);
+    }
+
+    res.json({
+      success: true,
+      account: {
+        accountId: profile.id,
+        username: profile.username,
+        profilePictureUrl: profilePic,
+        isLongLived: finalToken.length > 80
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
