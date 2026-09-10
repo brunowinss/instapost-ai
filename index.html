@@ -18,8 +18,11 @@
   <link rel="shortcut icon" href="/favicon-96.png?v=4">
   <link rel="stylesheet" href="vendor/fontawesome/all.min.css">
   <link rel="stylesheet" href="style.css?v=61">
+  <link rel="stylesheet" href="studio.css?v=1">
 </head>
 <body>
+  <a class="skip-link" href="#main-content">Pular para o conteúdo</a>
+  <button class="nav-backdrop" aria-label="Fechar menu" onclick="setMobileNavigation(false)"></button>
 
   <!-- Animated Background -->
   <div class="bg-ambient">
@@ -48,7 +51,7 @@
     <div class="login-card">
       <div class="login-logo"><img src="/icon-192.png?v=4" alt="Insta Post"></div>
       <h1 class="login-title">Insta Post</h1>
-      <p class="login-subtitle">Gestão Elite de Conteúdo</p>
+      <p class="login-subtitle">Seu conteúdo, no ritmo certo.</p>
       
       <form id="login-form" style="text-align:left;">
         <div class="form-group">
@@ -82,57 +85,30 @@
   </div>
 
   <!-- Sidebar -->
-  <aside class="sidebar">
+  <aside class="sidebar" id="main-navigation">
     <a href="/" class="logo-container">
       <div class="logo-icon"><img src="/icon-192.png?v=4" alt="Insta Post"></div>
       <span class="logo-text">Insta Post</span>
     </a>
-    <nav class="nav-links">
-      <a href="#" class="nav-item active" data-section="dashboard">
-        <i class="fa-solid fa-chart-pie"></i>
-        <span>Dashboard</span>
-      </a>
-      <a href="#" class="nav-item" data-section="bulk-reels">
-        <i class="fa-solid fa-bolt-lightning" style="color:var(--primary);"></i>
-        <span>Reels em Massa</span>
-      </a>
-      <a href="#" class="nav-item" data-section="bulk-carousel">
-        <i class="fa-solid fa-layer-group" style="color:var(--accent);"></i>
-        <span>Carrossel & Fotos</span>
-      </a>
-      <a href="#" class="nav-item" data-section="stories-loop">
-        <i class="fa-solid fa-arrows-spin" style="color:#A78BFA;"></i>
-        <span>Stories 24/7</span>
-      </a>
-      <a href="#" class="nav-item" data-section="captions">
-        <i class="fa-solid fa-book-bookmark" style="color:var(--warning);"></i>
-        <span>Legendas & Tags</span>
-      </a>
-      <a href="#" class="nav-item" data-section="drive">
-        <i class="fa-solid fa-folder-open" style="color:var(--success);"></i>
-        <span>Acervo / Drive</span>
-      </a>
-      <a href="#" class="nav-item" data-section="analytics">
-        <i class="fa-solid fa-chart-line" style="color:#38BDF8;"></i>
-        <span>Analytics Pro</span>
-      </a>
-      <div style="height:1px; background:var(--border-color); margin:0.5rem 0.8rem; opacity:0.6;"></div>
-      <a href="#" class="nav-item" data-section="new-post">
-        <i class="fa-solid fa-circle-plus"></i>
-        <span>Novo Post</span>
-      </a>
-      <a href="#" class="nav-item" data-section="schedule">
-        <i class="fa-solid fa-calendar-days"></i>
-        <span>Calendário</span>
-      </a>
-      <a href="#" class="nav-item" data-section="settings">
-        <i class="fa-solid fa-sliders"></i>
-        <span>Configurações</span>
-      </a>
+    <div class="workspace-label"><span class="workspace-avatar">IP</span><div>Meu espaço<small>Estúdio de conteúdo</small></div></div>
+    <nav class="nav-links" aria-label="Navegação principal">
+      <div class="nav-group"><p class="nav-group-label">Acompanhar</p>
+      <a href="#dashboard" class="nav-item active" data-section="dashboard" title="Visão geral" aria-current="page"><i class="fa-solid fa-table-cells-large" aria-hidden="true"></i><span>Visão geral</span></a>
+      <a href="#schedule" class="nav-item" data-section="schedule" title="Calendário"><i class="fa-solid fa-calendar-days" aria-hidden="true"></i><span>Calendário</span></a>
+      <a href="#analytics" class="nav-item" data-section="analytics" title="Resultados"><i class="fa-solid fa-chart-line" aria-hidden="true"></i><span>Resultados</span></a></div>
+      <div class="nav-group"><p class="nav-group-label">Criar e publicar</p>
+      <a href="#new-post" class="nav-item" data-section="new-post" title="Nova publicação"><i class="fa-solid fa-circle-plus" aria-hidden="true"></i><span>Nova publicação</span></a>
+      <a href="#bulk-reels" class="nav-item" data-section="bulk-reels" title="Reels em massa"><i class="fa-solid fa-clapperboard" aria-hidden="true"></i><span>Reels em massa</span></a>
+      <a href="#bulk-carousel" class="nav-item" data-section="bulk-carousel" title="Carrossel e fotos"><i class="fa-solid fa-layer-group" aria-hidden="true"></i><span>Carrossel e fotos</span></a>
+      <a href="#stories-loop" class="nav-item" data-section="stories-loop" title="Stories 24/7"><i class="fa-solid fa-arrows-spin" aria-hidden="true"></i><span>Stories 24/7</span></a></div>
+      <div class="nav-group"><p class="nav-group-label">Organizar</p>
+      <a href="#captions" class="nav-item" data-section="captions" title="Legendas e tags"><i class="fa-solid fa-bookmark" aria-hidden="true"></i><span>Legendas e tags</span></a>
+      <a href="#drive" class="nav-item" data-section="drive" title="Acervo de mídias"><i class="fa-solid fa-folder-open" aria-hidden="true"></i><span>Acervo de mídias</span></a>
+      <a href="#settings" class="nav-item" data-section="settings" title="Configurações"><i class="fa-solid fa-sliders" aria-hidden="true"></i><span>Configurações</span></a></div>
     </nav>
     <div class="sidebar-footer">
       <div class="status-badge" id="scheduler-badge">
-        <div class="status-badge-title">Motor</div>
+        <div class="status-badge-title">Agendamento automático</div>
         <div class="status-indicator">
           <div class="status-dot" id="scheduler-dot"></div>
           <span class="status-text" id="scheduler-text">VERIFICANDO...</span>
@@ -146,15 +122,16 @@
   </aside>
 
   <!-- Main -->
-  <main class="main-wrapper">
+  <main class="main-wrapper" id="main-content" tabindex="-1">
     <header class="header">
-      <div class="header-left">
-        <h1 id="page-title">Dashboard</h1>
-        <p id="page-subtitle">Visão geral do seu sistema de publicação.</p>
+      <button class="mobile-menu btn btn-ghost" aria-label="Abrir menu" aria-controls="main-navigation" aria-expanded="false" onclick="setMobileNavigation(!document.body.classList.contains('nav-open'))"><i class="fa-solid fa-bars" aria-hidden="true"></i></button>
+      <div class="header-left"><div class="page-eyebrow">SEU ESTÚDIO DE CONTEÚDO</div>
+        <h1 id="page-title">Visão geral</h1>
+        <p id="page-subtitle">Tudo o que você precisa para manter seu conteúdo em dia.</p>
       </div>
       <div class="header-right">
-        <button class="btn btn-ghost" id="btn-health-check" onclick="openHealthCheckModal()" style="border-color:rgba(16,184,245,0.3); color:var(--accent);">
-          <i class="fa-solid fa-heart-pulse"></i> Diagnóstico
+        <button aria-label="Diagnóstico do sistema" title="Diagnóstico do sistema" class="btn btn-ghost" id="btn-health-check" onclick="openHealthCheckModal()" style="border-color:rgba(16,184,245,0.3); color:var(--accent);">
+          <i class="fa-solid fa-heart-pulse" aria-hidden="true"></i><span class="diagnostic-label"> Diagnóstico</span>
         </button>
         <button class="btn btn-ghost" id="btn-sync-local">
           <i class="fa-solid fa-arrows-rotate"></i> Sincronizar
@@ -179,10 +156,15 @@
 
     <!-- ═══════════════ DASHBOARD ═══════════════ -->
     <section id="section-dashboard" class="section active">
-      <div class="dashboard-grid">
+      <div class="dashboard-welcome">
+        <div class="welcome-copy"><div class="welcome-eyebrow"><span></span> MAIS ESPAÇO PARA CRIAR</div><h2>Seu conteúdo.<br>Um passo à frente.</h2><p>Transforme suas ideias em presença. Planeje, publique<br class="desktop-break"> e acompanhe suas contas em um só lugar.</p><div class="welcome-actions"><button class="btn btn-primary" onclick="switchSection('new-post')"><i class="fa-solid fa-plus" aria-hidden="true"></i> Criar publicação</button><button class="welcome-calendar" onclick="switchSection('schedule')">Ver calendário <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></button></div></div>
+        <div class="welcome-planner"><div class="planner-topline"><span><i class="fa-regular fa-calendar" aria-hidden="true"></i> Seu próximo passo</span><i class="fa-solid fa-ellipsis" aria-hidden="true"></i></div><div class="planner-count"><strong id="today-scheduled-count">0</strong><span>publicações<br>agendadas para hoje</span></div><div class="planner-rule"></div><div class="planner-next"><span class="planner-next-icon"><i class="fa-solid fa-clock" aria-hidden="true"></i></span><div><small>PRÓXIMA PUBLICAÇÃO</small><span id="welcome-next-time">Nenhum agendamento</span></div><i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></div></div>
+      </div>
+      <div class="section-heading"><h2>Seu estúdio em números</h2><span>Visão das contas conectadas</span></div>
+      <div class="dashboard-grid dashboard-stats">
         <!-- Stat: Total Posts -->
         <div class="card">
-          <div class="card-title"><i class="fa-solid fa-paper-plane" style="color:var(--primary);"></i> Entregas</div>
+          <div class="card-title"><i class="fa-solid fa-paper-plane" style="color:var(--primary);"></i> Publicados</div>
           <div class="stat-value" id="stat-total">0</div>
           <p class="stat-desc">Posts publicados com sucesso</p>
           <div class="progress-bar"><div class="progress-fill" id="progress-total" style="width:0%"></div></div>
@@ -196,14 +178,14 @@
         </div>
         <!-- Stat: Accounts -->
         <div class="card">
-          <div class="card-title"><i class="fa-solid fa-users"></i> Contas Ativas</div>
+          <div class="card-title"><i class="fa-solid fa-users"></i> Contas conectadas</div>
           <div class="stat-value" id="stat-accounts">0</div>
           <p class="stat-desc">Perfis conectados ao sistema</p>
           <div class="progress-bar"><div class="progress-fill" style="width:100%;"></div></div>
         </div>
         <!-- Stat: Followers -->
         <div class="card">
-          <div class="card-title"><i class="fa-solid fa-heart"></i> Seguidores</div>
+          <div class="card-title"><i class="fa-solid fa-heart"></i> Seguidores do perfil</div>
           <div class="stat-value" id="stat-followers">—</div>
           <p class="stat-desc" id="stat-followers-label">Carregando...</p>
           <div class="progress-bar"><div class="progress-fill" id="progress-followers" style="width:0%;"></div></div>
@@ -213,7 +195,7 @@
       <!-- Activity & Weekly Summary -->
       <div class="dashboard-grid dashboard-grid-activity">
         <div class="card">
-          <div class="card-title"><i class="fa-solid fa-bolt-lightning"></i> Atividade Recente</div>
+          <div class="card-title"><i class="fa-solid fa-bolt-lightning"></i> Publicações e agendamentos</div>
           <div id="recent-activity-list" style="margin-top:0.5rem;">
             <div class="skeleton-loading">
               <div style="display:flex; gap:14px; padding:0.6rem; align-items:center;">
@@ -231,29 +213,26 @@
             </div>
           </div>
         </div>
-        <div class="card">
-          <div class="card-title"><i class="fa-solid fa-chart-line" style="color:var(--primary);"></i> Meta Semanal</div>
-          <div style="text-align:center; padding:1.5rem 0;">
-            <div style="font-size:3.5rem; font-weight:700; color:var(--text-main);">0<span style="color:var(--text-dim); font-size:2rem;">/7</span></div>
-            <p style="color:var(--text-dim); font-size:0.85rem; margin-top:0.5rem;">Publicações esta semana</p>
-          </div>
-          <div class="progress-bar"><div class="progress-fill" style="width:5%;"></div></div>
-          <button class="btn btn-primary" style="width:100%; margin-top:1.5rem;" onclick="switchSection('new-post')">
-            <i class="fa-solid fa-plus"></i> Criar Publicação
-          </button>
+        <div class="card weekly-focus">
+          <div class="card-title"><i class="fa-solid fa-chart-line" aria-hidden="true"></i> Seu ritmo de criação</div>
+          <div class="weekly-count"><strong id="weekly-published-count">0</strong><span>publicações nos<br>últimos 7 dias</span></div>
+          <p class="weekly-note">Consistência se constrói uma publicação de cada vez.</p>
+          <div class="weekly-next-label">CONTINUE DE ONDE PAROU</div>
+          <button class="focus-action" onclick="switchSection('schedule')"><span><i class="fa-regular fa-calendar-check" aria-hidden="true"></i> Organizar a semana</span><i class="fa-solid fa-arrow-right" aria-hidden="true"></i></button>
+          <button class="focus-action" onclick="switchSection('drive')"><span><i class="fa-regular fa-folder-open" aria-hidden="true"></i> Explorar meu acervo</span><i class="fa-solid fa-arrow-right" aria-hidden="true"></i></button>
         </div>
       </div>
 
       <!-- Seguidores por conta -->
       <div class="card" style="margin-top:2rem;">
-        <div class="card-title"><i class="fa-solid fa-users-line"></i> Seguidores por Conta</div>
+        <div class="card-title"><i class="fa-solid fa-users-line"></i> Suas contas</div>
         <div id="dashboard-followers-list" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(240px, 1fr)); gap:1rem; margin-top:0.5rem;"></div>
       </div>
 
       <!-- Charts -->
       <div class="dashboard-grid dashboard-grid-charts" style="margin-top:2rem;">
         <div class="card">
-          <div class="card-title"><i class="fa-solid fa-chart-column" style="color:var(--accent);"></i> Publicações — Últimos 7 dias</div>
+          <div class="card-title"><i class="fa-solid fa-chart-column" style="color:var(--accent);"></i> Publicações na semana</div>
           <div id="chart-weekly-bars" style="display:flex; align-items:flex-end; gap:8px; height:140px; margin-top:0.5rem;"></div>
         </div>
         <div class="card">
@@ -261,7 +240,7 @@
           <div id="chart-media-types" style="display:flex; align-items:center; gap:24px; margin-top:0.5rem;"></div>
         </div>
         <div class="card">
-          <div class="card-title"><i class="fa-solid fa-bolt" style="color:var(--warning);"></i> Sparkline — Taxa de Sucesso</div>
+          <div class="card-title"><i class="fa-solid fa-bolt" style="color:var(--warning);"></i> Taxa de sucesso</div>
           <div id="chart-success-spark" style="display:flex; align-items:flex-end; gap:6px; height:140px; margin-top:0.5rem;"></div>
         </div>
       </div>
@@ -402,9 +381,9 @@
         <div style="display:flex; justify-content:space-between; align-items:center;">
           <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-calendar-days"></i> Calendário</div>
           <div style="display:flex; align-items:center; gap:8px;">
-            <button class="btn btn-ghost btn-sm" style="padding:0.5rem;" id="cal-prev"><i class="fa-solid fa-chevron-left"></i></button>
+            <button class="btn btn-ghost btn-sm" style="padding:0.5rem;" id="cal-prev" aria-label="Mês anterior"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i></button>
             <span id="cal-month-label" style="font-weight:600; font-size:1rem; min-width:140px; text-align:center;"></span>
-            <button class="btn btn-ghost btn-sm" style="padding:0.5rem;" id="cal-next"><i class="fa-solid fa-chevron-right"></i></button>
+            <button class="btn btn-ghost btn-sm" style="padding:0.5rem;" id="cal-next" aria-label="Próximo mês"><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button>
           </div>
         </div>
         <div id="calendar-grid" style="margin-top:1.5rem;"></div>

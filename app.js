@@ -342,7 +342,19 @@ function setScheduleMode(mode) {
   document.getElementById('schedule-manual').style.display = mode === 'manual' ? 'block' : 'none';
 }
 
+function setMobileNavigation(open) {
+  document.body.classList.toggle('nav-open', open);
+  const button = document.querySelector('.mobile-menu');
+  button?.setAttribute('aria-expanded', String(open));
+  button?.setAttribute('aria-label', open ? 'Fechar menu' : 'Abrir menu');
+  if (open) document.querySelector('.nav-item.active')?.focus();
+  else button?.focus({ preventScroll: true });
+}
+
 function setupNavigation() {
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && document.body.classList.contains('nav-open')) setMobileNavigation(false);
+  });
   document.querySelectorAll('.nav-item').forEach(item => {
     item.addEventListener('click', (e) => {
       e.preventDefault();
@@ -354,24 +366,25 @@ function setupNavigation() {
 
 function switchSection(name) {
   STATE.activeSection = name;
+  if (document.body.classList.contains('nav-open')) setMobileNavigation(false);
   
   // Update UI Navigation state
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => { n.classList.remove('active'); n.removeAttribute('aria-current'); });
   const activeNavItem = document.querySelector(`.nav-item[data-section="${name}"]`);
-  if (activeNavItem) activeNavItem.classList.add('active');
+  if (activeNavItem) { activeNavItem.classList.add('active'); activeNavItem.setAttribute('aria-current', 'page'); }
   
   // Update Header
   const titles = {
-    'dashboard': { t: 'Dashboard', s: 'Acompanhe seus resultados e agendamentos.' },
-    'bulk-reels': { t: 'Reels em Massa', s: 'Distribuição inteligente de múltiplos vídeos com variância anti-ban.' },
+    'dashboard': { t: 'Visão geral', s: 'Tudo o que você precisa para manter seu conteúdo em dia.' },
+    'bulk-reels': { t: 'Reels em Massa', s: 'Prepare seus vídeos e organize a sequência de publicações.' },
     'bulk-carousel': { t: 'Carrossel & Fotos', s: 'Assistente de criação de posts carrossel de 2 a 10 mídias.' },
     'stories-loop': { t: 'Stories 24/7', s: 'Automação contínua de stories para máxima retenção de seguidores.' },
     'captions': { t: 'Legendas & Hashtags', s: 'Biblioteca de modelos e grupos com rotação automática.' },
-    'drive': { t: 'Acervo / Drive', s: 'Pool de mídias e criativos salvos na nuvem prontos para postar.' },
-    'analytics': { t: 'Analytics Pro', s: 'Métricas consolidadas e inteligência multi-conta.' },
-    'new-post': { t: 'Novo Post', s: 'Crie e agende uma publicação avulsa.' },
-    'schedule': { t: 'Agendados', s: 'Organize seu calendário de conteúdo.' },
-    'settings': { t: 'Configurações', s: 'Gerencie suas conexões e chaves de API.' }
+    'drive': { t: 'Acervo / Drive', s: 'Suas fotos e vídeos, prontos para a próxima ideia.' },
+    'analytics': { t: 'Resultados', s: 'Acompanhe o desempenho das suas contas e publicações.' },
+    'new-post': { t: 'Nova publicação', s: 'Escolha a conta, prepare seu conteúdo e defina quando publicar.' },
+    'schedule': { t: 'Calendário', s: 'Organize seu calendário de conteúdo.' },
+    'settings': { t: 'Configurações', s: 'Suas contas, integrações e preferências em um só lugar.' }
   };
   
   if (titles[name]) {
@@ -385,6 +398,7 @@ function switchSection(name) {
   if (targetSection) targetSection.classList.add('active');
   
   renderActiveSection();
+  window.scrollTo({ top: 0, behavior: 'instant' });
 }
 
 async function loadData() {
@@ -890,8 +904,14 @@ function renderDashboard() {
   const now = new Date();
   const lastWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const weeklyCount = STATE.history.filter(h => h.status === 'success' && new Date(h.publishedAt) >= lastWeek).length;
-  const weeklyGoal = 7;
-  const weeklyPercent = Math.min((weeklyCount / weeklyGoal) * 100, 100);
+  const weekCount = document.getElementById('weekly-published-count');
+  if (weekCount) weekCount.textContent = weeklyCount;
+  const todayCount = document.getElementById('today-scheduled-count');
+  const scheduledToday = STATE.scheduledPosts.filter(p => new Date(p.scheduledAt).toDateString() === now.toDateString()).length;
+  if (todayCount) {
+    todayCount.textContent = scheduledToday;
+    todayCount.nextElementSibling.innerHTML = scheduledToday === 1 ? 'publicação<br>agendada para hoje' : 'publicações<br>agendadas para hoje';
+  }
 
   animateCount(document.getElementById('stat-total'), successCount);
   animateCount(document.getElementById('stat-scheduled'), scheduledCount);
@@ -905,7 +925,9 @@ function renderDashboard() {
   const psEl = document.getElementById('progress-scheduled');
   if (psEl) psEl.style.width = `${Math.min(scheduledCount * 10, 100)}%`;
 
-  const next = STATE.scheduledPosts[0];
+  const next = [...STATE.scheduledPosts].sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt))[0];
+  const welcomeNext = document.getElementById('welcome-next-time');
+  if (welcomeNext) welcomeNext.textContent = next ? new Date(next.scheduledAt).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Sua próxima ideia começa aqui';
   if (next) {
     const date = new Date(next.scheduledAt);
     const remaining = getTimeRemaining(next.scheduledAt);
@@ -940,7 +962,7 @@ function renderDashboard() {
         <div style="font-weight:700; font-size:0.85rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${h.caption || 'Sem legenda'}</div>
         <div style="font-size:0.72rem; color:var(--text-dim); margin-top:2px;">${accName} • ${dateStr}</div>
       </div>
-      <span style="font-size:0.6rem; font-weight:800; text-transform:uppercase; padding:3px 8px; border-radius:6px; background:${statusBg}; color:${statusColor}; border:1px solid ${statusColor}; letter-spacing:0.5px;">${h.status}</span>
+      <span class="activity-status" style="background:${statusBg}; color:${statusColor};">${({ success: 'Publicado', pending: 'Agendado', processing: 'Publicando', error: 'Falhou', failed: 'Falhou' })[h.status] || h.status}</span>
     </div>`;
   }).join('');
 }
@@ -949,7 +971,7 @@ function renderDashboard() {
 let calendarDate = new Date();
 
 function getFilteredPosts() {
-  if (!STATE.filterAccountId) return STATE.scheduledPosts;
+  if (!STATE.filterAccountId || STATE.filterAccountId === 'all') return STATE.scheduledPosts;
   return STATE.scheduledPosts.filter(p => p.accountId === STATE.filterAccountId);
 }
 
@@ -957,17 +979,18 @@ function renderAccountFilterTabs() {
   const container = document.getElementById('account-filter-tabs');
   if (!container) return;
   
-  let html = `<button class="btn btn-sm ${!STATE.filterAccountId ? '' : 'btn-ghost'}" onclick="setAccountFilter('')" style="border-radius:100px; font-size:0.75rem; padding:0.5rem 1rem;">Todas</button>`;
+  const allActive = !STATE.filterAccountId || STATE.filterAccountId === 'all';
+  let html = `<button class="btn btn-sm ${allActive ? 'btn-primary' : 'btn-ghost'}" aria-pressed="${allActive}" onclick="setAccountFilter('all')" style="border-radius:100px; font-size:0.75rem; padding:0.5rem 1rem;">Todas</button>`;
   STATE.accounts.forEach(a => {
     const isActive = STATE.filterAccountId === a.accountId;
     const count = STATE.scheduledPosts.filter(p => p.accountId === a.accountId).length;
-    html += `<button class="btn btn-sm ${isActive ? '' : 'btn-ghost'}" onclick="setAccountFilter('${a.accountId}')" style="border-radius:100px; font-size:0.75rem; padding:0.5rem 1rem;">@${a.username} <span style='opacity:0.6; margin-left:4px;'>(${count})</span></button>`;
+    html += `<button class="btn btn-sm ${isActive ? 'btn-primary' : 'btn-ghost'}" aria-pressed="${isActive}" onclick="setAccountFilter('${a.accountId}')" style="border-radius:100px; font-size:0.75rem; padding:0.5rem 1rem;">@${a.username} <span style='opacity:0.6; margin-left:4px;'>(${count})</span></button>`;
   });
   container.innerHTML = html;
 }
 
 function setAccountFilter(accountId) {
-  STATE.filterAccountId = accountId;
+  STATE.filterAccountId = accountId || 'all';
   renderAccountFilterTabs();
   renderCalendar();
   renderScheduleCards();
@@ -1032,7 +1055,7 @@ function renderCalendar() {
           : `<div class="cal-day-thumb" style="display:flex;align-items:center;justify-content:center;background:rgba(16,184,245,0.15);" data-tip="${p.status}"><i class="fa-solid fa-${p.mediaType === 'REELS' ? 'film' : 'image'}" style="font-size:0.5rem;color:var(--accent);"></i></div>`;
       }).join('');
       const overflow = dayPosts.length > 2 ? `<div class="cal-day-thumb-overflow">+${dayPosts.length - 2}</div>` : '';
-      thumbs = `<div class="cal-day-thumbs">${shown}${overflow}</div>`;
+      thumbs = `<div class="cal-day-thumbs">${shown}${overflow}</div><span class="cal-day-count" aria-label="${dayPosts.length} publicações">${dayPosts.length}</span>`;
     }
 
     html += `<div class="${classes.join(' ')}">${day}${thumbs}</div>`;
@@ -1089,7 +1112,7 @@ function renderScheduleCards() {
       ` : ''}
       <div class="sched-card-header">
         <span class="sched-account"><i class="fa-brands fa-instagram"></i> ${accName}</span>
-        <span class="sched-badge pending">${p.status}</span>
+        <span class="sched-badge pending">${{pending: 'Agendado', processing: 'Publicando', success: 'Publicado', error: 'Falhou', failed: 'Falhou'}[p.status] || 'Agendado'}</span>
       </div>
       <div style="margin-bottom:0.8rem;">
         <div class="sched-img-container">
@@ -3760,4 +3783,3 @@ async function syncAccountFromMeta() {
     if (btn) btn.innerHTML = origHtml;
   }
 }
-
