@@ -141,6 +141,21 @@ app.get('/api/instagram-status', (req, res) => {
   });
 });
 
+// Endpoint para retornar o link de autorização do Instagram para cópia ou abertura em outro navegador
+app.get('/api/auth/instagram-url', (req, res) => {
+  const scopes = 'instagram_business_basic,instagram_business_content_publish,instagram_business_manage_comments';
+  const url = IG_APP_ID 
+    ? `https://www.instagram.com/oauth/authorize?enable_fb_login=0&force_authentication=1&client_id=${IG_APP_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=${encodeURIComponent(scopes)}`
+    : '';
+
+  res.json({
+    success: true,
+    configured: !!(IG_APP_ID && IG_APP_SECRET),
+    url,
+    redirectUri: REDIRECT_URI
+  });
+});
+
 app.get('/auth/instagram', (req, res) => {
   if (!IG_APP_ID) {
     return res.status(500).send(`
@@ -213,7 +228,6 @@ app.get('/auth/callback', async (req, res) => {
     const finalToken = llData.access_token || shortToken;
 
     // 3. Buscar username via /me com versão (Instagram Business Login API)
-    // Busca id,username SEM profile_picture_url para evitar erros em contas que não suportam esse campo
     let profile = null;
     const profileAttempts = [
       `https://graph.instagram.com/${IG_API_VERSION}/me?fields=id,username&access_token=${finalToken}`,
@@ -256,7 +270,42 @@ app.get('/auth/callback', async (req, res) => {
     }
 
     console.log(`[OAUTH] ✅ @${profile.username} (ID: ${finalUserId}) conectado via OAuth.`);
-    res.redirect('/?connected=' + encodeURIComponent(profile.username));
+    
+    // Retorna página de confirmação amigável para qualquer navegador (outro dispositivo / popup)
+    res.send(`
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Conta Conectada — Insta Post</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+        <style>
+          * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+          body { background: #04070C; color: #F1F5F9; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 1.5rem; }
+          .card { background: #0c121e; border: 1px solid rgba(52,211,153,0.35); border-radius: 16px; padding: 2.5rem 2rem; max-width: 440px; width: 100%; text-align: center; box-shadow: 0 0 35px rgba(52,211,153,0.12); }
+          .icon-box { width: 64px; height: 64px; border-radius: 50%; background: rgba(52,211,153,0.15); color: #34D399; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; margin: 0 auto 1.2rem auto; border: 1px solid rgba(52,211,153,0.3); }
+          h1 { font-size: 1.35rem; font-weight: 800; margin-bottom: 0.5rem; }
+          p { color: #94A3B8; font-size: 0.88rem; line-height: 1.5; margin-bottom: 1.5rem; }
+          .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 12px 20px; background: #34D399; color: #04070C; font-weight: 700; font-size: 0.92rem; text-decoration: none; border-radius: 10px; border: none; cursor: pointer; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <div class="icon-box">✓</div>
+          <h1>Conta @${profile.username} Conectada!</h1>
+          <p>Sua conta do Instagram foi vinculada com sucesso ao painel <b>Insta Post</b>. Se você abriu em outro navegador ou celular, já pode fechar esta aba e voltar para o seu painel.</p>
+          <a href="/?connected=${encodeURIComponent(profile.username)}" class="btn">Abrir Painel</a>
+        </div>
+        <script>
+          if (window.opener) {
+            setTimeout(() => { window.close(); }, 2500);
+          }
+        </script>
+      </body>
+      </html>
+    `);
   } catch (err) {
     console.error('[OAUTH ERROR]', err.message);
     res.redirect('/?error=' + encodeURIComponent(err.message));

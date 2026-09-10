@@ -3482,48 +3482,144 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /**
- * 10. CONEXÃO INSTAGRAM POR LINK & CONVITE PARA CLIENTES
+ * 10. CONEXÃO INSTAGRAM FORMATO SCALE (LINK & POLLING EM TEMPO REAL)
+ * ============================================================
  */
-function openConnectByLinkModal() {
-  const modal = document.getElementById('modal-connect-link');
-  if (modal) {
-    document.getElementById('ig-link-token-input').value = '';
-    const preview = document.getElementById('ig-link-preview-box');
-    if (preview) preview.style.display = 'none';
-    modal.style.display = 'flex';
+let _igPollInterval = null;
+let _initialAccountCount = 0;
+
+async function openConnectInstagramModal() {
+  const modal = document.getElementById('modal-connect-instagram');
+  if (!modal) return;
+
+  _initialAccountCount = (STATE.accounts || []).length;
+  const copyInput = document.getElementById('ig-copy-login-url-input');
+  const directBtn = document.getElementById('ig-direct-auth-btn');
+  const manualBox = document.getElementById('manual-token-box');
+  const manualInput = document.getElementById('ig-manual-token-input');
+
+  if (copyInput) copyInput.value = 'Obtendo link de conexão seguro...';
+  if (manualBox) manualBox.style.display = 'none';
+  if (manualInput) manualInput.value = '';
+
+  modal.style.display = 'flex';
+
+  try {
+    const res = await fetch('/api/auth/instagram-url');
+    const data = await res.json();
+    if (data.success && data.url) {
+      if (copyInput) copyInput.value = data.url;
+      if (directBtn) directBtn.href = data.url;
+    } else {
+      const errMsg = data.error || 'Configure IG_APP_ID e IG_APP_SECRET no servidor.';
+      if (copyInput) copyInput.value = errMsg;
+    }
+  } catch (err) {
+    if (copyInput) copyInput.value = 'Erro ao obter link: ' + err.message;
   }
+
+  // Inicia Polling em tempo real (a cada 2.5s) para detectar autorização feita em outro navegador
+  if (_igPollInterval) clearInterval(_igPollInterval);
+  _igPollInterval = setInterval(async () => {
+    try {
+      const res = await fetch('/api/data');
+      if (!res.ok) return;
+      const data = await res.json();
+      const newAccounts = data.accounts || [];
+
+      if (newAccounts.length > _initialAccountCount) {
+        clearInterval(_igPollInterval);
+        _igPollInterval = null;
+        closeConnectInstagramModal();
+        const latestAccount = newAccounts[newAccounts.length - 1];
+        showToast(`🎉 Conta @${latestAccount ? latestAccount.username : 'Instagram'} conectada com sucesso!`, 'success');
+        await loadData();
+      }
+    } catch (e) {
+      // Falha silenciosa no polling
+    }
+  }, 2500);
 }
 
-function closeConnectByLinkModal() {
-  const modal = document.getElementById('modal-connect-link');
+function closeConnectInstagramModal() {
+  if (_igPollInterval) {
+    clearInterval(_igPollInterval);
+    _igPollInterval = null;
+  }
+  const modal = document.getElementById('modal-connect-instagram');
   if (modal) modal.style.display = 'none';
 }
 
-function openInviteClientModal() {
-  const modal = document.getElementById('modal-invite-client');
-  if (modal) {
-    const origin = window.location.origin;
-    const inviteUrl = `${origin}/connect-instagram`;
-    document.getElementById('invite-client-link-input').value = inviteUrl;
-    modal.style.display = 'flex';
+function copyInstagramLoginLink() {
+  const input = document.getElementById('ig-copy-login-url-input');
+  if (!input || !input.value || !input.value.startsWith('http')) {
+    showToast('Link de conexão indisponível no momento.', 'warning');
+    return;
   }
+  navigator.clipboard.writeText(input.value).then(() => {
+    showToast('📋 Link do Instagram copiado! Cole em qualquer outro navegador para conectar.', 'success');
+    const btn = document.getElementById('btn-copy-ig-login-link');
+    if (btn) {
+      const origHtml = btn.innerHTML;
+      btn.innerHTML = '<i class="fa-solid fa-check"></i> Copiado!';
+      setTimeout(() => { btn.innerHTML = origHtml; }, 2000);
+    }
+  }).catch(() => {
+    input.select();
+    document.execCommand('copy');
+    showToast('Link copiado!', 'success');
+  });
 }
 
-function closeInviteClientModal() {
-  const modal = document.getElementById('modal-invite-client');
-  if (modal) modal.style.display = 'none';
-}
-
-function copyInviteClientLink() {
-  const input = document.getElementById('invite-client-link-input');
-  if (!input) return;
-  navigator.clipboard.writeText(input.value);
-  showToast('Link de convite copiado!', 'success');
-}
-
-function shareInviteWhatsApp() {
-  const input = document.getElementById('invite-client-link-input');
-  if (!input) return;
-  const msg = encodeURIComponent(`Olá! Por favor, acesse o link abaixo para conectar sua conta do Instagram ao painel de agendamento:\n\n${input.value}`);
+function shareInstagramLoginWhatsApp() {
+  const input = document.getElementById('ig-copy-login-url-input');
+  if (!input || !input.value || !input.value.startsWith('http')) {
+    showToast('Link indisponível no momento.', 'warning');
+    return;
+  }
+  const msg = encodeURIComponent(`Olá! Por favor, acesse o link oficial do Instagram abaixo para autorizar e conectar sua conta ao painel:\n\n${input.value}`);
   window.open(`https://api.whatsapp.com/send?text=${msg}`, '_blank');
 }
+
+function toggleManualTokenBox() {
+  const box = document.getElementById('manual-token-box');
+  if (box) {
+    box.style.display = box.style.display === 'none' ? 'block' : 'none';
+  }
+}
+
+async function submitManualToken() {
+  const input = document.getElementById('ig-manual-token-input');
+  const token = input ? input.value.trim() : '';
+  if (!token) return showToast('Insira um Access Token válido.', 'warning');
+
+  showLoading(true, 'CONECTANDO TOKEN...');
+  try {
+    const res = await fetch(`${API_BASE}/accounts/connect-by-link`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showToast(`Conta @${data.account.username} conectada com sucesso!`, 'success');
+      closeConnectInstagramModal();
+      await loadData();
+    } else {
+      throw new Error(data.error || 'Falha ao validar token.');
+    }
+  } catch (err) {
+    showToast(`Erro na conexão: ${err.message}`, 'error');
+  } finally {
+    showLoading(false);
+  }
+}
+
+// Aliases para compatibilidade
+function openConnectByLinkModal() { openConnectInstagramModal(); }
+function closeConnectByLinkModal() { closeConnectInstagramModal(); }
+function openInviteClientModal() { openConnectInstagramModal(); }
+function closeInviteClientModal() { closeConnectInstagramModal(); }
+function copyInviteClientLink() { copyInstagramLoginLink(); }
+function shareInviteWhatsApp() { shareInstagramLoginWhatsApp(); }
+
