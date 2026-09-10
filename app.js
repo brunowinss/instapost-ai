@@ -591,29 +591,34 @@ function renderSettingsAccounts() {
   }
   
   list.innerHTML = STATE.accounts.map(acc => `
-    <div style="display:flex; align-items:center; justify-content:space-between; padding:1rem; background:rgba(255,255,255,0.03); border-radius:14px; border:1px solid var(--glass-border); margin-bottom:0.8rem;">
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:1rem; background:rgba(255,255,255,0.03); border-radius:14px; border:1px solid var(--glass-border); margin-bottom:0.8rem; flex-wrap:wrap; gap:10px;">
       <div style="display:flex; align-items:center; gap:12px;">
-        <div data-avatar="${acc.accountId}" style="width:36px; height:36px; border-radius:50%; background:linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888); display:flex; align-items:center; justify-content:center; color:white; overflow:hidden;">
+        <div data-avatar="${acc.accountId}" style="width:38px; height:38px; border-radius:50%; background:linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888); display:flex; align-items:center; justify-content:center; color:white; overflow:hidden; flex-shrink:0;">
           ${acc.profilePictureUrl ? `<img src="${acc.profilePictureUrl}" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fa-brands fa-instagram"></i>'}
         </div>
         <div>
-          <div style="font-weight:700; font-size:0.95rem;">@${acc.username}</div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-weight:700; font-size:0.95rem;">@${acc.username}</span>
+            ${acc.username.startsWith('instagram_') ? '<span style="font-size:0.68rem; background:rgba(239,68,68,0.15); color:#fca5a5; padding:2px 6px; border-radius:4px; border:1px solid rgba(239,68,68,0.3);"><i class="fa-solid fa-pen"></i> Clique em Editar</span>' : ''}
+          </div>
           <div style="font-size:0.72rem; color:var(--text-secondary); margin-top:2px;">
             <i class="fa-solid fa-heart" style="color:var(--accent); font-size:0.7rem;"></i>
             <span id="followers-${acc.accountId}">carregando…</span>
           </div>
         </div>
       </div>
-      <div style="display:flex; align-items:center; gap:10px;">
-        <button class="btn btn-sm btn-ghost btn-delete" onclick="deleteAccount('${acc.accountId}')" style="padding:0.5rem; width:32px; height:32px; color:var(--error); border-color:rgba(239,68,68,0.2);">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <button class="btn btn-sm btn-ghost" onclick="openEditAccountModal('${acc.accountId}')" title="Editar nome de usuário e foto" style="padding:0.4rem 0.75rem; font-size:0.75rem; color:var(--accent); border-color:rgba(16,184,245,0.3);">
+          <i class="fa-solid fa-pen"></i> Editar
+        </button>
+        <button class="btn btn-sm btn-ghost btn-delete" onclick="deleteAccount('${acc.accountId}')" title="Excluir conta" style="padding:0.4rem; width:32px; height:32px; color:var(--error); border-color:rgba(239,68,68,0.2);">
           <i class="fa-solid fa-trash-can"></i>
         </button>
       </div>
     </div>
   `).join('');
 
-  // Busca os seguidores de cada conta separadamente. O cache de 10 min no
-  // servidor evita martelar a API da Meta quando há muitas contas.
+  // Busca estatísticas e atualiza username / foto se Meta retornar dados reais
   STATE.accounts.forEach(async (acc) => {
     const el = document.getElementById(`followers-${acc.accountId}`);
     if (!el) return;
@@ -621,6 +626,10 @@ function renderSettingsAccounts() {
       const res = await fetch(`${API_BASE}/account-stats?accountId=${encodeURIComponent(acc.accountId)}`);
       const s = await res.json();
       if (s.profilePictureUrl) updateAvatar(acc.accountId, s.profilePictureUrl);
+      if (s.username && s.username !== acc.username) {
+        acc.username = s.username;
+        updateHeaderUI();
+      }
       if (s.unavailable || s.followersCount === null || s.followersCount === undefined) {
         el.innerText = 'seguidores indisponíveis';
         el.parentElement.style.color = 'var(--text-dim)';
@@ -3622,4 +3631,124 @@ function openInviteClientModal() { openConnectInstagramModal(); }
 function closeInviteClientModal() { closeConnectInstagramModal(); }
 function copyInviteClientLink() { copyInstagramLoginLink(); }
 function shareInviteWhatsApp() { shareInstagramLoginWhatsApp(); }
+
+/**
+ * 11. EDIÇÃO & SINCRONIZAÇÃO DE PERFIL DO INSTAGRAM
+ * ============================================================
+ */
+function openEditAccountModal(accountId) {
+  const acc = STATE.accounts.find(a => a.accountId === accountId);
+  if (!acc) return showToast('Conta não encontrada.', 'error');
+
+  const modal = document.getElementById('modal-edit-account');
+  if (!modal) return;
+
+  document.getElementById('edit-account-id').value = acc.accountId;
+  const cleanUser = acc.username.startsWith('instagram_') ? '' : acc.username;
+  document.getElementById('edit-account-username').value = cleanUser;
+  document.getElementById('edit-account-avatar').value = acc.profilePictureUrl || '';
+
+  updateEditAccountPreview(cleanUser || acc.username, acc.profilePictureUrl);
+  modal.style.display = 'flex';
+}
+
+function closeEditAccountModal() {
+  const modal = document.getElementById('modal-edit-account');
+  if (modal) modal.style.display = 'none';
+}
+
+function updateEditAccountPreview(username, avatarUrl) {
+  const previewUser = document.getElementById('edit-account-preview-user');
+  const previewAvatar = document.getElementById('edit-account-preview-avatar');
+
+  if (previewUser) previewUser.innerText = `@${username || 'usuario'}`;
+  if (previewAvatar) {
+    if (avatarUrl) {
+      previewAvatar.innerHTML = `<img src="${avatarUrl}" style="width:100%;height:100%;object-fit:cover;">`;
+    } else {
+      previewAvatar.innerHTML = '<i class="fa-brands fa-instagram"></i>';
+    }
+  }
+}
+
+// Live inputs update preview
+document.addEventListener('DOMContentLoaded', () => {
+  const userInput = document.getElementById('edit-account-username');
+  const avatarInput = document.getElementById('edit-account-avatar');
+
+  if (userInput) {
+    userInput.addEventListener('input', () => {
+      updateEditAccountPreview(userInput.value.trim().replace(/^@/, ''), avatarInput ? avatarInput.value.trim() : '');
+    });
+  }
+  if (avatarInput) {
+    avatarInput.addEventListener('input', () => {
+      updateEditAccountPreview(userInput ? userInput.value.trim().replace(/^@/, '') : '', avatarInput.value.trim());
+    });
+  }
+
+  const editForm = document.getElementById('edit-account-form');
+  if (editForm) {
+    editForm.onsubmit = async (e) => {
+      e.preventDefault();
+      const accountId = document.getElementById('edit-account-id').value;
+      const username = document.getElementById('edit-account-username').value.trim();
+      const avatarUrl = document.getElementById('edit-account-avatar').value.trim();
+
+      if (!username) return showToast('Digite o nome de usuário.', 'warning');
+
+      showLoading(true, 'SALVANDO PERFIL...');
+      try {
+        const res = await fetch(`${API_BASE}/accounts/update-profile`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accountId, username, profilePictureUrl: avatarUrl })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          showToast(`Perfil @${data.account.username} atualizado com sucesso!`, 'success');
+          closeEditAccountModal();
+          await loadData();
+        } else {
+          throw new Error(data.error || 'Falha ao salvar perfil.');
+        }
+      } catch (err) {
+        showToast(`Erro: ${err.message}`, 'error');
+      } finally {
+        showLoading(false);
+      }
+    };
+  }
+});
+
+async function syncAccountFromMeta() {
+  const accountId = document.getElementById('edit-account-id').value;
+  if (!accountId) return;
+
+  const btn = document.getElementById('btn-sync-meta-profile');
+  const origHtml = btn ? btn.innerHTML : '';
+  if (btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sincronizando...';
+
+  try {
+    const res = await fetch(`${API_BASE}/accounts/sync-meta`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accountId })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      document.getElementById('edit-account-username').value = data.username;
+      if (data.profilePictureUrl) document.getElementById('edit-account-avatar').value = data.profilePictureUrl;
+      updateEditAccountPreview(data.username, data.profilePictureUrl);
+      showToast(`Dados sincronizados da Meta: @${data.username}`, 'success');
+    } else {
+      showToast(data.message || 'Meta não retornou o nome de usuário. Você pode preencher manualmente.', 'info');
+    }
+  } catch (e) {
+    showToast('Erro ao consultar Meta: ' + e.message, 'error');
+  } finally {
+    if (btn) btn.innerHTML = origHtml;
+  }
+}
+
 

@@ -243,18 +243,19 @@ app.get('/auth/callback', async (req, res) => {
     if (shortToken && shortToken !== finalToken) tokensToTry.push(shortToken);
 
     for (const tk of tokensToTry) {
-      if (profile && profile.username) break;
+      if (profile && profile.username && !profile.username.startsWith('instagram_')) break;
 
       const profileAttempts = [
-        // Standard Instagram Graph API (sem prefixo de versão)
-        `https://graph.instagram.com/me?fields=id,username,account_type,media_count,profile_picture_url&access_token=${tk}`,
-        igUserId ? `https://graph.instagram.com/${igUserId}?fields=id,username,account_type,profile_picture_url&access_token=${tk}` : null,
-        // Facebook Graph API com versão
+        // 1. Chamada mais segura e universal do Instagram Graph API (apenas campos básicos)
+        `https://graph.instagram.com/me?fields=id,username&access_token=${tk}`,
+        igUserId ? `https://graph.instagram.com/${igUserId}?fields=id,username&access_token=${tk}` : null,
+        // 2. Chamadas completas do Instagram
+        `https://graph.instagram.com/me?fields=id,username,name,profile_picture_url&access_token=${tk}`,
+        igUserId ? `https://graph.instagram.com/${igUserId}?fields=id,username,name,profile_picture_url&access_token=${tk}` : null,
+        // 3. Facebook Graph API
         `https://graph.facebook.com/v22.0/me?fields=id,name,accounts{id,name,instagram_business_account{id,username,profile_picture_url}}&access_token=${tk}`,
         `https://graph.facebook.com/v22.0/me/accounts?fields=id,name,instagram_business_account{id,username,profile_picture_url},access_token&access_token=${tk}`,
-        igUserId ? `https://graph.facebook.com/v22.0/${igUserId}?fields=id,username,name,profile_picture_url&access_token=${tk}` : null,
-        // Fallback básico
-        `https://graph.instagram.com/me?fields=id,username&access_token=${tk}`
+        igUserId ? `https://graph.facebook.com/v22.0/${igUserId}?fields=id,username,name,profile_picture_url&access_token=${tk}` : null
       ].filter(Boolean);
 
       for (const url of profileAttempts) {
@@ -263,7 +264,7 @@ app.get('/auth/callback', async (req, res) => {
           const data = await r.json();
           console.log(`[OAUTH] Profile attempt ${url.split('?')[0]}:`, JSON.stringify(data).substring(0, 120));
 
-          if (data.username) {
+          if (data.username && !data.username.startsWith('instagram_')) {
             profile = { id: data.id || igUserId, username: data.username };
             if (data.profile_picture_url) profilePictureUrl = data.profile_picture_url;
             break;
@@ -287,6 +288,26 @@ app.get('/auth/callback', async (req, res) => {
         } catch (e) {
           console.warn('[OAUTH] Falha no attempt:', e.message);
         }
+      }
+    }
+
+    // Busca foto de perfil separadamente em chamada isolada se ainda não obteve
+    if (!profilePictureUrl) {
+      const picAttempts = [
+        `https://graph.instagram.com/me?fields=profile_picture_url&access_token=${finalToken}`,
+        igUserId ? `https://graph.instagram.com/${igUserId}?fields=profile_picture_url&access_token=${finalToken}` : null,
+        igUserId ? `https://graph.facebook.com/v22.0/${igUserId}?fields=profile_picture_url&access_token=${finalToken}` : null
+      ].filter(Boolean);
+
+      for (const pUrl of picAttempts) {
+        try {
+          const pRes = await fetch(pUrl);
+          const pData = await pRes.json();
+          if (pData.profile_picture_url) {
+            profilePictureUrl = pData.profile_picture_url;
+            break;
+          }
+        } catch (e) {}
       }
     }
 
@@ -581,38 +602,56 @@ app.get('/api/account-stats', requireAuth, async (req, res) => {
 
   try {
     const db = await getDB();
-    const account = await db.get('SELECT "accessToken" FROM accounts WHERE "accountId" = ?', [accountId]);
+    const account = await db.get('SELECT * FROM accounts WHERE "accountId" = ?', [accountId]);
     if (!account || !account.accessToken) {
       return res.status(404).json({ error: 'Conta não encontrada.' });
     }
 
     const token = account.accessToken;
-    const baseUrl = token.startsWith('IGAA') ? 'https://graph.instagram.com/v21.0' : 'https://graph.facebook.com/v21.0';
-    const fields = 'followers_count,follows_count,media_count,username,profile_picture_url';
+    let username = account.username;
+    let profilePictureUrl = account.profilePictureUrl || null;
+    let followersCount = null;
+    let followsCount = null;
+    let mediaCount = null;
 
-    const r = await fetch(`${baseUrl}/${accountId}?fields=${fields}&access_token=${token}`);
-    const data = await r.json();
+    // 1. Tentar obter username e media_count via Instagram Graph API
+    try {
+      const r = await fetch(`https://graph.instagram.com/me?fields=id,username,account_type,media_count&access_token=${token}`);
+      const d = await r.json();
+      if (d.username && (!username || username.startsWith('instagram_'))) {
+        username = d.username;
+      }
+      if (d.media_count !== undefined) mediaCount = d.media_count;
+    } catch (e) {}
 
-    if (data.error) {
-      console.error('[STATS] Erro da Meta:', data.error.message);
-      // 200 de propósito: o painel trata como "indisponível" em vez de quebrar.
-      return res.json({ unavailable: true, reason: data.error.message });
-    }
+    // 2. Tentar obter foto de perfil via Instagram
+    try {
+      const r = await fetch(`https://graph.instagram.com/me?fields=profile_picture_url&access_token=${token}`);
+      const d = await r.json();
+      if (d.profile_picture_url) profilePictureUrl = d.profile_picture_url;
+    } catch (e) {}
 
-    // A foto de perfil do Instagram muda e sua URL expira. Sempre que a API
-    // devolve uma nova, guardamos no banco — assim o usuário não precisa mais
-    // reconectar a conta só para atualizar a foto.
-    const pic = data.profile_picture_url || null;
-    if (pic) {
-      await db.run('UPDATE accounts SET "profilePictureUrl" = ? WHERE "accountId" = ?', [pic, accountId]);
+    // 3. Tentar obter dados completos via Facebook Graph API
+    try {
+      const r = await fetch(`https://graph.facebook.com/v22.0/${accountId}?fields=followers_count,media_count,username,profile_picture_url&access_token=${token}`);
+      const d = await r.json();
+      if (d.followers_count !== undefined) followersCount = d.followers_count;
+      if (d.media_count !== undefined && mediaCount === null) mediaCount = d.media_count;
+      if (d.username && (!username || username.startsWith('instagram_'))) username = d.username;
+      if (d.profile_picture_url && !profilePictureUrl) profilePictureUrl = d.profile_picture_url;
+    } catch (e) {}
+
+    // 4. Se encontrou dados mais recentes e atualizados, persiste no banco
+    if (username !== account.username || (profilePictureUrl && profilePictureUrl !== account.profilePictureUrl)) {
+      await db.run('UPDATE accounts SET "username" = ?, "profilePictureUrl" = ? WHERE "accountId" = ?', [username, profilePictureUrl || '', accountId]);
     }
 
     const stats = {
-      followersCount: data.followers_count ?? null,
-      followsCount: data.follows_count ?? null,
-      mediaCount: data.media_count ?? null,
-      username: data.username,
-      profilePictureUrl: pic,
+      followersCount,
+      followsCount,
+      mediaCount,
+      username,
+      profilePictureUrl,
       fetchedAt: Date.now()
     };
 
@@ -621,6 +660,77 @@ app.get('/api/account-stats', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('[STATS] Falha:', err.message);
     res.json({ unavailable: true, reason: err.message });
+  }
+});
+
+// Atualizar Perfil (Nome de Usuário e Foto)
+app.post('/api/accounts/update-profile', requireAuth, async (req, res) => {
+  const { accountId, username, profilePictureUrl } = req.body;
+  if (!accountId || !username) return res.status(400).json({ error: 'accountId e username são obrigatórios.' });
+
+  try {
+    const cleanUser = username.replace(/^@/, '').trim();
+    const db = await getDB();
+    await db.run('UPDATE accounts SET "username" = ?, "profilePictureUrl" = ? WHERE "accountId" = ?', [cleanUser, profilePictureUrl || '', accountId]);
+    statsCache.delete(accountId);
+    res.json({ success: true, account: { accountId, username: cleanUser, profilePictureUrl } });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Sincronizar dados da Meta para uma conta
+app.post('/api/accounts/sync-meta', requireAuth, async (req, res) => {
+  const { accountId } = req.body;
+  if (!accountId) return res.status(400).json({ error: 'accountId é obrigatório.' });
+
+  try {
+    const db = await getDB();
+    const account = await db.get('SELECT * FROM accounts WHERE "accountId" = ?', [accountId]);
+    if (!account) return res.status(404).json({ error: 'Conta não encontrada.' });
+
+    const token = account.accessToken;
+    let foundUser = null;
+    let foundPic = null;
+
+    const attempts = [
+      `https://graph.instagram.com/me?fields=id,username,profile_picture_url&access_token=${token}`,
+      `https://graph.instagram.com/me?fields=id,username&access_token=${token}`,
+      `https://graph.instagram.com/${accountId}?fields=username,profile_picture_url&access_token=${token}`,
+      `https://graph.facebook.com/v22.0/${accountId}?fields=username,profile_picture_url,name&access_token=${token}`,
+      `https://graph.facebook.com/v22.0/me?fields=id,name,accounts{id,name,instagram_business_account{id,username,profile_picture_url}}&access_token=${token}`,
+      `https://graph.facebook.com/v22.0/me/accounts?fields=id,name,instagram_business_account{id,username,profile_picture_url},access_token&access_token=${token}`
+    ];
+
+    for (const url of attempts) {
+      try {
+        const r = await fetch(url);
+        const d = await r.json();
+        if (d.username && !d.username.startsWith('instagram_')) {
+          foundUser = d.username;
+          if (d.profile_picture_url) foundPic = d.profile_picture_url;
+          break;
+        }
+        if (d.accounts?.data?.length > 0) {
+          const ig = d.accounts.data.find(a => a.instagram_business_account)?.instagram_business_account;
+          if (ig?.username) {
+            foundUser = ig.username;
+            if (ig.profile_picture_url) foundPic = ig.profile_picture_url;
+            break;
+          }
+        }
+      } catch (e) {}
+    }
+
+    if (foundUser) {
+      await db.run('UPDATE accounts SET "username" = ?, "profilePictureUrl" = ? WHERE "accountId" = ?', [foundUser, foundPic || account.profilePictureUrl || '', accountId]);
+      statsCache.delete(accountId);
+      return res.json({ success: true, username: foundUser, profilePictureUrl: foundPic || account.profilePictureUrl });
+    }
+
+    res.json({ success: false, message: 'Meta não retornou o nome de usuário automaticamente. Você pode definir o nome diretamente no formulário.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
