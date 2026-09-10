@@ -568,14 +568,14 @@ function updateAvatar(accountId, url) {
   if (acc) acc.profilePictureUrl = url;
 
   document.querySelectorAll(`[data-avatar="${accountId}"]`).forEach(box => {
-    box.innerHTML = `<img src="${url}" onerror="this.onerror=null; ${acc?.username && !acc.username.startsWith('instagram_') ? `this.src='https://unavatar.io/instagram/${acc.username}';` : ''}" style="width:100%;height:100%;object-fit:cover;">`;
+    box.innerHTML = `<img src="${url}" onerror="this.parentElement.innerHTML='<i class=&quot;fa-brands fa-instagram&quot;></i>'" style="width:100%;height:100%;object-fit:cover;">`;
   });
 
   // Avatar do cabeçalho, se for a conta ativa
   if (accountId === STATE.activeAccountId) {
     const headerAvatar = document.getElementById('preview-user-avatar');
     if (headerAvatar) {
-      headerAvatar.innerHTML = `<img src="${url}" onerror="this.onerror=null; ${acc?.username && !acc.username.startsWith('instagram_') ? `this.src='https://unavatar.io/instagram/${acc.username}';` : ''}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+      headerAvatar.innerHTML = `<img src="${url}" onerror="this.parentElement.innerHTML='<i class=&quot;fa-brands fa-instagram&quot;></i>'" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
       headerAvatar.style.background = 'none';
     }
   }
@@ -596,12 +596,12 @@ function renderSettingsAccounts() {
     <div style="display:flex; align-items:center; justify-content:space-between; padding:1rem; background:rgba(255,255,255,0.03); border-radius:14px; border:1px solid var(--glass-border); margin-bottom:0.8rem; flex-wrap:wrap; gap:10px;">
       <div style="display:flex; align-items:center; gap:12px;">
         <div data-avatar="${acc.accountId}" style="width:38px; height:38px; border-radius:50%; background:linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888); display:flex; align-items:center; justify-content:center; color:white; overflow:hidden; flex-shrink:0;">
-          ${avatarSrc ? `<img src="${avatarSrc}" onerror="this.onerror=null; ${!acc.username.startsWith('instagram_') ? `this.src='https://unavatar.io/instagram/${acc.username}';` : ''}" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fa-brands fa-instagram"></i>'}
+          ${avatarSrc ? `<img src="${avatarSrc}" onerror="this.parentElement.innerHTML='<i class=&quot;fa-brands fa-instagram&quot;></i>'" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fa-brands fa-instagram"></i>'}
         </div>
         <div>
           <div style="display:flex; align-items:center; gap:8px;">
-            <span style="font-weight:700; font-size:0.95rem;">@${acc.username}</span>
-            ${acc.username.startsWith('instagram_') ? '<span style="font-size:0.68rem; background:rgba(239,68,68,0.15); color:#fca5a5; padding:2px 6px; border-radius:4px; border:1px solid rgba(239,68,68,0.3);"><i class="fa-solid fa-pen"></i> Clique em Editar</span>' : ''}
+            <span data-account-username="${acc.accountId}" style="font-weight:700; font-size:0.95rem;">@${acc.username}</span>
+            ${/^instagram_\d+$/.test(acc.username) ? `<span data-profile-pending="${acc.accountId}" style="font-size:0.68rem; background:rgba(239,68,68,0.15); color:#fca5a5; padding:2px 6px; border-radius:4px; border:1px solid rgba(239,68,68,0.3);"><i class="fa-solid fa-pen"></i> Clique em Editar</span>` : ''}
           </div>
           <div style="font-size:0.72rem; color:var(--text-secondary); margin-top:2px;">
             <i class="fa-solid fa-heart" style="color:var(--accent); font-size:0.7rem;"></i>
@@ -631,6 +631,9 @@ function renderSettingsAccounts() {
       if (s.profilePictureUrl) updateAvatar(acc.accountId, s.profilePictureUrl);
       if (s.username && s.username !== acc.username) {
         acc.username = s.username;
+        const name = document.querySelector(`[data-account-username="${acc.accountId}"]`);
+        if (name) name.textContent = `@${s.username}`;
+        document.querySelector(`[data-profile-pending="${acc.accountId}"]`)?.remove();
         updateHeaderUI();
       }
       if (s.unavailable || s.followersCount === null || s.followersCount === undefined) {
@@ -663,7 +666,7 @@ function updateHeaderUI() {
     if (previewAvatar) {
       const pic = activeAcc.profilePictureUrl || (!activeAcc.username.startsWith('instagram_') ? `https://unavatar.io/instagram/${activeAcc.username}` : '');
       if (pic) {
-        previewAvatar.innerHTML = `<img src="${pic}" onerror="this.onerror=null; ${!activeAcc.username.startsWith('instagram_') ? `this.src='https://unavatar.io/instagram/${activeAcc.username}';` : ''}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+        previewAvatar.innerHTML = `<img src="${pic}" onerror="this.parentElement.innerHTML='<i class=&quot;fa-brands fa-instagram&quot;></i>'" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
         previewAvatar.style.background = 'none';
       } else {
         previewAvatar.innerHTML = '';
@@ -768,7 +771,7 @@ function renderDashboardFollowers() {
     return `
     <div style="display:flex; align-items:center; gap:12px; padding:0.9rem 1rem; background:rgba(4,7,12,0.5); border:1px solid var(--border-color); border-radius:var(--radius-sm);">
       <div data-avatar="${acc.accountId}" style="width:38px; height:38px; border-radius:50%; background:linear-gradient(45deg,#f09433,#dc2743,#bc1888); display:flex; align-items:center; justify-content:center; color:#fff; overflow:hidden; flex-shrink:0;">
-        ${avatarSrc ? `<img src="${avatarSrc}" onerror="this.onerror=null; ${!acc.username.startsWith('instagram_') ? `this.src='https://unavatar.io/instagram/${acc.username}';` : ''}" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fa-brands fa-instagram"></i>'}
+        ${avatarSrc ? `<img src="${avatarSrc}" onerror="this.parentElement.innerHTML='<i class=&quot;fa-brands fa-instagram&quot;></i>'" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fa-brands fa-instagram"></i>'}
       </div>
       <div style="min-width:0;">
         <div style="font-weight:700; font-size:0.85rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">@${acc.username}</div>
@@ -3757,5 +3760,4 @@ async function syncAccountFromMeta() {
     if (btn) btn.innerHTML = origHtml;
   }
 }
-
 

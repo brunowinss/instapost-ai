@@ -3,6 +3,7 @@ const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
 const fetch = require('node-fetch');
+const { readMetaResponse, resolveInstagramProfile, needsProfileSync } = require('./instagram-profile');
 const webpush = require('web-push');
 const { getDB, initDB } = require('./database');
 const { runAutoImporter } = require('./auto_importer');
@@ -192,112 +193,6 @@ function parseIgError(data) {
   return JSON.stringify(data);
 }
 
-/**
- * 🌟 Universal Instagram Profile Resolver
- * Consulta todas as rotas possíveis da Meta (Instagram Graph API, Facebook Graph API, Pages, Me, ID)
- * e garante a obtenção do @username e foto de perfil oficiais.
- */
-async function resolveInstagramProfile(token, igUserId = null) {
-  if (!token) return { id: igUserId, username: null, profilePictureUrl: null };
-
-  let foundId = igUserId ? String(igUserId) : null;
-  let foundUser = null;
-  let foundPic = null;
-
-  const endpoints = [
-    // 1. Instagram Graph API (Direct User Token - clean queries without non-existing fields)
-    `https://graph.instagram.com/me?fields=id,username,account_type,media_count,profile_picture_url&access_token=${token}`,
-    `https://graph.instagram.com/me?fields=id,username&access_token=${token}`,
-    `https://graph.instagram.com/v22.0/me?fields=id,username,account_type,media_count,profile_picture_url&access_token=${token}`,
-    `https://graph.instagram.com/v22.0/me?fields=id,username&access_token=${token}`,
-    `https://graph.instagram.com/v21.0/me?fields=id,username,account_type,profile_picture_url&access_token=${token}`,
-    `https://graph.instagram.com/v21.0/me?fields=id,username&access_token=${token}`,
-    igUserId ? `https://graph.instagram.com/${igUserId}?fields=id,username,profile_picture_url&access_token=${token}` : null,
-    igUserId ? `https://graph.instagram.com/${igUserId}?fields=id,username&access_token=${token}` : null,
-    igUserId ? `https://graph.instagram.com/v22.0/${igUserId}?fields=id,username,profile_picture_url&access_token=${token}` : null,
-    igUserId ? `https://graph.instagram.com/v22.0/${igUserId}?fields=id,username&access_token=${token}` : null,
-
-    // 2. Facebook Graph API (Page-linked Instagram Business Account)
-    `https://graph.facebook.com/v22.0/me/accounts?fields=id,name,instagram_business_account{id,username,profile_picture_url,name},access_token&access_token=${token}`,
-    `https://graph.facebook.com/v21.0/me/accounts?fields=id,name,instagram_business_account{id,username,profile_picture_url,name},access_token&access_token=${token}`,
-    `https://graph.facebook.com/me/accounts?fields=id,name,instagram_business_account{id,username,profile_picture_url,name},access_token&access_token=${token}`,
-    `https://graph.facebook.com/v22.0/me?fields=id,name,accounts{id,name,instagram_business_account{id,username,profile_picture_url}}&access_token=${token}`,
-    `https://graph.facebook.com/v21.0/me?fields=id,name,accounts{id,name,instagram_business_account{id,username,profile_picture_url}}&access_token=${token}`,
-    igUserId ? `https://graph.facebook.com/v22.0/${igUserId}?fields=id,username,name,profile_picture_url&access_token=${token}` : null,
-    igUserId ? `https://graph.facebook.com/v21.0/${igUserId}?fields=id,username,name,profile_picture_url&access_token=${token}` : null,
-    igUserId ? `https://graph.facebook.com/${igUserId}?fields=id,username,name,profile_picture_url&access_token=${token}` : null
-  ].filter(Boolean);
-
-  for (const url of endpoints) {
-    try {
-      const res = await fetch(url);
-      const data = await res.json();
-      console.log(`[PROFILE-RESOLVER] ${url.split('?')[0]} =>`, JSON.stringify(data).substring(0, 160));
-
-      if (data.username && !data.username.startsWith('instagram_')) {
-        foundUser = data.username;
-        foundId = data.id || foundId;
-        if (data.profile_picture_url) foundPic = data.profile_picture_url;
-        break;
-      }
-
-      if (data.accounts?.data && Array.isArray(data.accounts.data)) {
-        for (const page of data.accounts.data) {
-          const ig = page.instagram_business_account;
-          if (ig && ig.username && !ig.username.startsWith('instagram_')) {
-            foundUser = ig.username;
-            foundId = ig.id || foundId;
-            if (ig.profile_picture_url) foundPic = ig.profile_picture_url;
-            break;
-          }
-        }
-        if (foundUser) break;
-      }
-
-      if (data.data && Array.isArray(data.data)) {
-        for (const page of data.data) {
-          const ig = page.instagram_business_account;
-          if (ig && ig.username && !ig.username.startsWith('instagram_')) {
-            foundUser = ig.username;
-            foundId = ig.id || foundId;
-            if (ig.profile_picture_url) foundPic = ig.profile_picture_url;
-            break;
-          }
-          if (page.username && !page.username.startsWith('instagram_')) {
-            foundUser = page.username;
-            foundId = page.id || foundId;
-            if (page.profile_picture_url) foundPic = page.profile_picture_url;
-            break;
-          }
-        }
-        if (foundUser) break;
-      }
-
-      if (data.instagram_business_account?.username) {
-        foundUser = data.instagram_business_account.username;
-        foundId = data.instagram_business_account.id || foundId;
-        if (data.instagram_business_account.profile_picture_url) foundPic = data.instagram_business_account.profile_picture_url;
-        break;
-      }
-    } catch (e) {
-      console.warn('[PROFILE-RESOLVER ERROR]', e.message);
-    }
-  }
-
-  // Se obteve username mas não foto, define avatar oficial do Instagram automaticamente
-  if (foundUser && !foundUser.startsWith('instagram_')) {
-    if (!foundPic) {
-      foundPic = `https://unavatar.io/instagram/${foundUser}`;
-    }
-  }
-
-  return {
-    id: foundId,
-    username: foundUser,
-    profilePictureUrl: foundPic
-  };
-}
-
 app.get('/auth/callback', async (req, res) => {
   const { code, error, error_description } = req.query;
   if (error || !code) {
@@ -314,8 +209,8 @@ app.get('/auth/callback', async (req, res) => {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ client_id: IG_APP_ID, client_secret: IG_APP_SECRET, grant_type: 'authorization_code', redirect_uri: REDIRECT_URI, code })
     });
-    const tokenData = await tokenRes.json();
-    console.log('[OAUTH] Token response:', JSON.stringify(tokenData));
+    const tokenData = await readMetaResponse(tokenRes);
+    console.log('[OAUTH] Token recebido:', !!tokenData.access_token);
     if (!tokenData.access_token) {
       const errMsg = parseIgError(tokenData);
       console.error('[OAUTH] Falha ao obter token:', errMsg);
@@ -331,7 +226,7 @@ app.get('/auth/callback', async (req, res) => {
     try {
       const llRes = await fetch(`https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_id=${IG_APP_ID}&client_secret=${IG_APP_SECRET}&access_token=${shortToken}`);
       const llData = await llRes.json();
-      console.log('[OAUTH] Long-lived token response:', JSON.stringify(llData).substring(0, 100));
+      console.log('[OAUTH] Token de longa duração recebido:', !!llData.access_token);
       if (llData.access_token) {
         finalToken = llData.access_token;
       } else if (llData.error) {
@@ -341,28 +236,19 @@ app.get('/auth/callback', async (req, res) => {
       console.warn('[OAUTH] Erro ao trocar por long-lived token:', e.message);
     }
 
-    // 3. Resolver perfil do Instagram 100% automático (ID, @username e foto)
-    let resolved = await resolveInstagramProfile(finalToken, igUserId);
-    if (!resolved.username && shortToken !== finalToken) {
-      resolved = await resolveInstagramProfile(shortToken, igUserId);
+    // Resolve identity and the official photo before confirming the connection.
+    let resolved = await resolveInstagramProfile(finalToken, igUserId, { provider: 'instagram' });
+    if ((!resolved.username || !resolved.profilePictureUrl) && shortToken !== finalToken) {
+      const fallback = await resolveInstagramProfile(shortToken, igUserId, { provider: 'instagram' });
+      if (!resolved.username) resolved = fallback;
+      else if (fallback.id === resolved.id) resolved.profilePictureUrl ||= fallback.profilePictureUrl;
     }
-
-    const finalUserId = resolved.id || igUserId;
-    let finalUsername = resolved.username;
-    let finalPic = resolved.profilePictureUrl || '';
-
-    if (!finalUsername) {
-      if (igUserId) {
-        console.warn(`[OAUTH] Username não retornado pela Meta, utilizando ID ${igUserId} como identificador.`);
-        finalUsername = `instagram_${igUserId}`;
-      } else {
-        throw new Error('Não foi possível obter os dados da conta do Instagram. Verifique as permissões do seu App na Meta.');
-      }
+    if (!resolved.id || !resolved.username) {
+      throw new Error('Não foi possível obter o perfil do Instagram. Tente conectar novamente e confira as permissões da conta profissional na Meta.');
     }
-
-    if (!finalPic && finalUsername && !finalUsername.startsWith('instagram_')) {
-      finalPic = `https://unavatar.io/instagram/${finalUsername}`;
-    }
+    const finalUserId = resolved.id;
+    const finalUsername = resolved.username;
+    const finalPic = resolved.profilePictureUrl || '';
 
     // 4. Salvar conta no banco
     const db = await getDB();
@@ -496,7 +382,7 @@ app.post('/api/accounts/connect-by-link', requireAuth, async (req, res) => {
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: new URLSearchParams({ client_id: IG_APP_ID, client_secret: IG_APP_SECRET, grant_type: 'authorization_code', redirect_uri: REDIRECT_URI, code })
         });
-        const tokenData = await tokenRes.json();
+        const tokenData = await readMetaResponse(tokenRes);
         if (tokenData.access_token) token = tokenData.access_token;
       }
     }
@@ -510,16 +396,13 @@ app.post('/api/accounts/connect-by-link', requireAuth, async (req, res) => {
     }
 
     const resolved = await resolveInstagramProfile(finalToken);
-    if (!resolved || !resolved.username) {
+    if (!resolved.id || !resolved.username) {
       return res.status(400).json({ error: 'Não foi possível validar a conta do Instagram com este link/token. Verifique se o token tem permissões válidas.' });
     }
 
-    const finalUserId = resolved.id || String(Date.now());
+    const finalUserId = resolved.id;
     const finalUsername = resolved.username;
-    let finalPic = resolved.profilePictureUrl || '';
-    if (!finalPic && !finalUsername.startsWith('instagram_')) {
-      finalPic = `https://unavatar.io/instagram/${finalUsername}`;
-    }
+    const finalPic = resolved.profilePictureUrl || '';
 
     // 3. Salvar no banco
     const db = await getDB();
@@ -559,37 +442,11 @@ app.get('/api/verify-account', requireAuth, async (req, res) => {
   console.log(`[VERIFY] Buscando conta ID: ${id} na Meta...`);
 
   try {
-    const urlsToTry = token.startsWith('IGAA')
-      ? [
-          `https://graph.instagram.com/me?fields=id,username,profile_picture_url&access_token=${token}`,
-          `https://graph.instagram.com/${id}?fields=username,profile_picture_url&access_token=${token}`,
-          `https://graph.facebook.com/v22.0/${id}?fields=username,profile_picture_url&access_token=${token}`
-        ]
-      : [
-          `https://graph.facebook.com/v22.0/${id}?fields=username,profile_picture_url&access_token=${token}`,
-          `https://graph.instagram.com/me?fields=id,username,profile_picture_url&access_token=${token}`
-        ];
-
-    let foundData = null;
-    for (const url of urlsToTry) {
-      try {
-        const r = await fetch(url);
-        const data = await r.json();
-        if (data.username) {
-          foundData = data;
-          break;
-        }
-      } catch (e) {}
+    const profile = await resolveInstagramProfile(token, id);
+    if (!profile.username || profile.id !== String(id)) {
+      return res.status(400).json({ error: 'Não foi possível verificar a conta na Meta. Verifique o ID e o Token.' });
     }
-
-    if (!foundData || !foundData.username) {
-      return res.status(400).json({ 
-        error: `Não foi possível verificar a conta na Meta. Verifique o ID e o Token.`
-      });
-    }
-
-    console.log(`[VERIFY SUCCESS] Conta @${foundData.username} validada.`);
-    res.json({ username: foundData.username, profilePictureUrl: foundData.profile_picture_url || '' });
+    res.json({ username: profile.username, profilePictureUrl: profile.profilePictureUrl || '' });
   } catch (err) {
     console.error('[SERVER ERROR]', err);
     res.status(500).json({ error: `Erro interno no servidor: ${err.message}` });
@@ -629,37 +486,21 @@ app.get('/api/account-stats', requireAuth, async (req, res) => {
     let followsCount = null;
     let mediaCount = null;
 
-    // 1. Tentar obter username e media_count via Instagram Graph API
+    const profile = await resolveInstagramProfile(token, accountId);
+    if (profile.username) username = profile.username;
+    if (profile.profilePictureUrl) profilePictureUrl = profile.profilePictureUrl;
     try {
-      const r = await fetch(`https://graph.instagram.com/me?fields=id,username,account_type,media_count&access_token=${token}`);
+      const host = token.startsWith('EAA') ? 'graph.facebook.com' : 'graph.instagram.com';
+      const node = encodeURIComponent(profile.id || accountId);
+      const query = new URLSearchParams({ fields: 'followers_count,follows_count,media_count', access_token: token });
+      const r = await fetch(`https://${host}/${IG_API_VERSION}/${node}?${query}`, { timeout: 8000 });
       const d = await r.json();
-      if (d.username && (!username || username.startsWith('instagram_'))) {
-        username = d.username;
+      if (r.ok && !d.error) {
+        followersCount = d.followers_count ?? null;
+        followsCount = d.follows_count ?? null;
+        mediaCount = d.media_count ?? null;
       }
-      if (d.media_count !== undefined) mediaCount = d.media_count;
-    } catch (e) {}
-
-    // 2. Tentar obter foto de perfil via Instagram
-    try {
-      const r = await fetch(`https://graph.instagram.com/me?fields=profile_picture_url&access_token=${token}`);
-      const d = await r.json();
-      if (d.profile_picture_url) profilePictureUrl = d.profile_picture_url;
-    } catch (e) {}
-
-    // 3. Tentar obter dados completos via Facebook Graph API
-    try {
-      const r = await fetch(`https://graph.facebook.com/v22.0/${accountId}?fields=followers_count,media_count,username,profile_picture_url&access_token=${token}`);
-      const d = await r.json();
-      if (d.followers_count !== undefined) followersCount = d.followers_count;
-      if (d.media_count !== undefined && mediaCount === null) mediaCount = d.media_count;
-      if (d.username && (!username || username.startsWith('instagram_'))) username = d.username;
-      if (d.profile_picture_url && !profilePictureUrl) profilePictureUrl = d.profile_picture_url;
-    } catch (e) {}
-
-    // 4. Se a conta não tem foto mas tem um username válido, puxa a foto do Instagram automaticamente
-    if (!profilePictureUrl && username && !username.startsWith('instagram_')) {
-      profilePictureUrl = `https://unavatar.io/instagram/${username}`;
-    }
+    } catch {}
 
     // Se encontrou dados mais recentes e atualizados, persiste no banco
     if (username !== account.username || (profilePictureUrl && profilePictureUrl !== account.profilePictureUrl)) {
@@ -719,22 +560,14 @@ app.post('/api/accounts/sync-meta', requireAuth, async (req, res) => {
     const token = account.accessToken;
     const resolved = await resolveInstagramProfile(token, accountId);
 
-    if (resolved.username && !resolved.username.startsWith('instagram_')) {
-      let finalPic = resolved.profilePictureUrl || `https://unavatar.io/instagram/${resolved.username}`;
+    if (resolved.username) {
+      const finalPic = resolved.profilePictureUrl || account.profilePictureUrl || '';
       await db.run('UPDATE accounts SET "username" = ?, "profilePictureUrl" = ? WHERE "accountId" = ?', [resolved.username, finalPic, accountId]);
       statsCache.delete(accountId);
       return res.json({ success: true, username: resolved.username, profilePictureUrl: finalPic });
     }
 
-    // Fallback: se tem username salvo, gera foto via unavatar
-    if (account.username && !account.username.startsWith('instagram_')) {
-      const autoPic = `https://unavatar.io/instagram/${account.username}`;
-      await db.run('UPDATE accounts SET "profilePictureUrl" = ? WHERE "accountId" = ?', [autoPic, accountId]);
-      statsCache.delete(accountId);
-      return res.json({ success: true, username: account.username, profilePictureUrl: autoPic });
-    }
-
-    res.json({ success: false, message: 'Meta não retornou o nome de usuário automaticamente. Digite o seu @username no campo acima.' });
+    res.json({ success: false, message: 'Não foi possível sincronizar o perfil com a Meta. Tente reconectar a conta.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -912,10 +745,10 @@ app.get('/api/data', requireAuth, async (req, res) => {
       let pic = acc.profilePictureUrl;
 
       // Se tem username genérico (instagram_...) e tem token, ou se não tem foto, tenta resolver com o motor completo
-      if (acc.accessToken && (user.startsWith('instagram_') || !pic)) {
+      if (acc.accessToken && needsProfileSync(user, pic)) {
         try {
           const resolved = await resolveInstagramProfile(acc.accessToken, acc.accountId);
-          if (resolved.username && !resolved.username.startsWith('instagram_')) {
+          if (resolved.username) {
             user = resolved.username;
             changed = true;
           }
@@ -926,13 +759,8 @@ app.get('/api/data', requireAuth, async (req, res) => {
         } catch (e) {}
       }
 
-      // Se tem username real e não tem foto, define avatar oficial do Instagram automaticamente
-      if (!pic && user && !user.startsWith('instagram_')) {
-        pic = `https://unavatar.io/instagram/${user}`;
-        changed = true;
-      }
-
       if (changed) {
+        statsCache.delete(acc.accountId);
         acc.username = user;
         acc.profilePictureUrl = pic;
         await db.run('UPDATE accounts SET "username" = ?, "profilePictureUrl" = ? WHERE "accountId" = ?', [user, pic || '', acc.accountId]);
@@ -981,24 +809,31 @@ app.get('/api/data', requireAuth, async (req, res) => {
 
 // Troca token curta duração → longa duração (60 dias) via Meta OAuth
 async function exchangeForLongLivedToken(shortToken) {
-  const appId = process.env.APP_ID || process.env.META_APP_ID;
-  const appSecret = process.env.APP_SECRET || process.env.META_APP_SECRET;
+  const instagramLogin = shortToken.startsWith('IG');
+  const appId = instagramLogin ? IG_APP_ID : process.env.APP_ID || process.env.META_APP_ID;
+  const appSecret = instagramLogin ? IG_APP_SECRET : process.env.APP_SECRET || process.env.META_APP_SECRET;
   if (!appId || !appSecret) {
     console.log('[TOKEN-EXCHANGE] APP_ID ou APP_SECRET não configurados — salvando token original.');
     return shortToken;
   }
   try {
-    const url = `https://graph.facebook.com/v21.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${shortToken}`;
-    const r = await fetch(url);
+    const query = new URLSearchParams({
+      grant_type: instagramLogin ? 'ig_exchange_token' : 'fb_exchange_token',
+      client_id: appId,
+      client_secret: appSecret,
+      [instagramLogin ? 'access_token' : 'fb_exchange_token']: shortToken
+    });
+    const endpoint = instagramLogin ? 'https://graph.instagram.com/access_token' : `https://graph.facebook.com/${IG_API_VERSION}/oauth/access_token`;
+    const r = await fetch(`${endpoint}?${query}`, { timeout: 8000 });
     const data = await r.json();
     if (data.access_token) {
       console.log('[TOKEN-EXCHANGE] ✅ Token trocado para longa duração (60 dias).');
       return data.access_token;
     }
-    console.warn('[TOKEN-EXCHANGE] Falha na troca:', data.error?.message || JSON.stringify(data));
+    console.warn('[TOKEN-EXCHANGE] Falha na troca. Código:', data.error?.code || r.status);
     return shortToken;
   } catch (err) {
-    console.warn('[TOKEN-EXCHANGE] Erro ao trocar token:', err.message);
+    console.warn('[TOKEN-EXCHANGE] Não foi possível trocar o token. Mantendo o original.');
     return shortToken;
   }
 }
