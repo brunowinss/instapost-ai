@@ -568,14 +568,14 @@ function updateAvatar(accountId, url) {
   if (acc) acc.profilePictureUrl = url;
 
   document.querySelectorAll(`[data-avatar="${accountId}"]`).forEach(box => {
-    box.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;">`;
+    box.innerHTML = `<img src="${url}" onerror="this.onerror=null; ${acc?.username && !acc.username.startsWith('instagram_') ? `this.src='https://unavatar.io/instagram/${acc.username}';` : ''}" style="width:100%;height:100%;object-fit:cover;">`;
   });
 
   // Avatar do cabeçalho, se for a conta ativa
   if (accountId === STATE.activeAccountId) {
     const headerAvatar = document.getElementById('preview-user-avatar');
     if (headerAvatar) {
-      headerAvatar.innerHTML = `<img src="${url}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+      headerAvatar.innerHTML = `<img src="${url}" onerror="this.onerror=null; ${acc?.username && !acc.username.startsWith('instagram_') ? `this.src='https://unavatar.io/instagram/${acc.username}';` : ''}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
       headerAvatar.style.background = 'none';
     }
   }
@@ -590,11 +590,13 @@ function renderSettingsAccounts() {
     return;
   }
   
-  list.innerHTML = STATE.accounts.map(acc => `
+  list.innerHTML = STATE.accounts.map(acc => {
+    const avatarSrc = acc.profilePictureUrl || (!acc.username.startsWith('instagram_') ? `https://unavatar.io/instagram/${acc.username}` : '');
+    return `
     <div style="display:flex; align-items:center; justify-content:space-between; padding:1rem; background:rgba(255,255,255,0.03); border-radius:14px; border:1px solid var(--glass-border); margin-bottom:0.8rem; flex-wrap:wrap; gap:10px;">
       <div style="display:flex; align-items:center; gap:12px;">
         <div data-avatar="${acc.accountId}" style="width:38px; height:38px; border-radius:50%; background:linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888); display:flex; align-items:center; justify-content:center; color:white; overflow:hidden; flex-shrink:0;">
-          ${acc.profilePictureUrl ? `<img src="${acc.profilePictureUrl}" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fa-brands fa-instagram"></i>'}
+          ${avatarSrc ? `<img src="${avatarSrc}" onerror="this.onerror=null; ${!acc.username.startsWith('instagram_') ? `this.src='https://unavatar.io/instagram/${acc.username}';` : ''}" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fa-brands fa-instagram"></i>'}
         </div>
         <div>
           <div style="display:flex; align-items:center; gap:8px;">
@@ -616,7 +618,8 @@ function renderSettingsAccounts() {
         </button>
       </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
 
   // Busca estatísticas e atualiza username / foto se Meta retornar dados reais
   STATE.accounts.forEach(async (acc) => {
@@ -658,8 +661,9 @@ function updateHeaderUI() {
     
     if (previewName) previewName.innerText = `@${activeAcc.username}`;
     if (previewAvatar) {
-      if (activeAcc.profilePictureUrl) {
-        previewAvatar.innerHTML = `<img src="${activeAcc.profilePictureUrl}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+      const pic = activeAcc.profilePictureUrl || (!activeAcc.username.startsWith('instagram_') ? `https://unavatar.io/instagram/${activeAcc.username}` : '');
+      if (pic) {
+        previewAvatar.innerHTML = `<img src="${pic}" onerror="this.onerror=null; ${!activeAcc.username.startsWith('instagram_') ? `this.src='https://unavatar.io/instagram/${activeAcc.username}';` : ''}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
         previewAvatar.style.background = 'none';
       } else {
         previewAvatar.innerHTML = '';
@@ -759,10 +763,12 @@ function renderDashboardFollowers() {
     return;
   }
 
-  container.innerHTML = STATE.accounts.map(acc => `
+  container.innerHTML = STATE.accounts.map(acc => {
+    const avatarSrc = acc.profilePictureUrl || (!acc.username.startsWith('instagram_') ? `https://unavatar.io/instagram/${acc.username}` : '');
+    return `
     <div style="display:flex; align-items:center; gap:12px; padding:0.9rem 1rem; background:rgba(4,7,12,0.5); border:1px solid var(--border-color); border-radius:var(--radius-sm);">
       <div data-avatar="${acc.accountId}" style="width:38px; height:38px; border-radius:50%; background:linear-gradient(45deg,#f09433,#dc2743,#bc1888); display:flex; align-items:center; justify-content:center; color:#fff; overflow:hidden; flex-shrink:0;">
-        ${acc.profilePictureUrl ? `<img src="${acc.profilePictureUrl}" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fa-brands fa-instagram"></i>'}
+        ${avatarSrc ? `<img src="${avatarSrc}" onerror="this.onerror=null; ${!acc.username.startsWith('instagram_') ? `this.src='https://unavatar.io/instagram/${acc.username}';` : ''}" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fa-brands fa-instagram"></i>'}
       </div>
       <div style="min-width:0;">
         <div style="font-weight:700; font-size:0.85rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">@${acc.username}</div>
@@ -770,7 +776,8 @@ function renderDashboardFollowers() {
         <div style="font-size:0.68rem; color:var(--text-dim);">seguidores</div>
       </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
 
   STATE.accounts.forEach(async (acc) => {
     const el = document.getElementById(`dash-fol-${acc.accountId}`);
