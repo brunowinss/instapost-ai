@@ -92,11 +92,44 @@ async function initDB() {
       "mediaId" TEXT,
       "publishedAt" TEXT,
       "createdAt" TEXT,
-      "sourceFile" TEXT
+      "sourceFile" TEXT,
+      "mediaItems" TEXT,
+      "varianceMinutes" INTEGER DEFAULT 0
     );
     CREATE TABLE IF NOT EXISTS push_subscriptions (
       "endpoint" TEXT PRIMARY KEY,
       "subscription" TEXT,
+      "createdAt" TEXT
+    );
+    CREATE TABLE IF NOT EXISTS captions (
+      "id" TEXT PRIMARY KEY,
+      "title" TEXT,
+      "text" TEXT,
+      "tag" TEXT,
+      "createdAt" TEXT
+    );
+    CREATE TABLE IF NOT EXISTS hashtags (
+      "id" TEXT PRIMARY KEY,
+      "name" TEXT,
+      "tags" TEXT,
+      "createdAt" TEXT
+    );
+    CREATE TABLE IF NOT EXISTS story_loops (
+      "id" TEXT PRIMARY KEY,
+      "accountId" TEXT,
+      "enabled" INTEGER DEFAULT 1,
+      "times" TEXT,
+      "varianceMinutes" INTEGER DEFAULT 5,
+      "activeMedia" TEXT,
+      "createdAt" TEXT
+    );
+    CREATE TABLE IF NOT EXISTS shared_drive (
+      "id" TEXT PRIMARY KEY,
+      "filename" TEXT,
+      "url" TEXT,
+      "size" TEXT,
+      "duration" TEXT,
+      "thumbnail" TEXT,
       "createdAt" TEXT
     );
   `);
@@ -115,6 +148,16 @@ async function initDB() {
         console.log('🌐 [MIGRATION] PostgreSQL: Adding "sourceFile" column to posts...');
         await db.exec('ALTER TABLE posts ADD COLUMN "sourceFile" TEXT');
       }
+      const checkMediaItems = await db.all("SELECT column_name FROM information_schema.columns WHERE table_name = 'posts' AND column_name = 'mediaItems'");
+      if (checkMediaItems.length === 0) {
+        console.log('🌐 [MIGRATION] PostgreSQL: Adding "mediaItems" column to posts...');
+        await db.exec('ALTER TABLE posts ADD COLUMN "mediaItems" TEXT');
+      }
+      const checkVariance = await db.all("SELECT column_name FROM information_schema.columns WHERE table_name = 'posts' AND column_name = 'varianceMinutes'");
+      if (checkVariance.length === 0) {
+        console.log('🌐 [MIGRATION] PostgreSQL: Adding "varianceMinutes" column to posts...');
+        await db.exec('ALTER TABLE posts ADD COLUMN "varianceMinutes" INTEGER DEFAULT 0');
+      }
     } else {
       // SQLite Migration Logic
       const accColumns = await db.all('PRAGMA table_info(accounts)');
@@ -126,6 +169,14 @@ async function initDB() {
       if (!postColumns.some(c => c.name === 'sourceFile')) {
         console.log('🏠 [MIGRATION] SQLite: Adding "sourceFile" column to posts...');
         await db.exec('ALTER TABLE posts ADD COLUMN "sourceFile" TEXT');
+      }
+      if (!postColumns.some(c => c.name === 'mediaItems')) {
+        console.log('🏠 [MIGRATION] SQLite: Adding "mediaItems" column to posts...');
+        await db.exec('ALTER TABLE posts ADD COLUMN "mediaItems" TEXT');
+      }
+      if (!postColumns.some(c => c.name === 'varianceMinutes')) {
+        console.log('🏠 [MIGRATION] SQLite: Adding "varianceMinutes" column to posts...');
+        await db.exec('ALTER TABLE posts ADD COLUMN "varianceMinutes" INTEGER DEFAULT 0');
       }
     }
   } catch (err) {

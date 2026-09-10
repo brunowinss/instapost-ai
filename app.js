@@ -60,7 +60,17 @@ const STATE = {
   scheduledPosts: [],
   history: [],
   uploadedUrl: '',
-  scheduleMode: 'auto'
+  scheduleMode: 'auto',
+  // ScaleReels State Extensions
+  captionsList: [],
+  hashtagsList: [],
+  driveFiles: [],
+  bulkFiles: [],
+  bulkQueue: [],
+  carouselSlides: [],
+  storySlots: ['09:00', '13:00', '18:00', '21:00'],
+  storyMediaPool: [],
+  libraryActiveTab: 'captions'
 };
 
 const API_BASE = '/api';
@@ -267,22 +277,32 @@ function switchSection(name) {
   
   // Update UI Navigation state
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.querySelector(`.nav-item[data-section="${name}"]`).classList.add('active');
+  const activeNavItem = document.querySelector(`.nav-item[data-section="${name}"]`);
+  if (activeNavItem) activeNavItem.classList.add('active');
   
   // Update Header
   const titles = {
     'dashboard': { t: 'Dashboard', s: 'Acompanhe seus resultados e agendamentos.' },
-    'new-post': { t: 'Novo Post', s: 'Crie a próxima publicação viral agora.' },
+    'bulk-reels': { t: 'Reels em Massa', s: 'Distribuição inteligente de múltiplos vídeos com variância anti-ban.' },
+    'bulk-carousel': { t: 'Carrossel & Fotos', s: 'Assistente de criação de posts carrossel de 2 a 10 mídias.' },
+    'stories-loop': { t: 'Stories 24/7', s: 'Automação contínua de stories para máxima retenção de seguidores.' },
+    'captions': { t: 'Legendas & Hashtags', s: 'Biblioteca de modelos e grupos com rotação automática.' },
+    'drive': { t: 'Acervo / Drive', s: 'Pool de mídias e criativos salvos na nuvem prontos para postar.' },
+    'analytics': { t: 'Analytics Pro', s: 'Métricas consolidadas e inteligência multi-conta.' },
+    'new-post': { t: 'Novo Post', s: 'Crie e agende uma publicação avulsa.' },
     'schedule': { t: 'Agendados', s: 'Organize seu calendário de conteúdo.' },
     'settings': { t: 'Configurações', s: 'Gerencie suas conexões e chaves de API.' }
   };
   
-  document.getElementById('page-title').innerText = titles[name].t;
-  document.getElementById('page-subtitle').innerText = titles[name].s;
+  if (titles[name]) {
+    document.getElementById('page-title').innerText = titles[name].t;
+    document.getElementById('page-subtitle').innerText = titles[name].s;
+  }
   
   // Show/Hide Sections
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-  document.getElementById(`section-${name}`).classList.add('active');
+  const targetSection = document.getElementById(`section-${name}`);
+  if (targetSection) targetSection.classList.add('active');
   
   renderActiveSection();
 }
@@ -433,6 +453,12 @@ function animateNumber(el, alvo) {
 function renderActiveSection() {
   const n = STATE.activeSection;
   if (n === 'dashboard') renderDashboard();
+  if (n === 'bulk-reels') renderBulkReelsSection();
+  if (n === 'bulk-carousel') renderBulkCarouselSection();
+  if (n === 'stories-loop') renderStoriesLoopSection();
+  if (n === 'captions') renderCaptionsSection();
+  if (n === 'drive') renderDriveSection();
+  if (n === 'analytics') renderAnalyticsSection();
   if (n === 'schedule') renderScheduleGrid();
   if (n === 'settings') {
     renderSettings();
@@ -564,22 +590,30 @@ function updateHeaderUI() {
 }
 
 function populateAccountSelector() {
-  const sel = document.getElementById('post-account-select');
-  if (!sel) return;
-  const prev = sel.value;
-  sel.innerHTML = STATE.accounts.map(a => 
-    `<option value="${a.accountId}" ${a.accountId === prev ? 'selected' : ''}>@${a.username}</option>`
-  ).join('');
-  
-  sel.onchange = () => {
-    STATE.activeAccountId = sel.value;
-    updateHeaderUI();
-    loadAccountStats(); // os seguidores são de outra conta agora
-  };
+  const selectors = [
+    document.getElementById('post-account-select'),
+    document.getElementById('bulk-account-select'),
+    document.getElementById('carousel-account-select'),
+    document.getElementById('stories-account-select')
+  ];
 
-  if (!prev && STATE.accounts.length > 0) {
+  selectors.forEach(sel => {
+    if (!sel) return;
+    const prev = sel.value;
+    sel.innerHTML = STATE.accounts.map(a => 
+      `<option value="${a.accountId}" ${a.accountId === prev ? 'selected' : ''}>@${a.username}</option>`
+    ).join('');
+    
+    sel.onchange = () => {
+      STATE.activeAccountId = sel.value;
+      updateHeaderUI();
+      loadAccountStats();
+      if (sel.id === 'stories-account-select') loadStoryLoopForAccount();
+    };
+  });
+
+  if (STATE.accounts.length > 0 && !STATE.activeAccountId) {
     STATE.activeAccountId = STATE.accounts[0].accountId;
-    updateHeaderUI();
     updateHeaderUI();
   }
 }
@@ -1966,3 +2000,1308 @@ function renderSettings() {
   if (tToken) tToken.value = STATE.globalConfig.telegramToken || '';
   if (tChat) tChat.value = STATE.globalConfig.telegramChatId || '';
 }
+
+// ============================================================
+// 🚀 SCALEREELS FEATURES INTEGRATION FOR INSTA POST AI
+// ============================================================
+
+/**
+ * 1. REELS EM MASSA (BULK REELS)
+ */
+function renderBulkReelsSection() {
+  populateAccountSelector();
+  const dateInput = document.getElementById('bulk-start-date');
+  if (dateInput && !dateInput.value) {
+    const today = new Date().toISOString().split('T')[0];
+    dateInput.value = today;
+  }
+  setupBulkDropzone();
+}
+
+function setupBulkDropzone() {
+  const dropzone = document.getElementById('bulk-dropzone');
+  const fileInput = document.getElementById('bulk-file-input');
+  if (!dropzone || !fileInput) return;
+
+  dropzone.onclick = () => fileInput.click();
+  fileInput.onchange = (e) => handleBulkFilesSelect(Array.from(e.target.files));
+
+  dropzone.ondragover = (e) => { e.preventDefault(); dropzone.style.borderColor = 'var(--primary)'; };
+  dropzone.ondragleave = () => { dropzone.style.borderColor = 'var(--border-color)'; };
+  dropzone.ondrop = (e) => {
+    e.preventDefault();
+    dropzone.style.borderColor = 'var(--border-color)';
+    if (e.dataTransfer.files?.length) {
+      handleBulkFilesSelect(Array.from(e.dataTransfer.files));
+    }
+  };
+}
+
+function handleBulkFilesSelect(files) {
+  const videoFiles = files.filter(f => f.type.startsWith('video/') || f.name.endsWith('.mp4'));
+  if (videoFiles.length === 0) {
+    showToast('Por favor selecione arquivos de vídeo (.mp4)', 'warning');
+    return;
+  }
+  STATE.bulkFiles = videoFiles;
+  const countEl = document.getElementById('bulk-files-count');
+  const summaryEl = document.getElementById('bulk-files-summary');
+  if (countEl) countEl.innerText = `${videoFiles.length} vídeos`;
+  if (summaryEl) summaryEl.style.display = 'block';
+  showToast(`${videoFiles.length} vídeos prontos para gerar fila!`, 'success');
+}
+
+function insertBulkPlaceholder(tag) {
+  const el = document.getElementById('bulk-caption-input');
+  if (!el) return;
+  el.value += ' ' + tag + ' ';
+  el.focus();
+}
+
+async function insertRandomCaptionBulk() {
+  try {
+    if (!STATE.captionsList.length) {
+      const res = await fetch(`${API_BASE}/captions`);
+      const data = await res.json();
+      STATE.captionsList = data.captions || [];
+    }
+    if (STATE.captionsList.length === 0) {
+      showToast('Nenhuma legenda salva na biblioteca ainda.', 'info');
+      return;
+    }
+    const rand = STATE.captionsList[Math.floor(Math.random() * STATE.captionsList.length)];
+    const el = document.getElementById('bulk-caption-input');
+    if (el) el.value = rand.text;
+    showToast(`Legenda "${rand.title}" inserida!`, 'info');
+  } catch (err) {
+    showToast('Erro ao buscar legenda.', 'error');
+  }
+}
+
+function generateBulkQueue() {
+  if (!STATE.bulkFiles || STATE.bulkFiles.length === 0) {
+    showToast('Selecione os vídeos primeiro!', 'warning');
+    return;
+  }
+
+  const accountId = document.getElementById('bulk-account-select')?.value || STATE.activeAccountId;
+  const startDateStr = document.getElementById('bulk-start-date')?.value || new Date().toISOString().split('T')[0];
+  const startTimeStr = document.getElementById('bulk-start-time')?.value || '10:00';
+  const intervalMode = document.getElementById('bulk-interval-mode')?.value || 'slots';
+  const varianceMinutes = parseInt(document.getElementById('bulk-variance')?.value || 5, 10);
+  const captionBase = document.getElementById('bulk-caption-input')?.value || '';
+  const useRotating = document.getElementById('bulk-use-rotating-captions')?.checked;
+
+  const [startHour, startMinute] = startTimeStr.split(':').map(Number);
+  let currentDate = new Date(`${startDateStr}T00:00:00`);
+  currentDate.setHours(startHour, startMinute, 0, 0);
+
+  const defaultSlots = [
+    { h: 10, m: 0 },
+    { h: 15, m: 0 },
+    { h: 20, m: 0 }
+  ];
+
+  STATE.bulkQueue = [];
+  let slotIndex = 0;
+
+  STATE.bulkFiles.forEach((file, index) => {
+    let itemDate = new Date(currentDate);
+
+    if (intervalMode === 'slots') {
+      const slot = defaultSlots[slotIndex % defaultSlots.length];
+      const dayOffset = Math.floor(slotIndex / defaultSlots.length);
+      itemDate = new Date(`${startDateStr}T00:00:00`);
+      itemDate.setDate(itemDate.getDate() + dayOffset);
+      itemDate.setHours(slot.h, slot.m, 0, 0);
+      slotIndex++;
+    } else if (intervalMode === 'hours') {
+      itemDate = new Date(currentDate.getTime() + index * 4 * 60 * 60 * 1000);
+    } else if (intervalMode === 'daily') {
+      itemDate = new Date(currentDate.getTime() + index * 24 * 60 * 60 * 1000);
+    }
+
+    // Jitter / Variância Anti-Ban
+    let jitterMinutes = 0;
+    if (varianceMinutes > 0) {
+      jitterMinutes = Math.floor(Math.random() * (varianceMinutes * 2 + 1)) - varianceMinutes;
+      itemDate = new Date(itemDate.getTime() + jitterMinutes * 60 * 1000);
+    }
+
+    // Formatar Legenda com Placeholders
+    const diasSemana = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+    const diaNome = diasSemana[itemDate.getDay()];
+    const horaFormatada = itemDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const dataFormatada = itemDate.toLocaleDateString('pt-BR');
+
+    let itemCaption = captionBase
+      .replace(/{dia}/gi, diaNome)
+      .replace(/{hora}/gi, horaFormatada)
+      .replace(/{data}/gi, dataFormatada);
+
+    if (useRotating && STATE.captionsList.length > 0) {
+      const randCap = STATE.captionsList[Math.floor(Math.random() * STATE.captionsList.length)];
+      itemCaption = randCap.text
+        .replace(/{dia}/gi, diaNome)
+        .replace(/{hora}/gi, horaFormatada)
+        .replace(/{data}/gi, dataFormatada);
+    }
+
+    STATE.bulkQueue.push({
+      file,
+      accountId,
+      scheduledAt: itemDate.toISOString(),
+      displayDate: itemDate.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }),
+      caption: itemCaption,
+      varianceMinutes,
+      jitterMinutes,
+      mediaType: 'REELS'
+    });
+  });
+
+  renderBulkQueueList();
+}
+
+function renderBulkQueueList() {
+  const container = document.getElementById('bulk-queue-list');
+  const emptyEl = document.getElementById('bulk-queue-empty');
+  const confirmBox = document.getElementById('bulk-confirm-container');
+  const countEl = document.getElementById('bulk-queue-count');
+
+  if (!container) return;
+
+  if (STATE.bulkQueue.length === 0) {
+    if (emptyEl) emptyEl.style.display = 'flex';
+    container.style.display = 'none';
+    if (confirmBox) confirmBox.style.display = 'none';
+    if (countEl) countEl.innerText = '0';
+    return;
+  }
+
+  if (emptyEl) emptyEl.style.display = 'none';
+  container.style.display = 'flex';
+  if (confirmBox) confirmBox.style.display = 'block';
+  if (countEl) countEl.innerText = String(STATE.bulkQueue.length);
+
+  container.innerHTML = STATE.bulkQueue.map((item, idx) => `
+    <div style="display:flex; align-items:center; justify-content:space-between; background:rgba(255,255,255,0.03); border:1px solid var(--border-color); border-radius:10px; padding:10px 14px; gap:12px;">
+      <div style="display:flex; align-items:center; gap:12px; flex:1; min-width:0;">
+        <div style="width:32px; height:32px; border-radius:8px; background:var(--primary-bg); color:var(--primary); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:0.8rem;">
+          #${idx + 1}
+        </div>
+        <div style="flex:1; min-width:0;">
+          <div style="font-weight:600; font-size:0.85rem; color:var(--text-main); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+            ${item.file.name}
+          </div>
+          <div style="font-size:0.72rem; color:var(--text-dim); display:flex; gap:8px; align-items:center; margin-top:2px;">
+            <span><i class="fa-solid fa-clock" style="color:var(--accent);"></i> ${item.displayDate}</span>
+            ${item.jitterMinutes ? `<span style="color:var(--success);"><i class="fa-solid fa-shield-halved"></i> Jitter ${item.jitterMinutes > 0 ? '+' : ''}${item.jitterMinutes}m</span>` : ''}
+          </div>
+        </div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="removeBulkQueueItem(${idx})" style="padding:4px 8px; color:var(--error);"><i class="fa-solid fa-trash"></i></button>
+    </div>
+  `).join('');
+}
+
+function removeBulkQueueItem(index) {
+  STATE.bulkQueue.splice(index, 1);
+  renderBulkQueueList();
+}
+
+function clearBulkQueue() {
+  STATE.bulkQueue = [];
+  STATE.bulkFiles = [];
+  const summaryEl = document.getElementById('bulk-files-summary');
+  if (summaryEl) summaryEl.style.display = 'none';
+  renderBulkQueueList();
+}
+
+async function submitBulkQueue() {
+  if (STATE.bulkQueue.length === 0) return;
+
+  const btn = document.getElementById('btn-submit-bulk-queue');
+  const progressBox = document.getElementById('bulk-progress-box');
+  const progressBar = document.getElementById('bulk-progress-bar');
+  const progressStatus = document.getElementById('bulk-progress-status');
+  const progressPct = document.getElementById('bulk-progress-percentage');
+
+  if (btn) btn.disabled = true;
+  if (progressBox) progressBox.style.display = 'block';
+
+  const cloudName = STATE.globalConfig.cloudinaryName;
+  const cloudPreset = STATE.globalConfig.cloudinaryPreset;
+
+  if (!cloudName || !cloudPreset) {
+    showToast('Configure Cloud Name e Preset do Cloudinary nas Configurações!', 'error');
+    if (btn) btn.disabled = false;
+    if (progressBox) progressBox.style.display = 'none';
+    return;
+  }
+
+  const scheduledPayload = [];
+
+  for (let i = 0; i < STATE.bulkQueue.length; i++) {
+    const item = STATE.bulkQueue[i];
+    const pct = Math.round(((i) / STATE.bulkQueue.length) * 100);
+    if (progressBar) progressBar.style.width = `${pct}%`;
+    if (progressPct) progressPct.innerText = `${pct}%`;
+    if (progressStatus) progressStatus.innerText = `Enviando vídeo ${i + 1} de ${STATE.bulkQueue.length} (${item.file.name})...`;
+
+    try {
+      // Direct Cloudinary Upload
+      const formData = new FormData();
+      formData.append('file', item.file);
+      formData.append('upload_preset', cloudPreset);
+      formData.append('resource_type', 'video');
+
+      const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/video/upload`, {
+        method: 'POST',
+        body: formData
+      });
+
+      const uploadData = await uploadRes.json();
+      if (!uploadData.secure_url) throw new Error(uploadData.error?.message || 'Falha no upload do Cloudinary.');
+
+      scheduledPayload.push({
+        accountId: item.accountId,
+        mediaType: 'REELS',
+        imageUrl: uploadData.secure_url,
+        caption: item.caption,
+        scheduledAt: item.scheduledAt,
+        varianceMinutes: item.varianceMinutes,
+        sourceFile: item.file.name
+      });
+    } catch (err) {
+      console.error('Bulk upload error on item:', err);
+      showToast(`Erro ao enviar ${item.file.name}: ${err.message}`, 'error');
+    }
+  }
+
+  if (scheduledPayload.length > 0) {
+    if (progressStatus) progressStatus.innerText = 'Salvando agendamentos no banco de dados...';
+    try {
+      const res = await fetch(`${API_BASE}/posts/bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ posts: scheduledPayload })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`🎉 ${data.count} Reels agendados com sucesso!`, 'success');
+        clearBulkQueue();
+        await loadData();
+        setTimeout(() => switchSection('schedule'), 800);
+      } else {
+        throw new Error(data.error);
+      }
+    } catch (e) {
+      showToast(`Erro ao salvar lote: ${e.message}`, 'error');
+    }
+  }
+
+  if (btn) btn.disabled = false;
+  if (progressBox) progressBox.style.display = 'none';
+}
+
+/**
+ * 2. CARROSSEL & FOTOS WIZARD
+ */
+function renderBulkCarouselSection() {
+  populateAccountSelector();
+  const dateInput = document.getElementById('carousel-date');
+  if (dateInput && !dateInput.value) {
+    dateInput.value = new Date().toISOString().split('T')[0];
+  }
+  setupCarouselDropzone();
+}
+
+function setupCarouselDropzone() {
+  const dropzone = document.getElementById('carousel-dropzone');
+  const fileInput = document.getElementById('carousel-file-input');
+  if (!dropzone || !fileInput) return;
+
+  dropzone.onclick = () => fileInput.click();
+  fileInput.onchange = (e) => handleCarouselFiles(Array.from(e.target.files));
+
+  dropzone.ondragover = (e) => { e.preventDefault(); dropzone.style.borderColor = 'var(--accent)'; };
+  dropzone.ondragleave = () => { dropzone.style.borderColor = 'var(--border-color)'; };
+  dropzone.ondrop = (e) => {
+    e.preventDefault();
+    dropzone.style.borderColor = 'var(--border-color)';
+    if (e.dataTransfer.files?.length) handleCarouselFiles(Array.from(e.dataTransfer.files));
+  };
+}
+
+function handleCarouselFiles(files) {
+  if (STATE.carouselSlides.length + files.length > 10) {
+    showToast('O Instagram permite no máximo 10 slides por carrossel.', 'warning');
+    return;
+  }
+  files.forEach(file => {
+    const previewUrl = URL.createObjectURL(file);
+    STATE.carouselSlides.push({ file, previewUrl, isVideo: file.type.startsWith('video/') });
+  });
+  renderCarouselSlides();
+}
+
+function renderCarouselSlides() {
+  const container = document.getElementById('carousel-slides-container');
+  const indicator = document.getElementById('carousel-slide-indicator');
+  const previewBox = document.getElementById('carousel-preview-box');
+  const previewDots = document.getElementById('carousel-preview-dots');
+
+  if (!container) return;
+  if (indicator) indicator.innerText = `${STATE.carouselSlides.length}/10 slides`;
+
+  container.innerHTML = STATE.carouselSlides.map((slide, idx) => `
+    <div class="carousel-slide-item">
+      <span class="carousel-slide-badge">#${idx + 1}</span>
+      <span class="carousel-slide-remove" onclick="removeCarouselSlide(${idx})"><i class="fa-solid fa-times"></i></span>
+      ${slide.isVideo ? `<video src="${slide.previewUrl}" muted></video>` : `<img src="${slide.previewUrl}">`}
+    </div>
+  `).join('');
+
+  if (STATE.carouselSlides.length > 0 && previewBox) {
+    const first = STATE.carouselSlides[0];
+    previewBox.innerHTML = first.isVideo 
+      ? `<video src="${first.previewUrl}" controls style="width:100%;height:100%;object-fit:cover;"></video>`
+      : `<img src="${first.previewUrl}" style="width:100%;height:100%;object-fit:cover;">`;
+    
+    if (previewDots) {
+      previewDots.innerHTML = STATE.carouselSlides.map((_, idx) => `
+        <div style="width:6px; height:6px; border-radius:50%; background:${idx === 0 ? 'var(--primary)' : 'var(--border-color)'};"></div>
+      `).join('');
+    }
+  } else if (previewBox) {
+    previewBox.innerHTML = '<span style="color:var(--text-dim); font-size:0.9rem;">Adicione slides para visualizar</span>';
+    if (previewDots) previewDots.innerHTML = '';
+  }
+}
+
+function removeCarouselSlide(index) {
+  STATE.carouselSlides.splice(index, 1);
+  renderCarouselSlides();
+}
+
+async function submitCarousel() {
+  if (STATE.carouselSlides.length < 2) {
+    showToast('Adicione pelo menos 2 slides para criar um carrossel!', 'warning');
+    return;
+  }
+
+  const accountId = document.getElementById('carousel-account-select')?.value || STATE.activeAccountId;
+  const dateStr = document.getElementById('carousel-date')?.value;
+  const timeStr = document.getElementById('carousel-time')?.value || '18:00';
+  const caption = document.getElementById('carousel-caption')?.value || '';
+
+  if (!dateStr) { showToast('Selecione a data de agendamento.', 'warning'); return; }
+
+  const scheduledDate = new Date(`${dateStr}T${timeStr}:00`);
+  const cloudName = STATE.globalConfig.cloudinaryName;
+  const cloudPreset = STATE.globalConfig.cloudinaryPreset;
+  const imgbbKey = STATE.globalConfig.imgbbKey;
+
+  showLoading(true, 'ENVIANDO SLIDES DO CARROSSEL...');
+
+  try {
+    const uploadedMediaUrls = [];
+
+    for (let i = 0; i < STATE.carouselSlides.length; i++) {
+      const slide = STATE.carouselSlides[i];
+      if (slide.isVideo) {
+        if (!cloudName || !cloudPreset) throw new Error('Cloudinary não configurado para upload de vídeos do carrossel.');
+        const fd = new FormData();
+        fd.append('file', slide.file);
+        fd.append('upload_preset', cloudPreset);
+        fd.append('resource_type', 'video');
+        const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/video/upload`, { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!data.secure_url) throw new Error('Falha no upload do slide de vídeo.');
+        uploadedMediaUrls.push(data.secure_url);
+      } else {
+        // Upload imagem via ImgBB ou Cloudinary
+        if (imgbbKey) {
+          const fd = new FormData();
+          fd.append('image', slide.file);
+          const res = await fetch(`https://api.imgbb.com/1/upload?key=${imgbbKey}`, { method: 'POST', body: fd });
+          const data = await res.json();
+          if (data.data?.url) uploadedMediaUrls.push(data.data.url);
+          else throw new Error('Falha no upload de imagem via ImgBB.');
+        } else if (cloudName && cloudPreset) {
+          const fd = new FormData();
+          fd.append('file', slide.file);
+          fd.append('upload_preset', cloudPreset);
+          const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, { method: 'POST', body: fd });
+          const data = await res.json();
+          if (data.secure_url) uploadedMediaUrls.push(data.secure_url);
+          else throw new Error('Falha no upload de imagem.');
+        } else {
+          throw new Error('Configure ImgBB Key ou Cloudinary nas Configurações.');
+        }
+      }
+    }
+
+    const newPostId = 'post_carousel_' + Date.now();
+    const postPayload = {
+      id: newPostId,
+      accountId,
+      mediaType: 'CAROUSEL',
+      imageUrl: uploadedMediaUrls[0],
+      mediaItems: uploadedMediaUrls,
+      caption,
+      scheduledAt: scheduledDate.toISOString(),
+      status: 'pending'
+    };
+
+    const saveRes = await fetch(`${API_BASE}/save-post`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(postPayload)
+    });
+
+    if (saveRes.ok) {
+      showToast('🎉 Carrossel agendado com sucesso!', 'success');
+      STATE.carouselSlides = [];
+      renderCarouselSlides();
+      await loadData();
+      setTimeout(() => switchSection('schedule'), 800);
+    } else {
+      const err = await saveRes.json();
+      throw new Error(err.error || 'Erro ao salvar carrossel.');
+    }
+  } catch (e) {
+    showToast(e.message, 'error');
+  } finally {
+    showLoading(false);
+  }
+}
+
+/**
+ * 3. STORIES 24/7 LOOP
+ */
+function renderStoriesLoopSection() {
+  populateAccountSelector();
+  loadStoryLoopForAccount();
+}
+
+async function loadStoryLoopForAccount() {
+  const accountId = document.getElementById('stories-account-select')?.value || STATE.activeAccountId;
+  if (!accountId) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/stories/loop?accountId=${encodeURIComponent(accountId)}`);
+    const data = await res.json();
+    if (data.loops && data.loops.length > 0) {
+      const loop = data.loops[0];
+      const enabledCheckbox = document.getElementById('story-loop-enabled');
+      if (enabledCheckbox) enabledCheckbox.checked = loop.enabled === 1 || loop.enabled === true;
+
+      try {
+        STATE.storySlots = JSON.parse(loop.times || '["09:00", "13:00", "18:00", "21:00"]');
+      } catch (e) {
+        STATE.storySlots = ['09:00', '13:00', '18:00', '21:00'];
+      }
+
+      try {
+        STATE.storyMediaPool = JSON.parse(loop.activeMedia || '[]');
+      } catch (e) {
+        STATE.storyMediaPool = [];
+      }
+    }
+    renderStorySlots();
+    renderStoryMediaPool();
+  } catch (err) {
+    console.error('Error loading story loop:', err);
+  }
+}
+
+function renderStorySlots() {
+  const container = document.getElementById('story-slots-container');
+  if (!container) return;
+  container.innerHTML = STATE.storySlots.map(time => `
+    <span class="slot-chip">${time} <i class="fa-solid fa-times" onclick="removeStorySlot('${time}')"></i></span>
+  `).join('');
+}
+
+function addStorySlot() {
+  const input = document.getElementById('new-story-slot');
+  if (!input || !input.value) return;
+  if (!STATE.storySlots.includes(input.value)) {
+    STATE.storySlots.push(input.value);
+    STATE.storySlots.sort();
+    renderStorySlots();
+  }
+}
+
+function removeStorySlot(time) {
+  STATE.storySlots = STATE.storySlots.filter(t => t !== time);
+  renderStorySlots();
+}
+
+function renderStoryMediaPool() {
+  const container = document.getElementById('story-media-pool');
+  if (!container) return;
+
+  if (STATE.storyMediaPool.length === 0) {
+    container.innerHTML = '<p style="color:var(--text-dim); font-size:0.8rem; grid-column:1/-1;">Nenhuma mídia ativa no loop. Adicione do Acervo.</p>';
+    return;
+  }
+
+  container.innerHTML = STATE.storyMediaPool.map((media, idx) => `
+    <div style="position:relative; border-radius:8px; overflow:hidden; aspect-ratio:9/16; background:#000; border:1px solid var(--border-color);">
+      <span style="position:absolute; top:4px; right:4px; background:rgba(239,68,68,0.85); color:#fff; width:18px; height:18px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.6rem; cursor:pointer;" onclick="removeStoryMedia(${idx})">
+        <i class="fa-solid fa-times"></i>
+      </span>
+      <span style="position:absolute; bottom:4px; left:4px; background:rgba(0,0,0,0.7); color:var(--accent); font-size:0.65rem; padding:2px 6px; border-radius:4px; font-weight:700;">#${idx + 1}</span>
+      ${media.toLowerCase().includes('.mp4') ? `<video src="${media}" style="width:100%;height:100%;object-fit:cover;"></video>` : `<img src="${media}" style="width:100%;height:100%;object-fit:cover;">`}
+    </div>
+  `).join('');
+}
+
+function removeStoryMedia(index) {
+  STATE.storyMediaPool.splice(index, 1);
+  renderStoryMediaPool();
+}
+
+async function saveStoryLoopConfig() {
+  const accountId = document.getElementById('stories-account-select')?.value || STATE.activeAccountId;
+  const enabled = document.getElementById('story-loop-enabled')?.checked ? 1 : 0;
+  const varianceMinutes = parseInt(document.getElementById('story-loop-variance')?.value || 5, 10);
+
+  try {
+    const res = await fetch(`${API_BASE}/stories/loop`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        accountId,
+        enabled,
+        times: STATE.storySlots,
+        varianceMinutes,
+        activeMedia: STATE.storyMediaPool
+      })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast('Configurações do Loop 24/7 salvas com sucesso!', 'success');
+    } else {
+      throw new Error(data.error);
+    }
+  } catch (err) {
+    showToast('Erro ao salvar loop: ' + err.message, 'error');
+  }
+}
+
+function openDriveSelectForStories() {
+  switchSection('drive');
+  showToast('Clique em uma mídia do Acervo para usar no seu Loop de Stories!', 'info');
+}
+
+/**
+ * 4. LEGENDAS & HASHTAGS LIBRARY
+ */
+function renderCaptionsSection() {
+  switchLibraryTab(STATE.libraryActiveTab || 'captions');
+}
+
+function switchLibraryTab(tab) {
+  STATE.libraryActiveTab = tab;
+  document.querySelectorAll('.btn-tab').forEach(b => {
+    b.classList.toggle('active', b.getAttribute('data-tab') === tab);
+    b.classList.toggle('btn-primary', b.getAttribute('data-tab') === tab);
+    b.classList.toggle('btn-ghost', b.getAttribute('data-tab') !== tab);
+  });
+
+  const capView = document.getElementById('tab-captions-view');
+  const hashView = document.getElementById('tab-hashtags-view');
+  const btnNew = document.getElementById('btn-new-library-item');
+
+  if (tab === 'captions') {
+    if (capView) capView.style.display = 'block';
+    if (hashView) hashView.style.display = 'none';
+    if (btnNew) btnNew.innerHTML = '<i class="fa-solid fa-plus"></i> Nova Legenda';
+    loadCaptionsList();
+  } else {
+    if (capView) capView.style.display = 'none';
+    if (hashView) hashView.style.display = 'block';
+    if (btnNew) btnNew.innerHTML = '<i class="fa-solid fa-plus"></i> Novo Grupo de Hashtags';
+    loadHashtagsList();
+  }
+}
+
+async function loadCaptionsList() {
+  const container = document.getElementById('captions-list-container');
+  if (!container) return;
+  try {
+    const res = await fetch(`${API_BASE}/captions`);
+    const data = await res.json();
+    STATE.captionsList = data.captions || [];
+
+    if (STATE.captionsList.length === 0) {
+      container.innerHTML = '<p style="color:var(--text-dim); grid-column:1/-1;">Nenhuma legenda cadastrada ainda. Clique no botão acima para adicionar.</p>';
+      return;
+    }
+
+    container.innerHTML = STATE.captionsList.map(item => `
+      <div class="library-card">
+        <div>
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
+            <div style="font-weight:700; font-size:0.95rem; color:var(--text-main);">${item.title}</div>
+            <span style="background:rgba(16,184,245,0.12); color:var(--accent); font-size:0.7rem; font-weight:700; padding:2px 8px; border-radius:6px;">${item.tag || 'Geral'}</span>
+          </div>
+          <div style="font-size:0.85rem; color:var(--text-secondary); line-height:1.5; white-space:pre-wrap; max-height:120px; overflow-y:auto; padding-right:4px;">
+            ${item.text}
+          </div>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--border-color); padding-top:10px; margin-top:8px;">
+          <button class="btn btn-ghost btn-sm" onclick="copyToClipboard('${encodeURIComponent(item.text)}')" style="font-size:0.75rem;"><i class="fa-solid fa-copy"></i> Copiar</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteCaption('${item.id}')" style="padding:4px 8px;"><i class="fa-solid fa-trash"></i></button>
+        </div>
+      </div>
+    `).join('');
+  } catch (err) {
+    console.error('Error loading captions:', err);
+  }
+}
+
+async function loadHashtagsList() {
+  const container = document.getElementById('hashtags-list-container');
+  if (!container) return;
+  try {
+    const res = await fetch(`${API_BASE}/hashtags`);
+    const data = await res.json();
+    STATE.hashtagsList = data.hashtags || [];
+
+    if (STATE.hashtagsList.length === 0) {
+      container.innerHTML = '<p style="color:var(--text-dim); grid-column:1/-1;">Nenhum grupo de hashtags cadastrado ainda.</p>';
+      return;
+    }
+
+    container.innerHTML = STATE.hashtagsList.map(item => {
+      const tagsArray = item.tags.split(/\s+/).filter(t => t.startsWith('#') || t.length > 0);
+      return `
+        <div class="library-card">
+          <div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+              <div style="font-weight:700; font-size:0.95rem; color:var(--text-main);">${item.name}</div>
+              <span style="color:var(--accent); font-size:0.75rem; font-weight:700;">${tagsArray.length} hashtags</span>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:4px; max-height:100px; overflow-y:auto;">
+              ${tagsArray.map(t => `<span style="background:rgba(255,255,255,0.04); color:var(--text-secondary); font-size:0.72rem; padding:2px 6px; border-radius:4px;">${t.startsWith('#') ? t : '#' + t}</span>`).join('')}
+            </div>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--border-color); padding-top:10px; margin-top:8px;">
+            <button class="btn btn-ghost btn-sm" onclick="copyToClipboard('${encodeURIComponent(item.tags)}')" style="font-size:0.75rem;"><i class="fa-solid fa-copy"></i> Copiar Grupo</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteHashtagGroup('${item.id}')" style="padding:4px 8px;"><i class="fa-solid fa-trash"></i></button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch (err) {
+    console.error('Error loading hashtags:', err);
+  }
+}
+
+function openNewLibraryItemModal() {
+  if (STATE.libraryActiveTab === 'captions') {
+    document.getElementById('caption-edit-id').value = '';
+    document.getElementById('caption-title-input').value = '';
+    document.getElementById('caption-text-input').value = '';
+    document.getElementById('modal-caption-form').style.display = 'flex';
+  } else {
+    document.getElementById('hashtag-edit-id').value = '';
+    document.getElementById('hashtag-name-input').value = '';
+    document.getElementById('hashtag-tags-input').value = '';
+    document.getElementById('modal-hashtag-form').style.display = 'flex';
+  }
+}
+
+function closeCaptionModal() { document.getElementById('modal-caption-form').style.display = 'none'; }
+function closeHashtagModal() { document.getElementById('modal-hashtag-form').style.display = 'none'; }
+
+function insertInCaptionModal(tag) {
+  const el = document.getElementById('caption-text-input');
+  if (!el) return;
+  el.value += ' ' + tag + ' ';
+  el.focus();
+}
+
+function copyToClipboard(encodedText) {
+  const text = decodeURIComponent(encodedText);
+  navigator.clipboard.writeText(text);
+  showToast('Copiado para a área de transferência!', 'success');
+}
+
+async function deleteCaption(id) {
+  if (!confirm('Deseja excluir esta legenda?')) return;
+  try {
+    await fetch(`${API_BASE}/captions/${id}`, { method: 'DELETE' });
+    showToast('Legenda removida.', 'info');
+    loadCaptionsList();
+  } catch (err) { showToast('Erro ao remover legenda.', 'error'); }
+}
+
+async function deleteHashtagGroup(id) {
+  if (!confirm('Deseja excluir este grupo de hashtags?')) return;
+  try {
+    await fetch(`${API_BASE}/hashtags/${id}`, { method: 'DELETE' });
+    showToast('Grupo de hashtags removido.', 'info');
+    loadHashtagsList();
+  } catch (err) { showToast('Erro ao remover grupo.', 'error'); }
+}
+
+// Event Listeners for library forms
+document.addEventListener('DOMContentLoaded', () => {
+  const capForm = document.getElementById('caption-item-form');
+  if (capForm) {
+    capForm.onsubmit = async (e) => {
+      e.preventDefault();
+      const id = document.getElementById('caption-edit-id').value;
+      const title = document.getElementById('caption-title-input').value.trim();
+      const tag = document.getElementById('caption-tag-input').value.trim();
+      const text = document.getElementById('caption-text-input').value.trim();
+
+      try {
+        const res = await fetch(`${API_BASE}/captions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, title, tag, text })
+        });
+        if (res.ok) {
+          showToast('Legenda salva com sucesso!', 'success');
+          closeCaptionModal();
+          loadCaptionsList();
+        }
+      } catch (err) { showToast('Erro ao salvar: ' + err.message, 'error'); }
+    };
+  }
+
+  const hashForm = document.getElementById('hashtag-item-form');
+  if (hashForm) {
+    hashForm.onsubmit = async (e) => {
+      e.preventDefault();
+      const id = document.getElementById('hashtag-edit-id').value;
+      const name = document.getElementById('hashtag-name-input').value.trim();
+      const tags = document.getElementById('hashtag-tags-input').value.trim();
+
+      try {
+        const res = await fetch(`${API_BASE}/hashtags`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, name, tags })
+        });
+        if (res.ok) {
+          showToast('Grupo de hashtags salvo com sucesso!', 'success');
+          closeHashtagModal();
+          loadHashtagsList();
+        }
+      } catch (err) { showToast('Erro ao salvar: ' + err.message, 'error'); }
+    };
+  }
+});
+
+/**
+ * 5. ACERVO / SHARED DRIVE
+ */
+function renderDriveSection() {
+  loadDriveItems();
+  setupDriveDropzone();
+}
+
+async function loadDriveItems() {
+  const grid = document.getElementById('drive-items-grid');
+  if (!grid) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/drive`);
+    const data = await res.json();
+    STATE.driveFiles = data.files || [];
+
+    if (STATE.driveFiles.length === 0) {
+      grid.innerHTML = '<p style="color:var(--text-dim); grid-column:1/-1;">Nenhum arquivo no acervo ainda. Faça upload de vídeos e fotos para começar.</p>';
+      return;
+    }
+
+    grid.innerHTML = STATE.driveFiles.map(file => `
+      <div class="drive-card">
+        ${file.url.toLowerCase().includes('.mp4') 
+          ? `<video class="drive-thumb" src="${file.url}" controls></video>` 
+          : `<img class="drive-thumb" src="${file.url}">`}
+        <div class="drive-card-title" title="${file.filename}">${file.filename}</div>
+        <div class="drive-card-meta">
+          <span>${file.size || 'Nuvem'}</span>
+          <span>${new Date(file.createdAt).toLocaleDateString('pt-BR')}</span>
+        </div>
+        <div style="display:flex; gap:6px; margin-top:4px;">
+          <button class="btn btn-primary btn-sm" onclick="useDriveMediaInComposer('${file.url}')" style="flex:1; font-size:0.72rem; padding:4px;">
+            <i class="fa-solid fa-calendar-plus"></i> Postar
+          </button>
+          <button class="btn btn-ghost btn-sm" onclick="addDriveMediaToStoryLoop('${file.url}')" style="font-size:0.72rem; padding:4px;" title="Adicionar ao Story Loop">
+            <i class="fa-solid fa-arrows-spin"></i>
+          </button>
+          <button class="btn btn-danger btn-sm" onclick="deleteDriveItem('${file.id}')" style="padding:4px 6px;">
+            <i class="fa-solid fa-trash"></i>
+          </button>
+        </div>
+      </div>
+    `).join('');
+  } catch (err) {
+    console.error('Error loading drive items:', err);
+  }
+}
+
+function openDriveUploadModal() {
+  document.getElementById('modal-drive-upload').style.display = 'flex';
+}
+
+function closeDriveUploadModal() {
+  document.getElementById('modal-drive-upload').style.display = 'none';
+}
+
+function setupDriveDropzone() {
+  const dropzone = document.getElementById('drive-dropzone');
+  const fileInput = document.getElementById('drive-file-input');
+  if (!dropzone || !fileInput) return;
+
+  dropzone.onclick = () => fileInput.click();
+  fileInput.onchange = (e) => uploadFilesToDrive(Array.from(e.target.files));
+}
+
+async function uploadFilesToDrive(files) {
+  const cloudName = STATE.globalConfig.cloudinaryName;
+  const cloudPreset = STATE.globalConfig.cloudinaryPreset;
+  const imgbbKey = STATE.globalConfig.imgbbKey;
+
+  const statusBox = document.getElementById('drive-upload-status');
+  const filenameEl = document.getElementById('drive-upload-filename');
+  const pctEl = document.getElementById('drive-upload-pct');
+  const barEl = document.getElementById('drive-upload-bar');
+
+  if (statusBox) statusBox.style.display = 'block';
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    const isVideo = file.type.startsWith('video/') || file.name.endsWith('.mp4');
+    const pct = Math.round(((i + 1) / files.length) * 100);
+
+    if (filenameEl) filenameEl.innerText = `Enviando (${i + 1}/${files.length}): ${file.name}`;
+    if (pctEl) pctEl.innerText = `${pct}%`;
+    if (barEl) barEl.style.width = `${pct}%`;
+
+    try {
+      let uploadedUrl = '';
+      if (isVideo) {
+        if (!cloudName || !cloudPreset) throw new Error('Cloudinary não configurado.');
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('upload_preset', cloudPreset);
+        fd.append('resource_type', 'video');
+        const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/video/upload`, { method: 'POST', body: fd });
+        const data = await res.json();
+        uploadedUrl = data.secure_url;
+      } else {
+        if (imgbbKey) {
+          const fd = new FormData();
+          fd.append('image', file);
+          const res = await fetch(`https://api.imgbb.com/1/upload?key=${imgbbKey}`, { method: 'POST', body: fd });
+          const data = await res.json();
+          uploadedUrl = data.data?.url;
+        } else if (cloudName && cloudPreset) {
+          const fd = new FormData();
+          fd.append('file', file);
+          fd.append('upload_preset', cloudPreset);
+          const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, { method: 'POST', body: fd });
+          const data = await res.json();
+          uploadedUrl = data.secure_url;
+        }
+      }
+
+      if (!uploadedUrl) throw new Error('Falha no upload.');
+
+      await fetch(`${API_BASE}/drive`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filename: file.name,
+          url: uploadedUrl,
+          size: (file.size / (1024 * 1024)).toFixed(1) + ' MB'
+        })
+      });
+    } catch (e) {
+      console.error('Drive upload failed for file:', file.name, e);
+    }
+  }
+
+  showToast('Arquivos adicionados ao acervo com sucesso!', 'success');
+  if (statusBox) statusBox.style.display = 'none';
+  closeDriveUploadModal();
+  loadDriveItems();
+}
+
+function useDriveMediaInComposer(url) {
+  switchSection('new-post');
+  STATE.uploadedUrl = url;
+  const previewBox = document.getElementById('preview-image-box');
+  if (previewBox) {
+    if (url.toLowerCase().includes('.mp4')) {
+      previewBox.innerHTML = `<video src="${url}" controls style="width:100%;height:100%;object-fit:cover;"></video>`;
+    } else {
+      previewBox.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;">`;
+    }
+  }
+  showToast('Mídia do acervo carregada no agendador!', 'success');
+}
+
+function addDriveMediaToStoryLoop(url) {
+  if (!STATE.storyMediaPool.includes(url)) {
+    STATE.storyMediaPool.push(url);
+    saveStoryLoopConfig();
+    showToast('Mídia adicionada ao Loop de Stories!', 'success');
+  } else {
+    showToast('Esta mídia já está no loop.', 'info');
+  }
+}
+
+async function deleteDriveItem(id) {
+  if (!confirm('Deseja excluir esta mídia do acervo?')) return;
+  try {
+    await fetch(`${API_BASE}/drive/${id}`, { method: 'DELETE' });
+    showToast('Mídia excluída.', 'info');
+    loadDriveItems();
+  } catch (err) { showToast('Erro ao excluir mídia.', 'error'); }
+}
+
+/**
+ * 6. ANALYTICS PRO CONSOLIDADO
+ */
+async function renderAnalyticsSection() {
+  try {
+    const res = await fetch(`${API_BASE}/analytics/summary`);
+    const data = await res.json();
+    const s = data.summary || {};
+
+    const folEl = document.getElementById('analytics-total-followers');
+    const pubEl = document.getElementById('analytics-total-published');
+    const rateEl = document.getElementById('analytics-success-rate');
+    const pendEl = document.getElementById('analytics-total-pending');
+
+    if (pubEl) pubEl.innerText = s.published || 0;
+    if (rateEl) rateEl.innerText = `${s.successRate || 100}%`;
+    if (pendEl) pendEl.innerText = s.pending || 0;
+
+    // Calcular seguidores somados de todas as contas
+    let totalFollowers = 0;
+    for (const acc of STATE.accounts) {
+      const statsRes = await fetch(`${API_BASE}/account-stats?accountId=${encodeURIComponent(acc.accountId)}`);
+      const stats = await statsRes.json();
+      if (stats.followersCount) totalFollowers += stats.followersCount;
+    }
+    if (folEl) animateNumber(folEl, totalFollowers || 0);
+
+    // Leaderboard
+    const tableEl = document.getElementById('analytics-accounts-table');
+    if (tableEl) {
+      tableEl.innerHTML = `
+        <table style="width:100%; border-collapse:collapse; font-size:0.85rem; text-align:left;">
+          <thead>
+            <tr style="border-bottom:1px solid var(--border-color); color:var(--text-dim); font-size:0.75rem;">
+              <th style="padding:8px;">CONTA</th>
+              <th style="padding:8px;">TOTAL AGENDADOS</th>
+              <th style="padding:8px;">PUBLICADOS</th>
+              <th style="padding:8px;">STATUS</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${STATE.accounts.map(acc => {
+              const accData = s.postsPerAccount?.find(p => p.accountId === acc.accountId) || { total: 0, published: 0 };
+              return `
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.03);">
+                  <td style="padding:10px 8px; font-weight:600; color:var(--text-main);">@${acc.username}</td>
+                  <td style="padding:10px 8px; color:var(--accent);">${accData.total}</td>
+                  <td style="padding:10px 8px; color:var(--success); font-weight:600;">${accData.published}</td>
+                  <td style="padding:10px 8px;"><span style="color:var(--success); font-size:0.75rem;"><i class="fa-solid fa-circle-check"></i> Ativa</span></td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    // Media Breakdown
+    const chartEl = document.getElementById('analytics-media-chart');
+    if (chartEl && s.mediaTypes) {
+      const types = [
+        { label: 'Reels', count: s.mediaTypes.reels || 0, color: 'var(--primary)' },
+        { label: 'Carrossel', count: s.mediaTypes.carousel || 0, color: 'var(--accent)' },
+        { label: 'Fotos', count: s.mediaTypes.image || 0, color: 'var(--success)' },
+        { label: 'Stories', count: s.mediaTypes.stories || 0, color: '#A78BFA' }
+      ];
+      const max = Math.max(...types.map(t => t.count), 1);
+      chartEl.innerHTML = types.map(t => `
+        <div>
+          <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-bottom:4px;">
+            <span>${t.label}</span>
+            <span style="font-weight:700; color:${t.color};">${t.count}</span>
+          </div>
+          <div class="progress-bar"><div class="progress-fill" style="width:${Math.round((t.count / max) * 100)}%; background:${t.color};"></div></div>
+        </div>
+      `).join('');
+    }
+
+    // Carregar Heatmap de Melhores Horários (Feature 4)
+    loadBestTimesHeatmap();
+  } catch (err) {
+    console.error('Error rendering analytics:', err);
+  }
+}
+
+/**
+ * 7. TOKEN HEALTH CHECK DIAGNOSTIC
+ */
+function openHealthCheckModal() {
+  const modal = document.getElementById('modal-health-check');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  runHealthCheck();
+}
+
+function closeHealthCheckModal() {
+  const modal = document.getElementById('modal-health-check');
+  if (modal) modal.style.display = 'none';
+}
+
+async function runHealthCheck() {
+  const resultsContainer = document.getElementById('health-check-results');
+  if (!resultsContainer) return;
+  resultsContainer.innerHTML = '<div style="text-align:center; padding:2rem;"><div class="spinner"></div><p style="margin-top:1rem; font-size:0.85rem; color:var(--text-dim);">Testando tokens com a Meta Graph API...</p></div>';
+
+  try {
+    const res = await fetch(`${API_BASE}/accounts/health-check`);
+    const data = await res.json();
+    const accounts = data.accounts || [];
+
+    if (accounts.length === 0) {
+      resultsContainer.innerHTML = '<p style="color:var(--text-dim); text-align:center; padding:1.5rem;">Nenhuma conta cadastrada para verificar.</p>';
+      return;
+    }
+
+    resultsContainer.innerHTML = accounts.map(acc => `
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 14px; background:rgba(255,255,255,0.03); border:1px solid ${acc.valid ? 'rgba(52,211,153,0.3)' : 'rgba(239,68,68,0.35)'}; border-radius:10px;">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <div style="width:34px; height:34px; border-radius:50%; background:${acc.valid ? 'rgba(52,211,153,0.15)' : 'rgba(239,68,68,0.15)'}; display:flex; align-items:center; justify-content:center; color:${acc.valid ? 'var(--success)' : 'var(--error)'}; font-size:0.9rem;">
+            <i class="fa-solid ${acc.valid ? 'fa-circle-check' : 'fa-triangle-exclamation'}"></i>
+          </div>
+          <div>
+            <div style="font-weight:700; font-size:0.9rem; color:var(--text-main);">@${acc.username}</div>
+            <div style="font-size:0.72rem; color:${acc.valid ? 'var(--success)' : 'var(--error)'}; margin-top:2px;">
+              ${acc.valid ? 'Token Válido · Permissão de Publicação Ativa' : (acc.error || 'Token expirado')}
+            </div>
+          </div>
+        </div>
+        <div>
+          ${acc.valid 
+            ? `<span style="background:rgba(52,211,153,0.15); color:var(--success); font-size:0.7rem; font-weight:700; padding:3px 8px; border-radius:6px;">60 DIAS (Long-Lived)</span>` 
+            : `<a href="/auth/instagram" class="btn btn-sm btn-ghost" style="color:var(--error); border-color:rgba(239,68,68,0.3); font-size:0.72rem;"><i class="fa-solid fa-arrows-rotate"></i> Reconectar</a>`}
+        </div>
+      </div>
+    `).join('');
+  } catch (err) {
+    resultsContainer.innerHTML = `<p style="color:var(--error); text-align:center; padding:1rem;">Falha ao executar diagnóstico: ${err.message}</p>`;
+  }
+}
+
+/**
+ * 8. DETECTOR DE MELHORES HORÁRIOS POR IA (HEATMAP & GOLDEN HOURS)
+ */
+async function loadBestTimesHeatmap() {
+  const container = document.getElementById('best-times-heatmap-grid');
+  const recContainer = document.getElementById('best-times-recommendations');
+  const todayContainer = document.getElementById('today-slots-preview');
+  if (!container) return;
+
+  const targetAcc = (STATE.filterAccountId && STATE.filterAccountId !== 'all') ? STATE.filterAccountId : '';
+  
+  try {
+    const res = await fetch(`${API_BASE}/accounts/best-times?accountId=${encodeURIComponent(targetAcc)}`);
+    const data = await res.json();
+    if (!data.success) return;
+
+    STATE.bestTimesData = data;
+
+    // Render 7x24 Matrix
+    const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    let gridHtml = `
+      <div style="display:grid; grid-template-columns: 45px repeat(24, 1fr); gap: 3px; font-size: 0.65rem; color: var(--text-dim); text-align: center; margin-bottom: 4px;">
+        <div></div>
+        ${Array.from({ length: 24 }, (_, h) => `<div>${h}h</div>`).join('')}
+      </div>
+    `;
+
+    data.heatmap.forEach((dayData, dayIdx) => {
+      const scores = dayData.scores || [];
+      gridHtml += `
+        <div style="display:grid; grid-template-columns: 45px repeat(24, 1fr); gap: 3px; align-items:center; margin-bottom: 3px;">
+          <div style="font-weight:700; font-size:0.7rem; color:var(--text-secondary); text-align:right; padding-right:6px;">${dayNames[dayIdx]}</div>
+          ${scores.map((score, hour) => {
+            let bg = 'rgba(255,255,255,0.03)';
+            let borderColor = 'rgba(255,255,255,0.05)';
+            if (score >= 80) {
+              bg = 'rgba(16, 184, 245, 0.85)';
+              borderColor = '#10B8F5';
+            } else if (score >= 65) {
+              bg = 'rgba(16, 184, 245, 0.55)';
+            } else if (score >= 45) {
+              bg = 'rgba(16, 184, 245, 0.28)';
+            } else if (score >= 25) {
+              bg = 'rgba(16, 184, 245, 0.12)';
+            }
+            return `
+              <div class="heatmap-cell" 
+                   title="${dayNames[dayIdx]} às ${String(hour).padStart(2, '0')}:00 — Engajamento Estimado: ${score}%"
+                   style="height: 22px; border-radius: 4px; background: ${bg}; border: 1px solid ${borderColor}; cursor: pointer; transition: transform 0.15s ease;"
+                   onmouseover="this.style.transform='scale(1.2)';" 
+                   onmouseout="this.style.transform='scale(1)';"
+                   onclick="showToast('${dayNames[dayIdx]} às ${String(hour).padStart(2, '0')}:00 — Probabilidade Viral: ${score}%', 'info')">
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+    });
+
+    container.innerHTML = gridHtml;
+
+    // Render Golden Hours cards
+    if (recContainer && data.goldenHours) {
+      recContainer.innerHTML = data.goldenHours.map(slot => `
+        <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(16,184,245,0.25); border-radius:10px; padding:12px 14px; display:flex; align-items:center; justify-content:space-between;">
+          <div>
+            <div style="font-weight:700; font-size:0.92rem; color:var(--text-main); display:flex; align-items:center; gap:8px;">
+              <i class="fa-solid fa-clock" style="color:var(--accent);"></i> ${slot.time}
+              <span style="font-size:0.7rem; font-weight:700; background:rgba(16,184,245,0.15); color:var(--accent); padding:2px 6px; border-radius:4px;">${slot.label}</span>
+            </div>
+            <div style="font-size:0.75rem; color:var(--text-dim); margin-top:3px;">
+              Janela ideal para engajamento e alcance orgânico
+            </div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-weight:800; font-size:1.1rem; color:var(--accent);">${slot.probability || (slot.score ? slot.score + '%' : '95%')}</div>
+            <div style="font-size:0.65rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Score IA</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Render Today Peak Slots
+    const peakSlots = data.todayPeakSlots || data.recommendedSlots || [];
+    if (todayContainer && peakSlots.length > 0) {
+      todayContainer.innerHTML = peakSlots.map(timeStr => `
+        <span style="background:rgba(16,184,245,0.15); color:var(--accent); border:1px solid rgba(16,184,245,0.3); padding:4px 10px; border-radius:8px; font-weight:700; font-size:0.8rem;">
+          <i class="fa-solid fa-bolt"></i> ${timeStr}
+        </span>
+      `).join('');
+    }
+  } catch (err) {
+    console.error('Error loading best times heatmap:', err);
+  }
+}
+
+async function applyBestTimesToAutoScheduler() {
+  const targetAcc = (STATE.filterAccountId && STATE.filterAccountId !== 'all') ? STATE.filterAccountId : (STATE.accounts[0]?.accountId || '');
+  if (!targetAcc) return showToast('Nenhuma conta disponível.', 'warning');
+
+  showLoading(true, 'APLICANDO MELHORES HORÁRIOS...');
+  try {
+    const res = await fetch(`${API_BASE}/accounts/apply-best-times`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accountId: targetAcc })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(`Horários de pico aplicados ao agendamento automático! (${data.slots.join(', ')})`, 'success');
+      await loadData();
+    } else {
+      throw new Error(data.error || 'Erro ao aplicar horários');
+    }
+  } catch (err) {
+    showToast(`Erro: ${err.message}`, 'error');
+  } finally {
+    showLoading(false);
+  }
+}
+
+async function applyBestTimesToBulk() {
+  showLoading(true, 'CALCULANDO HORÁRIOS DE PICO...');
+  try {
+    const targetAcc = document.getElementById('bulk-account-select')?.value || STATE.activeAccountId || '';
+    const res = await fetch(`${API_BASE}/accounts/best-times?accountId=${encodeURIComponent(targetAcc)}`);
+    const data = await res.json();
+    if (data.todayPeakSlots && data.todayPeakSlots.length > 0) {
+      const timeInputs = document.querySelectorAll('.bulk-time-slot');
+      data.todayPeakSlots.slice(0, timeInputs.length).forEach((slot, idx) => {
+        if (timeInputs[idx]) timeInputs[idx].value = slot;
+      });
+      showToast(`Horários otimizados pela IA inseridos no Bulk Reels!`, 'success');
+    } else {
+      showToast('Nenhum horário calculado.', 'info');
+    }
+  } catch (err) {
+    showToast('Falha ao calcular horários: ' + err.message, 'error');
+  } finally {
+    showLoading(false);
+  }
+}
+
+/**
+ * 9. IMPORTAÇÃO NA NUVEM (GOOGLE DRIVE / DROPBOX)
+ */
+function openCloudImportModal() {
+  const modal = document.getElementById('modal-cloud-import');
+  if (modal) {
+    document.getElementById('cloud-import-url').value = '';
+    document.getElementById('cloud-import-name').value = '';
+    modal.style.display = 'flex';
+  }
+}
+
+function closeCloudImportModal() {
+  const modal = document.getElementById('modal-cloud-import');
+  if (modal) modal.style.display = 'none';
+}
+
+// Inicializar formulário de importação em nuvem
+document.addEventListener('DOMContentLoaded', () => {
+  const cloudForm = document.getElementById('cloud-import-form');
+  if (cloudForm) {
+    cloudForm.onsubmit = async (e) => {
+      e.preventDefault();
+      const rawUrl = document.getElementById('cloud-import-url').value.trim();
+      const customName = document.getElementById('cloud-import-name').value.trim();
+
+      if (!rawUrl) return showToast('Cole o link do Google Drive ou Dropbox.', 'warning');
+
+      showLoading(true, 'IMPORTANDO DA NUVEM...');
+      try {
+        const res = await fetch(`${API_BASE}/drive/import-cloud`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: rawUrl, name: customName })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast(`Arquivo "${data.file.filename}" importado para o Acervo com sucesso!`, 'success');
+          closeCloudImportModal();
+          loadDriveItems();
+        } else {
+          throw new Error(data.error || 'Erro ao importar arquivo');
+        }
+      } catch (err) {
+        showToast(`Erro na importação: ${err.message}`, 'error');
+      } finally {
+        showLoading(false);
+      }
+    };
+  }
+});
