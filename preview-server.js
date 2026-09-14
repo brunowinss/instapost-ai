@@ -93,6 +93,7 @@ app.get('/api/drive', (req, res) => res.json({ files: accounts.map((a, i) => ({
   id: `media-${i}`, url: `/preview/art/${i}.svg`, filename: ['ideias-do-studio.svg', 'pausa-para-cafe.svg', 'nova-colecao.svg'][i], size: 'Demonstração', createdAt: new Date(previewTime).toISOString()
 })) }));
 app.get('/api/stories/loop', (req, res) => res.json({ loops: [{ enabled: false, times: '["09:00","13:00","18:00","21:00"]', activeMedia: '[]' }] }));
+app.get('/api/ai/status', (req, res) => res.json({ preview: true, configured: false }));
 app.use('/api', (req, res) => res.status(403).json({ error: 'Esta é uma prévia visual. Conexões e publicações estão disponíveis no site oficial.' }));
 app.use('/auth', (req, res) => res.status(403).send('Conexões externas estão desativadas na prévia local.'));
 app.use((req, res, next) => {

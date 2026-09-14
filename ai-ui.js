@@ -100,9 +100,36 @@
   settings.className = 'card';
   settings.innerHTML = `<h3 class="card-title">Inteligência artificial · AIsa</h3><p class="stat-desc" id="ai-key-status" role="status" aria-live="polite">Configure sua chave para gerar legendas e hashtags.</p><form id="ai-key-form"><label class="label" for="ai-key">Chave API AIsa</label><input class="input" type="password" id="ai-key" autocomplete="off" placeholder="Cole sua chave AIsa" required><p class="stat-desc">A chave é salva no servidor e não é exibida novamente. Para trocar, cole e salve a nova chave.</p><button class="btn btn-primary" type="submit">Salvar chave da IA</button></form><button type="button" class="btn btn-ghost" id="ai-validate" style="margin-top:12px">Validar conexão</button><p class="stat-desc">A validação faz uma pequena geração real e usa créditos da AIsa. O resultado confirma a conexão no momento do teste.</p>`;
   document.querySelector('.settings-grid').append(settings);
+  let keyConfigured = false;
+  let keyBusy = false;
+  const saveKeyButton = el('ai-key-form').querySelector('button');
+  saveKeyButton.textContent = 'Salvar e validar';
+  function lockKeyForm(locked) {
+    keyBusy = locked;
+    saveKeyButton.disabled = locked;
+    el('ai-key').disabled = locked;
+    el('ai-validate').disabled = locked || !keyConfigured || !!el('ai-key').value.trim();
+  }
+  async function validateSavedKey() {
+    el('ai-key-status').textContent = 'Chave salva. Validando a conexão com a AIsa…';
+    const data = await api('validate', {});
+    if (!data.valid) throw new Error('A AIsa não confirmou a conexão.');
+    el('ai-key-status').textContent = '✓ Validada — a AIsa respondeu ao teste com sucesso.';
+    showToast('Chave da IA validada com sucesso!', 'success');
+  }
   async function status() {
+    if (keyBusy) return;
     try {
       const data = await api('status');
+      if (keyBusy) return;
+      if (data.preview) {
+        el('ai-key-status').textContent = 'Esta prévia não salva nem valida chaves. Abra o site publicado para configurar a IA.';
+        el('ai-key-form').hidden = true;
+        el('ai-validate').hidden = true;
+        return;
+      }
+      keyConfigured = data.configured;
+      el('ai-key').placeholder = keyConfigured ? '•••••••• — chave salva. Cole outra para trocar.' : 'Cole sua chave AIsa';
       el('ai-key-status').textContent = data.configured ? 'Chave salva. Clique em Validar conexão para testar.' : 'Nenhuma chave salva. Adicione sua chave para começar.';
       el('ai-validate').disabled = !data.configured;
       el('ai-key-form').hidden = !!data.managedByEnvironment;
@@ -111,10 +138,22 @@
   document.querySelector('[data-section="settings"]').addEventListener('click', status);
   el('ai-key-form').onsubmit = async e => {
     e.preventDefault();
-    const button = e.currentTarget.querySelector('button'); button.disabled = true;
-    try { await api('key', { apiKey: el('ai-key').value.trim() }); el('ai-key').value = ''; await status(); }
-    catch (err) { el('ai-key-status').textContent = err.message; }
-    finally { button.disabled = false; }
+    if (keyBusy) return;
+    lockKeyForm(true);
+    el('ai-key-status').textContent = 'Salvando sua chave…';
+    let saved = false;
+    try {
+      await api('key', { apiKey: el('ai-key').value.trim() });
+      saved = true;
+      keyConfigured = true;
+      el('ai-key').value = '';
+      el('ai-key').placeholder = '•••••••• — chave salva. Cole outra para trocar.';
+      await validateSavedKey();
+    } catch (err) {
+      const text = (saved ? 'Chave salva, mas não validada: ' : 'Não foi possível salvar: ') + err.message;
+      el('ai-key-status').textContent = text;
+      showToast(text, 'error');
+    } finally { lockKeyForm(false); }
   };
   el('ai-key').addEventListener('input', () => {
     el('ai-validate').disabled = true;
@@ -122,15 +161,11 @@
   });
   el('ai-validate').disabled = true;
   el('ai-validate').onclick = async () => {
-    const button = el('ai-validate');
-    button.disabled = true;
-    el('ai-key').disabled = true;
-    el('ai-key-form').querySelector('button').disabled = true;
-    el('ai-key-status').textContent = 'Validando com a AIsa…';
+    if (keyBusy) return;
+    lockKeyForm(true);
     try {
-      const data = await api('validate', {});
-      el('ai-key-status').textContent = data.valid ? '✓ Validada — a AIsa respondeu ao teste com sucesso.' : 'Não foi possível validar a chave.';
-    } catch (err) { el('ai-key-status').textContent = 'Não validada: ' + err.message; }
-    finally { button.disabled = false; el('ai-key').disabled = false; el('ai-key-form').querySelector('button').disabled = false; }
+      await validateSavedKey();
+    } catch (err) { el('ai-key-status').textContent = 'Não validada: ' + err.message; showToast(err.message, 'error'); }
+    finally { lockKeyForm(false); }
   };
 })();

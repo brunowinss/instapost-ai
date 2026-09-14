@@ -1,6 +1,6 @@
 # Legendas e hashtags com AIsa
 
-Em Configurações → Inteligência artificial, cole a chave, clique em **Salvar chave da IA** e depois em **Validar conexão**. Salvar não significa validar: somente uma geração real bem-sucedida confirma a conexão. A validação e a geração consomem créditos da AIsa.
+Em Configurações → Inteligência artificial, cole a chave e clique em **Salvar e validar**. O sistema salva e inicia o teste automaticamente. Somente uma geração real bem-sucedida confirma a conexão; em caso de falha, a tela informa que a chave foi salva mas não validada. Use **Validar conexão** para repetir o teste. A validação e a geração consomem créditos da AIsa.
 
 A chave é guardada no banco do servidor, não é devolvida pela API de dados e não deve ser adicionada ao Git. Como alternativa, `AISA_API_KEY` pode ser definida no ambiente do servidor; nesse caso a edição pelo painel fica desabilitada. `AISA_MODEL` permite trocar o modelo; o padrão é `gpt-4.1`.
 
