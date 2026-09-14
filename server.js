@@ -801,6 +801,7 @@ app.get('/api/data', requireAuth, async (req, res) => {
     delete globalConfig.vapidPrivateKey;
     delete globalConfig.loginPass;
     delete globalConfig.aisaApiKey;
+    delete globalConfig.openrouterApiKey;
 
     res.json({
       accounts: safeAccounts,
@@ -1111,27 +1112,30 @@ app.post('/api/posts/bulk', requireAuth, async (req, res) => {
  * 📚 Gerenciamento de Legendas Rotativas (Captions)
  */
 async function getAisaKey() {
+  if (process.env.OPENROUTER_API_KEY) return process.env.OPENROUTER_API_KEY;
+  if (process.env.AI_API_KEY) return process.env.AI_API_KEY;
   if (process.env.AISA_API_KEY) return process.env.AISA_API_KEY;
   const db = await getDB();
-  const row = await db.get('SELECT value FROM global_config WHERE key = ?', ['aisaApiKey']);
+  const row = await db.get('SELECT value FROM global_config WHERE key = ? OR key = ? ORDER BY CASE WHEN key = "openrouterApiKey" THEN 1 ELSE 2 END LIMIT 1', ['openrouterApiKey', 'aisaApiKey']);
   if (!row) return '';
   try { return JSON.parse(row.value); } catch { return ''; }
 }
 
 app.get('/api/ai/status', requireAuth, async (req, res) => {
-  try { res.json({ configured: !!await getAisaKey(), managedByEnvironment: !!process.env.AISA_API_KEY }); }
+  try { res.json({ configured: !!await getAisaKey(), managedByEnvironment: !!(process.env.OPENROUTER_API_KEY || process.env.AI_API_KEY || process.env.AISA_API_KEY) }); }
   catch { res.status(500).json({ error: 'Não foi possível consultar a configuração da IA.' }); }
 });
 
 app.post('/api/ai/key', requireAuth, async (req, res) => {
   const key = req.body.apiKey;
-  if (typeof key !== 'string' || !/^sk-[A-Za-z0-9_-]{20,200}$/.test(key)) return res.status(400).json({ error: 'Informe uma chave AIsa válida.' });
-  if (process.env.AISA_API_KEY) return res.status(409).json({ error: 'A chave está configurada no ambiente do servidor. Altere-a por lá.' });
+  if (typeof key !== 'string' || !/^sk-[A-Za-z0-9_.-]{20,250}$/.test(key)) return res.status(400).json({ error: 'Informe uma chave OpenRouter válida (iniciada por sk-).' });
+  if (process.env.OPENROUTER_API_KEY || process.env.AI_API_KEY || process.env.AISA_API_KEY) return res.status(409).json({ error: 'A chave está configurada no ambiente do servidor. Altere-a por lá.' });
   try {
     const db = await getDB();
     const sql = process.env.DATABASE_URL
       ? 'INSERT INTO global_config ("key", "value") VALUES (?, ?) ON CONFLICT ("key") DO UPDATE SET "value"=EXCLUDED."value"'
       : 'INSERT OR REPLACE INTO global_config ("key", "value") VALUES (?, ?)';
+    await db.run(sql, ['openrouterApiKey', JSON.stringify(key)]);
     await db.run(sql, ['aisaApiKey', JSON.stringify(key)]);
     res.json({ success: true });
   } catch { res.status(500).json({ error: 'Não foi possível salvar a chave.' }); }
@@ -1143,9 +1147,9 @@ app.post('/api/ai/validate', requireAuth, async (req, res) => {
   aiLastRequest = Date.now();
   try {
     await generateContent({ topic: 'Uma pausa para um café', kind: 'caption', tone: 'natural' }, await getAisaKey());
-    res.json({ valid: true, message: 'Chave validada. A AIsa respondeu ao teste com sucesso.' });
+    res.json({ valid: true, message: 'Chave validada. O OpenRouter respondeu ao teste com sucesso.' });
   } catch (err) {
-    res.status(400).json({ valid: false, error: err.message?.startsWith('A ') || err.message?.startsWith('Configure') || err.message?.startsWith('Confira') ? err.message : 'Não foi possível validar a conexão com a IA.' });
+    res.status(400).json({ valid: false, error: err.message?.startsWith('O ') || err.message?.startsWith('A ') || err.message?.startsWith('Configure') || err.message?.startsWith('Confira') ? err.message : 'Não foi possível validar a conexão com a IA.' });
   } finally { aiBusy = false; }
 });
 
@@ -1158,7 +1162,7 @@ app.post('/api/ai/generate', requireAuth, async (req, res) => {
   try {
     res.json(await generateContent(req.body, await getAisaKey()));
   } catch (err) {
-    res.status(400).json({ error: err.message?.startsWith('A ') || err.message?.startsWith('Escolha') || err.message?.startsWith('Descreva') || err.message?.startsWith('Configure') || err.message?.startsWith('Confira') ? err.message : 'Não foi possível gerar o conteúdo. Tente novamente.' });
+    res.status(400).json({ error: err.message?.startsWith('O ') || err.message?.startsWith('A ') || err.message?.startsWith('Escolha') || err.message?.startsWith('Descreva') || err.message?.startsWith('Configure') || err.message?.startsWith('Confira') ? err.message : 'Não foi possível gerar o conteúdo. Tente novamente.' });
   } finally { aiBusy = false; }
 });
 

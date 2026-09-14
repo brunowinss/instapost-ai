@@ -14,7 +14,7 @@
         <div><label class="label" for="ai-tone">Tom da legenda</label><select class="input" id="ai-tone"><option value="natural">Natural</option><option value="professional">Profissional</option><option value="fun">Descontraído</option><option value="sales">Vendas</option></select></div>
         <div><label class="label" for="ai-kind">O que gerar</label><select class="input" id="ai-kind"><option value="both">Legenda e hashtags</option><option value="caption">Só legenda</option><option value="hashtags">Só hashtags</option></select></div>
       </div>
-      <p class="stat-desc">Cada geração usa créditos da sua conta AIsa. Revise o resultado antes de usar.</p>
+      <p class="stat-desc">Cada geração usa créditos da sua conta OpenRouter. Revise o resultado antes de usar.</p>
       <button type="submit" class="btn btn-primary" id="ai-generate">Gerar com IA</button>
       <p id="ai-message" role="status" aria-live="polite"></p>
     </form>
@@ -98,7 +98,7 @@
 
   const settings = document.createElement('div');
   settings.className = 'card';
-  settings.innerHTML = `<h3 class="card-title">Inteligência artificial · AIsa</h3><p class="stat-desc" id="ai-key-status" role="status" aria-live="polite">Configure sua chave para gerar legendas e hashtags.</p><form id="ai-key-form"><label class="label" for="ai-key">Chave API AIsa</label><input class="input" type="password" id="ai-key" autocomplete="off" placeholder="Cole sua chave AIsa" required><p class="stat-desc">A chave é salva no servidor e não é exibida novamente. Para trocar, cole e salve a nova chave.</p><button class="btn btn-primary" type="submit">Salvar chave da IA</button></form><button type="button" class="btn btn-ghost" id="ai-validate" style="margin-top:12px">Validar conexão</button><p class="stat-desc">A validação faz uma pequena geração real e usa créditos da AIsa. O resultado confirma a conexão no momento do teste.</p>`;
+  settings.innerHTML = `<h3 class="card-title">Inteligência artificial · OpenRouter</h3><p class="stat-desc" id="ai-key-status" role="status" aria-live="polite">Configure sua chave para gerar legendas e hashtags.</p><form id="ai-key-form"><label class="label" for="ai-key">Chave API OpenRouter</label><input class="input" type="password" id="ai-key" autocomplete="off" placeholder="Cole sua chave OpenRouter (sk-or-v1-...)" required><p class="stat-desc">Obtenha sua chave em <a href="https://openrouter.ai/keys" target="_blank" style="color:var(--accent,#e1306c);text-decoration:underline">openrouter.ai/keys</a>. A chave é salva no servidor e não é exibida novamente.</p><button class="btn btn-primary" type="submit">Salvar chave da IA</button></form><button type="button" class="btn btn-ghost" id="ai-validate" style="margin-top:12px">Validar conexão</button><p class="stat-desc">A validação faz uma pequena geração real e usa créditos do OpenRouter. O resultado confirma a conexão no momento do teste.</p>`;
   document.querySelector('.settings-grid').append(settings);
   let keyConfigured = false;
   let keyBusy = false;
@@ -111,10 +111,10 @@
     el('ai-validate').disabled = locked || !keyConfigured || !!el('ai-key').value.trim();
   }
   async function validateSavedKey() {
-    el('ai-key-status').textContent = 'Chave salva. Validando a conexão com a AIsa…';
+    el('ai-key-status').textContent = 'Chave salva. Validando a conexão com o OpenRouter…';
     const data = await api('validate', {});
-    if (!data.valid) throw new Error('A AIsa não confirmou a conexão.');
-    el('ai-key-status').textContent = '✓ Validada — a AIsa respondeu ao teste com sucesso.';
+    if (!data.valid) throw new Error('O OpenRouter não confirmou a conexão.');
+    el('ai-key-status').textContent = '✓ Validada — o OpenRouter respondeu ao teste com sucesso.';
     showToast('Chave da IA validada com sucesso!', 'success');
   }
   async function status() {
@@ -129,7 +129,7 @@
         return;
       }
       keyConfigured = data.configured;
-      el('ai-key').placeholder = keyConfigured ? '•••••••• — chave salva. Cole outra para trocar.' : 'Cole sua chave AIsa';
+      el('ai-key').placeholder = keyConfigured ? '•••••••• — chave salva. Cole outra para trocar.' : 'Cole sua chave OpenRouter (sk-or-v1-...)';
       el('ai-key-status').textContent = data.configured ? 'Chave salva. Clique em Validar conexão para testar.' : 'Nenhuma chave salva. Adicione sua chave para começar.';
       el('ai-validate').disabled = !data.configured;
       el('ai-key-form').hidden = !!data.managedByEnvironment;

@@ -3,9 +3,9 @@ const assert = require('node:assert/strict');
 const { generateContent } = require('../aisa-content');
 const result = content => ({ ok: true, json: async () => ({ choices: [{ message: { content } }] }) });
 
-test('generation uses the AIsa host and sends credentials only in Authorization', async () => {
+test('generation uses the OpenRouter host and sends credentials only in Authorization', async () => {
   const output = await generateContent({ topic: 'Café artesanal' }, 'test-secret', async (url, init) => {
-    assert.equal(url, 'https://api.aisa.one/v1/chat/completions');
+    assert.equal(url, 'https://openrouter.ai/api/v1/chat/completions');
     assert.equal(init.headers.Authorization, 'Bearer test-secret');
     assert.ok(!init.body.includes('test-secret'));
     assert.equal(JSON.parse(init.body).stream, false);

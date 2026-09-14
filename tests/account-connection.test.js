@@ -73,13 +73,13 @@ function oauthFetch(profileReply) {
   };
 }
 
-test('AIsa key saving is write-only and validation requires a successful provider response', async () => {
-  const key = 'sk-aisa-unit-test-only-1234567890';
+test('OpenRouter key saving is write-only and validation requires a successful provider response', async () => {
+  const key = 'sk-or-v1-unit-test-only-1234567890abcdef1234567890abcdef1234567890';
   for (const postgres of [false, true]) {
     let calls = 0;
     const server = serverHarness(async (url, init) => {
       calls++;
-      assert.equal(url, 'https://api.aisa.one/v1/chat/completions');
+      assert.equal(url, 'https://openrouter.ai/api/v1/chat/completions');
       assert.equal(init.headers.Authorization, 'Bearer ' + key);
       return response({ choices: [{ message: { content: '{"caption":"Uma pausa para o café.","hashtags":[]}' } }] });
     }, [], postgres);
