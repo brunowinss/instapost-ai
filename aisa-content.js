@@ -32,14 +32,32 @@ async function generateContent({ topic, tone = 'natural', kind = 'both' }, apiKe
     throw new Error('A IA não respondeu a tempo. Tente novamente.');
   }
   if (!response.ok) {
-    if ([401, 403].includes(response.status)) throw new Error('O OpenRouter recusou a chave. Confira a configuração.');
-    if ([402, 429].includes(response.status)) throw new Error('Confira o saldo e os limites da sua conta OpenRouter antes de tentar novamente.');
-    throw new Error('O OpenRouter está indisponível no momento. Tente novamente mais tarde.');
+    let detail = '';
+    try {
+      const errBody = await response.json();
+      const rawDetail = typeof errBody === 'object' && errBody !== null ? (errBody.error?.message || (typeof errBody.error === 'string' ? errBody.error : errBody.message) || '') : '';
+      if (typeof rawDetail === 'string' && !rawDetail.includes(apiKey) && rawDetail.length < 150) {
+        detail = rawDetail;
+      }
+    } catch {}
+    if ([401, 403].includes(response.status)) {
+      throw new Error('O OpenRouter recusou a chave. ' + (detail ? `Motivo: ${detail}. ` : '') + 'Confira a chave em openrouter.ai/keys.');
+    }
+    if (response.status === 402) {
+      throw new Error('Saldo insuficiente na conta OpenRouter. Adicione créditos em openrouter.ai/credits ou configure um modelo gratuito no .env.');
+    }
+    if (response.status === 429) {
+      throw new Error('Limite de requisições atingido na OpenRouter. ' + (detail ? `(${detail}) ` : '') + 'Aguarde um momento.');
+    }
+    throw new Error('O OpenRouter retornou erro: ' + (detail || `status ${response.status}. Tente novamente mais tarde.`));
   }
   try {
     const result = await response.json();
-    const raw = result.choices?.[0]?.message?.content;
-    const parsed = JSON.parse(raw.replace(/^```(?:json)?\s*|\s*```$/g, '').trim());
+    let raw = result.choices?.[0]?.message?.content || '';
+    raw = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    const jsonStr = jsonMatch ? jsonMatch[0] : raw.replace(/^```(?:json)?\s*|\s*```$/g, '').trim();
+    const parsed = JSON.parse(jsonStr);
     const caption = kind === 'hashtags' ? '' : typeof parsed.caption === 'string' ? parsed.caption.trim().slice(0, 1500) : '';
     const hashtags = kind === 'caption' ? [] : [...new Set((Array.isArray(parsed.hashtags) ? parsed.hashtags : [])
       .filter(tag => typeof tag === 'string').map(tag => '#' + tag.replace(/^#+/, '').replace(/[^\p{L}\p{N}_]/gu, '')).filter(tag => tag.length > 1))].slice(0, 5);

@@ -1112,11 +1112,11 @@ app.post('/api/posts/bulk', requireAuth, async (req, res) => {
  * 📚 Gerenciamento de Legendas Rotativas (Captions)
  */
 async function getAisaKey() {
-  if (process.env.OPENROUTER_API_KEY) return process.env.OPENROUTER_API_KEY;
-  if (process.env.AI_API_KEY) return process.env.AI_API_KEY;
-  if (process.env.AISA_API_KEY) return process.env.AISA_API_KEY;
+  if (process.env.OPENROUTER_API_KEY) return process.env.OPENROUTER_API_KEY.trim();
+  if (process.env.AI_API_KEY) return process.env.AI_API_KEY.trim();
+  if (process.env.AISA_API_KEY) return process.env.AISA_API_KEY.trim();
   const db = await getDB();
-  const row = await db.get('SELECT value FROM global_config WHERE key = ? OR key = ? ORDER BY CASE WHEN key = "openrouterApiKey" THEN 1 ELSE 2 END LIMIT 1', ['openrouterApiKey', 'aisaApiKey']);
+  const row = await db.get('SELECT value FROM global_config WHERE key = ? OR key = ?', ['openrouterApiKey', 'aisaApiKey']);
   if (!row) return '';
   try { return JSON.parse(row.value); } catch { return ''; }
 }
@@ -1127,8 +1127,8 @@ app.get('/api/ai/status', requireAuth, async (req, res) => {
 });
 
 app.post('/api/ai/key', requireAuth, async (req, res) => {
-  const key = req.body.apiKey;
-  if (typeof key !== 'string' || !/^sk-[A-Za-z0-9_.-]{20,250}$/.test(key)) return res.status(400).json({ error: 'Informe uma chave OpenRouter válida (iniciada por sk-).' });
+  const key = typeof req.body.apiKey === 'string' ? req.body.apiKey.trim() : '';
+  if (!/^sk-[A-Za-z0-9_.-]{20,250}$/.test(key)) return res.status(400).json({ error: 'Informe uma chave OpenRouter válida (iniciada por sk-).' });
   if (process.env.OPENROUTER_API_KEY || process.env.AI_API_KEY || process.env.AISA_API_KEY) return res.status(409).json({ error: 'A chave está configurada no ambiente do servidor. Altere-a por lá.' });
   try {
     const db = await getDB();
