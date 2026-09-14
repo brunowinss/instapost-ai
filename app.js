@@ -1164,7 +1164,7 @@ function getThumbnailUrl(url) {
 
 
 function autoFillNextSlot() {
-  const SLOTS = [10, 15, 20];
+  const SLOTS = slotsForCount(STATE.globalConfig.postsPerDay);
   const dateInput = document.getElementById('post-date');
   const timeInput = document.getElementById('post-time');
   if (!dateInput || !timeInput) return;
@@ -1185,7 +1185,7 @@ function autoFillNextSlot() {
   for (let attempts = 0; attempts < 30 && !found; attempts++) {
     for (const hour of SLOTS) {
       const slot = new Date(nextDate);
-      slot.setHours(hour, 0, 0, 0);
+      slot.setHours(Math.floor(hour), Math.round((hour % 1) * 60), 0, 0);
       if (slot > baseDate && slot > minTime) {
         nextDate = slot;
         found = true;
@@ -1211,14 +1211,14 @@ function autoFillNextSlot() {
 
 /**
  * Gera os horários do dia a partir da quantidade de posts/dia configurada.
- * 1 → [15h]; 3 → [10,15,20] (padrão); espalha entre 10h e 20h. Máx. 6.
+ * 1 → [15h]; 3 → [10,15,20] (padrão); espalha entre 10h e 20h. Máx. 24.
  */
 function slotsForCount(n) {
-  const count = Math.max(1, Math.min(6, parseInt(n, 10) || 3));
+  const count = Math.max(1, Math.min(24, parseInt(n, 10) || 3));
   if (count === 1) return [15];
   const slots = [];
   for (let i = 0; i < count; i++) {
-    slots.push(Math.round(10 + (20 - 10) * i / (count - 1)));
+    slots.push(Math.round(600 + 600 * i / (count - 1)) / 60);
   }
   return slots;
 }
@@ -1232,7 +1232,7 @@ function calculateNextSlot(lastDate) {
   for (let attempts = 0; attempts < 60; attempts++) {
     for (const hour of SLOTS) {
       const slot = new Date(nextDate);
-      slot.setHours(hour, 0, 0, 0);
+      slot.setHours(Math.floor(hour), Math.round((hour % 1) * 60), 0, 0);
       if (slot > baseDate && slot > minTime) {
         return slot;
       }
@@ -1786,7 +1786,8 @@ function setupUIEvents() {
   if (schedulingForm) {
     schedulingForm.onsubmit = async (e) => {
       e.preventDefault();
-      const postsPerDay = parseInt(document.getElementById('posts-per-day-input').value, 10) || 3;
+      const postsPerDay = Number(document.getElementById('posts-per-day-input').value);
+      if (!Number.isInteger(postsPerDay) || postsPerDay < 1 || postsPerDay > 24) return showToast('Escolha um número inteiro de 1 a 24.', 'warning');
       showLoading(true, 'SALVANDO AGENDAMENTO...');
       try {
         const res = await fetch(`${API_BASE}/save-config`, {
@@ -2282,11 +2283,7 @@ function generateBulkQueue() {
   let currentDate = new Date(`${startDateStr}T00:00:00`);
   currentDate.setHours(startHour, startMinute, 0, 0);
 
-  const defaultSlots = [
-    { h: 10, m: 0 },
-    { h: 15, m: 0 },
-    { h: 20, m: 0 }
-  ];
+  const defaultSlots = slotsForCount(STATE.globalConfig.postsPerDay).map(hour => ({ h: Math.floor(hour), m: Math.round((hour % 1) * 60) }));
 
   STATE.bulkQueue = [];
   let slotIndex = 0;

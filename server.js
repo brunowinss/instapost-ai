@@ -877,6 +877,9 @@ app.delete('/api/accounts/:id', requireAuth, async (req, res) => {
 });
 
 app.post('/api/save-config', requireAuth, async (req, res) => {
+  if (req.body.postsPerDay !== undefined && (!Number.isInteger(req.body.postsPerDay) || req.body.postsPerDay < 1 || req.body.postsPerDay > 24)) {
+    return res.status(400).json({ error: 'Escolha um número inteiro de 1 a 24 posts por dia.' });
+  }
   const db = await getDB();
   const isPostgres = !!process.env.DATABASE_URL;
   

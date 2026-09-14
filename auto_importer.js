@@ -9,14 +9,14 @@ const VIDEOS_DIR = path.join(__dirname, 'vídeos_para_postar');
 /**
  * Gera os horários do dia a partir da quantidade de posts/dia desejada.
  * 1 → [15h]; 3 → [10,15,20] (padrão histórico); espalha entre 10h e 20h.
- * Limitado entre 1 e 6 para não sobrecarregar a conta.
+ * Aceita de 1 a 24 posts, com precisão de minutos.
  */
 function slotsForCount(n) {
-  const count = Math.max(1, Math.min(6, parseInt(n, 10) || 3));
+  const count = Math.max(1, Math.min(24, parseInt(n, 10) || 3));
   if (count === 1) return [15];
   const slots = [];
   for (let i = 0; i < count; i++) {
-    slots.push(Math.round(10 + (20 - 10) * i / (count - 1)));
+    slots.push(Math.round(600 + 600 * i / (count - 1)) / 60);
   }
   return slots;
 }
@@ -60,10 +60,6 @@ async function runAutoImporter() {
     return;
   }
 
-  // 3. Get Latest Global Schedule to start from (to avoid overlap)
-  let lastScheduledDate = await db.get('SELECT "scheduledAt" FROM posts WHERE "status" = \'pending\' ORDER BY "scheduledAt" DESC LIMIT 1');
-  let currentBasis = lastScheduledDate ? new Date(lastScheduledDate.scheduledAt) : new Date();
-
   // 4. Process each subfolder
   for (const folderName of subfolders) {
     const folderPath = path.join(VIDEOS_DIR, folderName);
@@ -76,6 +72,8 @@ async function runAutoImporter() {
     }
 
     console.log(`📂 Processing niche for @${account.username}...`);
+    const lastScheduledDate = await db.get('SELECT "scheduledAt" FROM posts WHERE "status" = ? AND "accountId" = ? ORDER BY "scheduledAt" DESC LIMIT 1', ['pending', account.accountId]);
+    let currentBasis = lastScheduledDate ? new Date(lastScheduledDate.scheduledAt) : new Date();
     
     const files = fs.readdirSync(folderPath).filter(f => f.endsWith('.mp4') || f.endsWith('.mov'));
     
@@ -141,7 +139,7 @@ async function calculateNextSlotFromDate(baseDate, SLOTS = [10, 15, 20]) {
   while (!found) {
     for (const hour of SLOTS) {
       const slotTime = new Date(nextDate);
-      slotTime.setHours(hour, 0, 0, 0);
+      slotTime.setHours(Math.floor(hour), Math.round((hour % 1) * 60), 0, 0);
       
       if (slotTime > baseDate && slotTime > minimumLeadTime) {
         nextDate = slotTime;

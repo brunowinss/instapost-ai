@@ -72,6 +72,21 @@ function oauthFetch(profileReply) {
   };
 }
 
+test('daily post configuration validates before writing and persists valid counts', async () => {
+  for (const postgres of [false, true]) {
+    for (const value of [0, 25, 2.5, '4', null]) {
+      const server = serverHarness(null, [], postgres);
+      const result = await server.invoke('post', '/api/save-config', { body: { postsPerDay: value } });
+      assert.equal(result.statusCode, 400);
+      assert.equal(server.writes.length, 0);
+    }
+    const server = serverHarness(null, [], postgres);
+    const result = await server.invoke('post', '/api/save-config', { body: { postsPerDay: 24 } });
+    assert.equal(result.statusCode, 200);
+    assert.deepEqual(Array.from(server.writes[0].params), ['postsPerDay', '24']);
+  }
+});
+
 for (const postgres of [false, true]) {
   test(`OAuth saves the exact ID, real username and official photo (${postgres ? 'PostgreSQL' : 'SQLite'})`, async () => {
     const server = serverHarness(oauthFetch(() => response({

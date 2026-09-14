@@ -310,7 +310,7 @@
                   <div style="flex:1;">
                     <div style="font-size:0.78rem; font-weight:600; color:var(--text-main);">Horários automáticos</div>
                     <div style="font-size:0.72rem; color:var(--text-dim); margin-top:2px;">
-                      Distribuídos sequencialmente em <strong style="color:var(--accent);">10h</strong>, <strong style="color:var(--accent);">15h</strong> e <strong style="color:var(--accent);">20h</strong>.
+                      Distribuídos entre 10h e 20h conforme a quantidade diária em Configurações.
                     </div>
                   </div>
                 </div>
@@ -434,19 +434,13 @@
         <div class="card">
           <h3 class="card-title"><i class="fa-solid fa-calendar-day"></i> Agendamento Automático</h3>
           <p style="font-size:0.85rem; color:var(--text-dim); margin-bottom:1.5rem;">
-            Quantos vídeos por dia o modo automático agenda em cada conta. Recomendado: 1 a 3.
+            Defina quantos posts por dia serão distribuídos entre 10h e 20h em cada conta.
           </p>
           <form id="scheduling-form">
             <div class="form-group">
-              <label class="label">Vídeos por dia (por conta)</label>
-              <select class="input" id="posts-per-day-input">
-                <option value="1">1 por dia — mais seguro (contas novas)</option>
-                <option value="2">2 por dia</option>
-                <option value="3" selected>3 por dia — padrão</option>
-                <option value="4">4 por dia</option>
-                <option value="5">5 por dia</option>
-                <option value="6">6 por dia — máximo</option>
-              </select>
+              <label class="label" for="posts-per-day-input">Posts por dia (por conta)</label>
+              <input class="input" id="posts-per-day-input" type="number" min="1" max="24" step="1" value="3" required aria-describedby="daily-posts-help">
+              <p id="daily-posts-help" class="stat-desc">Escolha de 1 a 24 posts por dia. Vale para novos agendamentos automáticos; os posts já agendados mantêm seus horários.</p>
             </div>
             <button type="submit" class="btn btn-primary" style="width:100%;"><i class="fa-solid fa-floppy-disk"></i> Salvar Agendamento</button>
           </form>
@@ -638,7 +632,7 @@
                 <div>
                   <label class="label" style="font-size:0.7rem;">Modo de Intervalo</label>
                   <select class="input" id="bulk-interval-mode">
-                    <option value="slots">Horários Fixos (10h, 15h, 20h)</option>
+                    <option value="slots">Quantidade diária das Configurações</option>
                     <option value="best_times">Melhores Horários da IA (Picos)</option>
                     <option value="hours">A cada X horas (ex: 3h, 4h)</option>
                     <option value="daily">1 por dia no mesmo horário</option>
