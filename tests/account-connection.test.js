@@ -12,7 +12,7 @@ function response(data, status = 200) {
 
 // Run the actual route handlers with isolated HTTP/database dependencies.
 // No listening socket, scheduler, real credentials or production writes.
-function serverHarness(fetch, accounts = [], postgres = false) {
+function serverHarness(fetch, accounts = [], postgres = false, config = {}) {
   const routes = new Map();
   const writes = [];
   const logs = [];
@@ -22,9 +22,9 @@ function serverHarness(fetch, accounts = [], postgres = false) {
   }
   const express = Object.assign(() => app, { json() {}, static() {} });
   const db = {
-    all: async sql => sql === 'SELECT * FROM accounts' ? accounts.map(a => ({ ...a })) : [],
-    get: async (sql, params) => accounts.find(a => a.accountId === params?.[0]),
-    run: async (sql, params) => writes.push({ sql, params })
+    all: async sql => sql === 'SELECT * FROM accounts' ? accounts.map(a => ({ ...a })) : sql === 'SELECT * FROM global_config' ? Object.entries(config).map(([key, value]) => ({ key, value: JSON.stringify(value) })) : [],
+    get: async (sql, params) => sql.includes('global_config') ? (config[params?.[0]] ? { value: JSON.stringify(config[params[0]]) } : undefined) : accounts.find(a => a.accountId === params?.[0]),
+    run: async (sql, params) => { writes.push({ sql, params }); if (sql.includes('INTO global_config')) config[params[0]] = JSON.parse(params[1]); }
   };
   const mocks = {
     express,
@@ -33,6 +33,7 @@ function serverHarness(fetch, accounts = [], postgres = false) {
     dotenv: { config() {} },
     './database': { getDB: async () => db, initDB: () => new Promise(() => {}) },
     './auto_importer': {},
+    './aisa-content': { generateContent: (input, key) => require('../aisa-content').generateContent(input, key, fetch) },
     './instagram-profile': {
       ...profileApi,
       resolveInstagramProfile: (token, id, options) => profileApi.resolveInstagramProfile(token, id, { ...options, fetch })
@@ -71,6 +72,34 @@ function oauthFetch(profileReply) {
     return profileReply(request);
   };
 }
+
+test('AIsa key saving is write-only and validation requires a successful provider response', async () => {
+  const key = 'sk-aisa-unit-test-only-1234567890';
+  for (const postgres of [false, true]) {
+    let calls = 0;
+    const server = serverHarness(async (url, init) => {
+      calls++;
+      assert.equal(url, 'https://api.aisa.one/v1/chat/completions');
+      assert.equal(init.headers.Authorization, 'Bearer ' + key);
+      return response({ choices: [{ message: { content: '{"caption":"Uma pausa para o café.","hashtags":[]}' } }] });
+    }, [], postgres);
+    assert.equal((await server.invoke('get', '/api/ai/status')).body.configured, false);
+    assert.equal((await server.invoke('post', '/api/ai/key', { body: { apiKey: key } })).statusCode, 200);
+    assert.equal(calls, 0);
+    const status = await server.invoke('get', '/api/ai/status');
+    assert.equal(status.body.configured, true);
+    assert.ok(!JSON.stringify(status.body).includes(key));
+    const data = await server.invoke('get', '/api/data');
+    assert.ok(!JSON.stringify(data.body).includes(key));
+    assert.equal((await server.invoke('post', '/api/ai/validate')).body.valid, true);
+    assert.equal(calls, 1);
+    assert.equal((await server.invoke('post', '/api/ai/validate')).statusCode, 429);
+  }
+  const rejected = serverHarness(async () => response({ error: key }, 401), [], false, { aisaApiKey: key });
+  const failure = await rejected.invoke('post', '/api/ai/validate');
+  assert.equal(failure.body.valid, false);
+  assert.ok(!JSON.stringify(failure.body).includes(key));
+});
 
 test('daily post configuration validates before writing and persists valid counts', async () => {
   for (const postgres of [false, true]) {

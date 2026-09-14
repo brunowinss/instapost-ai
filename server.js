@@ -3,6 +3,7 @@ const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
 const fetch = require('node-fetch');
+const { generateContent } = require('./aisa-content');
 const { readMetaResponse, resolveInstagramProfile, needsProfileSync } = require('./instagram-profile');
 const webpush = require('web-push');
 const { getDB, initDB } = require('./database');
@@ -124,6 +125,15 @@ setInterval(() => {
 
 app.use(cors());
 app.use(express.json({ limit: '60mb' }));
+// Keep server files and local databases out of the public asset directory.
+app.use((req, res, next) => {
+  let assetPath;
+  try { assetPath = decodeURIComponent(req.path); } catch { return res.status(400).send('Invalid path'); }
+  if (assetPath.split(/[\\/]/).includes('..')) return res.status(404).send('Not found');
+  if (req.path.startsWith('/api/') || req.path.startsWith('/auth/') || req.path === '/connect-instagram') return next();
+  if (req.path === '/' || /^\/(?:index\.html|(?:app|ai-ui|particles|sw)\.js|(?:style|studio|ai-ui)\.css|manifest\.json|[^/]+\.(?:png|ico|svg|jpg|webp))$/i.test(req.path) || req.path.startsWith('/vendor/')) return next();
+  return res.status(404).send('Not found');
+});
 app.use(express.static(__dirname));
 
 // ── OAuth Instagram Login ──────────────────────────────────────────────────
@@ -790,6 +800,7 @@ app.get('/api/data', requireAuth, async (req, res) => {
     }));
     delete globalConfig.vapidPrivateKey;
     delete globalConfig.loginPass;
+    delete globalConfig.aisaApiKey;
 
     res.json({
       accounts: safeAccounts,
@@ -1099,6 +1110,58 @@ app.post('/api/posts/bulk', requireAuth, async (req, res) => {
 /**
  * 📚 Gerenciamento de Legendas Rotativas (Captions)
  */
+async function getAisaKey() {
+  if (process.env.AISA_API_KEY) return process.env.AISA_API_KEY;
+  const db = await getDB();
+  const row = await db.get('SELECT value FROM global_config WHERE key = ?', ['aisaApiKey']);
+  if (!row) return '';
+  try { return JSON.parse(row.value); } catch { return ''; }
+}
+
+app.get('/api/ai/status', requireAuth, async (req, res) => {
+  try { res.json({ configured: !!await getAisaKey(), managedByEnvironment: !!process.env.AISA_API_KEY }); }
+  catch { res.status(500).json({ error: 'Não foi possível consultar a configuração da IA.' }); }
+});
+
+app.post('/api/ai/key', requireAuth, async (req, res) => {
+  const key = req.body.apiKey;
+  if (typeof key !== 'string' || !/^sk-[A-Za-z0-9_-]{20,200}$/.test(key)) return res.status(400).json({ error: 'Informe uma chave AIsa válida.' });
+  if (process.env.AISA_API_KEY) return res.status(409).json({ error: 'A chave está configurada no ambiente do servidor. Altere-a por lá.' });
+  try {
+    const db = await getDB();
+    const sql = process.env.DATABASE_URL
+      ? 'INSERT INTO global_config ("key", "value") VALUES (?, ?) ON CONFLICT ("key") DO UPDATE SET "value"=EXCLUDED."value"'
+      : 'INSERT OR REPLACE INTO global_config ("key", "value") VALUES (?, ?)';
+    await db.run(sql, ['aisaApiKey', JSON.stringify(key)]);
+    res.json({ success: true });
+  } catch { res.status(500).json({ error: 'Não foi possível salvar a chave.' }); }
+});
+
+app.post('/api/ai/validate', requireAuth, async (req, res) => {
+  if (aiBusy || Date.now() - aiLastRequest < 5000) return res.status(429).json({ error: 'Aguarde alguns segundos antes de testar novamente.' });
+  aiBusy = true;
+  aiLastRequest = Date.now();
+  try {
+    await generateContent({ topic: 'Uma pausa para um café', kind: 'caption', tone: 'natural' }, await getAisaKey());
+    res.json({ valid: true, message: 'Chave validada. A AIsa respondeu ao teste com sucesso.' });
+  } catch (err) {
+    res.status(400).json({ valid: false, error: err.message?.startsWith('A ') || err.message?.startsWith('Configure') || err.message?.startsWith('Confira') ? err.message : 'Não foi possível validar a conexão com a IA.' });
+  } finally { aiBusy = false; }
+});
+
+let aiBusy = false;
+let aiLastRequest = 0;
+app.post('/api/ai/generate', requireAuth, async (req, res) => {
+  if (aiBusy || Date.now() - aiLastRequest < 5000) return res.status(429).json({ error: 'Aguarde alguns segundos antes de gerar novamente.' });
+  aiBusy = true;
+  aiLastRequest = Date.now();
+  try {
+    res.json(await generateContent(req.body, await getAisaKey()));
+  } catch (err) {
+    res.status(400).json({ error: err.message?.startsWith('A ') || err.message?.startsWith('Escolha') || err.message?.startsWith('Descreva') || err.message?.startsWith('Configure') || err.message?.startsWith('Confira') ? err.message : 'Não foi possível gerar o conteúdo. Tente novamente.' });
+  } finally { aiBusy = false; }
+});
+
 app.get('/api/captions', requireAuth, async (req, res) => {
   try {
     const db = await getDB();

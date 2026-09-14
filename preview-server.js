@@ -96,13 +96,13 @@ app.get('/api/stories/loop', (req, res) => res.json({ loops: [{ enabled: false, 
 app.use('/api', (req, res) => res.status(403).json({ error: 'Esta é uma prévia visual. Conexões e publicações estão disponíveis no site oficial.' }));
 app.use('/auth', (req, res) => res.status(403).send('Conexões externas estão desativadas na prévia local.'));
 app.use((req, res, next) => {
-  if (req.path.startsWith('/vendor/') || /^\/(index\.html|app\.js|particles\.js|sw\.js|style\.css|studio\.css|manifest\.json|[^/]+\.png)$/.test(req.path)) return next();
+  if (req.path.startsWith('/vendor/') || /^\/(index\.html|app\.js|ai-ui\.js|ai-ui\.css|particles\.js|sw\.js|style\.css|studio\.css|manifest\.json|[^/]+\.png)$/.test(req.path)) return next();
   res.sendStatus(404);
 });
 app.use(express.static(root));
 let refreshTimer;
 fs.watch(root, (event, filename) => {
-  if (!['index.html', 'style.css', 'studio.css', 'app.js'].includes(filename)) return;
+  if (!['index.html', 'style.css', 'studio.css', 'app.js', 'ai-ui.js', 'ai-ui.css'].includes(filename)) return;
   clearTimeout(refreshTimer);
   refreshTimer = setTimeout(() => peers.forEach(res => res.write('data: refresh\n\n')), 250);
 });

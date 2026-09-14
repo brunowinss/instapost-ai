@@ -2812,6 +2812,10 @@ function switchLibraryTab(tab) {
   }
 }
 
+function escapeLibraryText(value) {
+  return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+}
+
 async function loadCaptionsList() {
   const container = document.getElementById('captions-list-container');
   if (!container) return;
@@ -2829,15 +2833,15 @@ async function loadCaptionsList() {
       <div class="library-card">
         <div>
           <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
-            <div style="font-weight:700; font-size:0.95rem; color:var(--text-main);">${item.title}</div>
-            <span style="background:rgba(16,184,245,0.12); color:var(--accent); font-size:0.7rem; font-weight:700; padding:2px 8px; border-radius:6px;">${item.tag || 'Geral'}</span>
+            <div style="font-weight:700; font-size:0.95rem; color:var(--text-main);">${escapeLibraryText(item.title)}</div>
+            <span style="background:rgba(16,184,245,0.12); color:var(--accent); font-size:0.7rem; font-weight:700; padding:2px 8px; border-radius:6px;">${escapeLibraryText(item.tag || 'Geral')}</span>
           </div>
           <div style="font-size:0.85rem; color:var(--text-secondary); line-height:1.5; white-space:pre-wrap; max-height:120px; overflow-y:auto; padding-right:4px;">
-            ${item.text}
+            ${escapeLibraryText(item.text)}
           </div>
         </div>
         <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--border-color); padding-top:10px; margin-top:8px;">
-          <button class="btn btn-ghost btn-sm" onclick="copyToClipboard('${encodeURIComponent(item.text)}')" style="font-size:0.75rem;"><i class="fa-solid fa-copy"></i> Copiar</button>
+          <button class="btn btn-ghost btn-sm" onclick="copyToClipboard('${encodeURIComponent(item.text).replace(/'/g, '%27')}')" style="font-size:0.75rem;"><i class="fa-solid fa-copy"></i> Copiar</button>
           <button class="btn btn-danger btn-sm" onclick="deleteCaption('${item.id}')" style="padding:4px 8px;"><i class="fa-solid fa-trash"></i></button>
         </div>
       </div>
@@ -2866,15 +2870,15 @@ async function loadHashtagsList() {
         <div class="library-card">
           <div>
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-              <div style="font-weight:700; font-size:0.95rem; color:var(--text-main);">${item.name}</div>
+              <div style="font-weight:700; font-size:0.95rem; color:var(--text-main);">${escapeLibraryText(item.name)}</div>
               <span style="color:var(--accent); font-size:0.75rem; font-weight:700;">${tagsArray.length} hashtags</span>
             </div>
             <div style="display:flex; flex-wrap:wrap; gap:4px; max-height:100px; overflow-y:auto;">
-              ${tagsArray.map(t => `<span style="background:rgba(255,255,255,0.04); color:var(--text-secondary); font-size:0.72rem; padding:2px 6px; border-radius:4px;">${t.startsWith('#') ? t : '#' + t}</span>`).join('')}
+              ${tagsArray.map(t => `<span style="background:rgba(255,255,255,0.04); color:var(--text-secondary); font-size:0.72rem; padding:2px 6px; border-radius:4px;">${escapeLibraryText(t.startsWith('#') ? t : '#' + t)}</span>`).join('')}
             </div>
           </div>
           <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--border-color); padding-top:10px; margin-top:8px;">
-            <button class="btn btn-ghost btn-sm" onclick="copyToClipboard('${encodeURIComponent(item.tags)}')" style="font-size:0.75rem;"><i class="fa-solid fa-copy"></i> Copiar Grupo</button>
+            <button class="btn btn-ghost btn-sm" onclick="copyToClipboard('${encodeURIComponent(item.tags).replace(/'/g, '%27')}')" style="font-size:0.75rem;"><i class="fa-solid fa-copy"></i> Copiar Grupo</button>
             <button class="btn btn-danger btn-sm" onclick="deleteHashtagGroup('${item.id}')" style="padding:4px 8px;"><i class="fa-solid fa-trash"></i></button>
           </div>
         </div>

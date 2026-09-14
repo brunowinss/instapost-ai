@@ -1,0 +1,13 @@
+.ai-dialog { color: var(--text-main); background: #090b0e; border: 1px solid var(--border-color); border-radius: 18px; width: min(620px, calc(100vw - 24px)); max-height: 90dvh; padding: 24px; margin: auto; overflow-y: auto; }
+.ai-dialog::backdrop { background: #000b; backdrop-filter: blur(4px); }
+.ai-dialog [hidden], #ai-key-form[hidden] { display: none !important; }
+.ai-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+.ai-heading h2 { font-size: 20px; }
+.ai-dialog .input, #ai-key-form .input { width: 100%; }
+.ai-dialog .label, #ai-key-form .label { display: block; margin: 16px 0 8px; }
+.ai-dialog .stat-desc, #ai-key-form .stat-desc { margin: 12px 0; }
+.ai-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.ai-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.ai-trigger { margin-bottom: 12px; }
+#ai-message { margin-top: 12px; color: var(--text-secondary); font-size: 13px; }
+@media(max-width: 520px) { .ai-fields { grid-template-columns: 1fr; } .ai-dialog { padding: 18px; } }
