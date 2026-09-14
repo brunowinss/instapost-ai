@@ -1149,7 +1149,7 @@ app.post('/api/ai/validate', requireAuth, async (req, res) => {
     await generateContent({ topic: 'Uma pausa para um café', kind: 'caption', tone: 'natural' }, await getAisaKey());
     res.json({ valid: true, message: 'Chave validada. O OpenRouter respondeu ao teste com sucesso.' });
   } catch (err) {
-    res.status(400).json({ valid: false, error: err.message?.startsWith('O ') || err.message?.startsWith('A ') || err.message?.startsWith('Configure') || err.message?.startsWith('Confira') ? err.message : 'Não foi possível validar a conexão com a IA.' });
+    res.status(400).json({ valid: false, error: err.message || 'Não foi possível validar a conexão com a IA.' });
   } finally { aiBusy = false; }
 });
 
@@ -1162,7 +1162,7 @@ app.post('/api/ai/generate', requireAuth, async (req, res) => {
   try {
     res.json(await generateContent(req.body, await getAisaKey()));
   } catch (err) {
-    res.status(400).json({ error: err.message?.startsWith('O ') || err.message?.startsWith('A ') || err.message?.startsWith('Escolha') || err.message?.startsWith('Descreva') || err.message?.startsWith('Configure') || err.message?.startsWith('Confira') ? err.message : 'Não foi possível gerar o conteúdo. Tente novamente.' });
+    res.status(400).json({ error: err.message || 'Não foi possível gerar o conteúdo. Tente novamente.' });
   } finally { aiBusy = false; }
 });
 
