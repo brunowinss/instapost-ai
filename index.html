@@ -1250,15 +1250,15 @@
           <div class="card" style="border-color:rgba(70,207,218,.2);">
             <div id="mult-upload-progress-box" style="display:none; margin-bottom:1rem;">
               <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-bottom:4px;">
-                <span id="mult-upload-status" style="color:var(--accent);">Enviando clipes...</span>
-                <span id="mult-upload-pct" style="font-weight:700;">0%</span>
+                <span id="mult-upload-status" style="color:var(--accent);">Carregando FFmpeg...</span>
+                <span id="mult-upload-pct" style="font-weight:700;"></span>
               </div>
-              <div class="progress-bar"><div class="progress-fill" id="mult-upload-bar" style="width:0%;"></div></div>
+              <div class="progress-bar"><div class="progress-fill" id="mult-upload-bar" style="width:100%; animation: mult-pulse 1s ease-in-out infinite alternate;"></div></div>
             </div>
             <button type="button" id="btn-mult-generate" class="btn btn-primary" style="width:100%; padding:1rem; font-size:1rem; background:linear-gradient(135deg,#46cfda,#a855f7); border:none;" onclick="multGenerate()">
-              <i class="fa-solid fa-infinity"></i> Gerar <span id="mult-btn-total">150</span> Vídeos Únicos
+              <i class="fa-solid fa-infinity"></i> Ver <span id="mult-btn-total">150</span> Combinações
             </button>
-            <p style="font-size:0.72rem; color:var(--text-dim); text-align:center; margin-top:8px;">Os clipes serão enviados ao Cloudinary e as combinações geradas automaticamente</p>
+            <p style="font-size:0.72rem; color:var(--text-dim); text-align:center; margin-top:8px;"><i class="fa-solid fa-lock" style="color:var(--accent);"></i> 100% local — sem upload, sem internet, sem nuvem</p>
           </div>
         </div>
 
@@ -1273,8 +1273,11 @@
                 <option value="medium">🔶 Repete um pouco</option>
                 <option value="similar">🔸 Bem parecido</option>
               </select>
+              <button class="btn btn-ghost btn-sm" onclick="multGenerateAll()" style="font-size:0.72rem; display:none;" id="mult-gen-all-btn">
+                <i class="fa-solid fa-bolt-lightning"></i> Gerar Todos
+              </button>
               <button class="btn btn-ghost btn-sm" onclick="multDownloadAll()" style="font-size:0.72rem; display:none;" id="mult-download-all-btn">
-                <i class="fa-solid fa-download"></i> Baixar lista
+                <i class="fa-solid fa-list"></i> Exportar lista
               </button>
             </div>
           </div>
