@@ -2,7 +2,14 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
+const os = require('os');
+const fs = require('fs');
 const fetch = require('node-fetch');
+const multer = require('multer');
+const ffmpeg = require('fluent-ffmpeg');
+const ffmpegStatic = require('ffmpeg-static');
+
+ffmpeg.setFfmpegPath(ffmpegStatic);
 const { generateContent } = require('./aisa-content');
 const { readMetaResponse, resolveInstagramProfile, needsProfileSync } = require('./instagram-profile');
 const webpush = require('web-push');
@@ -2250,6 +2257,99 @@ app.get('/api/import-local', requireAuth, async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ── Multiplicador de Vídeos (server-side FFmpeg) ──────────────────────────
+
+const MULT_TEMP_DIR = path.join(os.tmpdir(), 'instapost-mult');
+if (!fs.existsSync(MULT_TEMP_DIR)) fs.mkdirSync(MULT_TEMP_DIR, { recursive: true });
+
+const multClipStore  = new Map(); // id → filePath
+const multVideoStore = new Map(); // id → filePath
+
+const multUpload = multer({
+  storage: multer.diskStorage({
+    destination: MULT_TEMP_DIR,
+    filename: (_req, file, cb) => {
+      const id = crypto.randomBytes(8).toString('hex');
+      cb(null, `clip_${id}${path.extname(file.originalname) || '.mp4'}`);
+    }
+  }),
+  limits: { fileSize: 500 * 1024 * 1024 }
+});
+
+// Recebe até 18 clipes e devolve os IDs
+app.post('/api/multiplicador/prepare', requireAuth, multUpload.array('clips', 18), (req, res) => {
+  const ids = req.files.map(f => {
+    const id = path.basename(f.filename, path.extname(f.filename)).replace('clip_', '');
+    multClipStore.set(id, f.path);
+    return id;
+  });
+  res.json({ ids });
+});
+
+// Concatena 3 clipes e devolve o ID do vídeo resultante
+app.post('/api/multiplicador/concat', requireAuth, async (req, res) => {
+  const { gancho, corpo, cta } = req.body;
+  const gPath   = multClipStore.get(gancho);
+  const cPath   = multClipStore.get(corpo);
+  const ctaPath = multClipStore.get(cta);
+  if (!gPath || !cPath || !ctaPath) return res.status(400).json({ error: 'Clip não encontrado' });
+
+  const outId   = crypto.randomBytes(8).toString('hex');
+  const outPath = path.join(MULT_TEMP_DIR, `out_${outId}.mp4`);
+  const listPath = path.join(MULT_TEMP_DIR, `list_${outId}.txt`);
+
+  fs.writeFileSync(listPath,
+    `file '${gPath.replace(/\\/g, '/')}'\n` +
+    `file '${cPath.replace(/\\/g, '/')}'\n` +
+    `file '${ctaPath.replace(/\\/g, '/')}'\n`
+  );
+
+  try {
+    await new Promise((resolve, reject) => {
+      ffmpeg()
+        .input(listPath)
+        .inputOptions(['-f', 'concat', '-safe', '0'])
+        .outputOptions(['-c', 'copy'])
+        .output(outPath)
+        .on('end', resolve)
+        .on('error', reject)
+        .run();
+    });
+    if (fs.existsSync(listPath)) fs.unlinkSync(listPath);
+    multVideoStore.set(outId, outPath);
+    res.json({ id: outId });
+  } catch (err) {
+    if (fs.existsSync(listPath)) fs.unlinkSync(listPath);
+    if (fs.existsSync(outPath)) fs.unlinkSync(outPath);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Baixa o vídeo gerado
+app.get('/api/multiplicador/video/:id', requireAuth, (req, res) => {
+  const filePath = multVideoStore.get(req.params.id);
+  if (!filePath || !fs.existsSync(filePath)) return res.status(404).json({ error: 'Não encontrado' });
+  res.setHeader('Content-Type', 'video/mp4');
+  res.setHeader('Content-Disposition', `attachment; filename="combo_${req.params.id}.mp4"`);
+  fs.createReadStream(filePath).pipe(res);
+});
+
+// Remove arquivos temporários ao final da sessão
+app.delete('/api/multiplicador/cleanup', requireAuth, (req, res) => {
+  const { clipIds = [], videoIds = [] } = req.body;
+  clipIds.forEach(id => {
+    const p = multClipStore.get(id);
+    if (p && fs.existsSync(p)) fs.unlinkSync(p);
+    multClipStore.delete(id);
+  });
+  videoIds.forEach(id => {
+    const p = multVideoStore.get(id);
+    if (p && fs.existsSync(p)) fs.unlinkSync(p);
+    multVideoStore.delete(id);
+  });
+  res.json({ ok: true });
 });
 
 /**

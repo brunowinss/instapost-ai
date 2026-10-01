@@ -4208,24 +4208,22 @@ async function submitYoutubeBulk() {
 }
 
 /* =====================================================================
-   MULTIPLICADOR DE VÍDEOS — FFmpeg.wasm (100% local, sem upload)
+   MULTIPLICADOR DE VÍDEOS — FFmpeg no servidor local
    ===================================================================== */
 
 const MULT_LIMITS = { gancho: 10, corpo: 5, cta: 3 };
 
 const MULT_STATE = {
-  gancho: [],  // { file, previewUrl, name }
+  gancho: [],  // { file, previewUrl, name, serverId }
   corpo:  [],
   cta:    [],
-  combinations: []
+  combinations: [],
+  uploadedClipIds: [],
+  generatedVideoIds: []
 };
 
-// FFmpeg singleton — carregado uma única vez
-let _multFFmpeg    = null;
-let _multFetchFile = null;
-let _multFFmpegLoading = false;
-let _multClipsInFS = false;
 let _multGenAllRunning = false;
+let _multClipsUploaded = false;
 
 /* ---- Picker e upload de clipes ---- */
 
@@ -4240,7 +4238,7 @@ function multHandleFiles(type, files) {
   toAdd.forEach(f => {
     arr.push({ file: f, previewUrl: URL.createObjectURL(f), name: f.name });
   });
-  _multClipsInFS = false; // precisa reescrever no FS do FFmpeg
+  _multClipsUploaded = false;
   multRefreshCounters();
   multRenderClipGrid(type);
   document.getElementById(`mult-${type}-input`).value = '';
@@ -4249,7 +4247,7 @@ function multHandleFiles(type, files) {
 function multRemoveClip(type, index) {
   URL.revokeObjectURL(MULT_STATE[type][index]?.previewUrl);
   MULT_STATE[type].splice(index, 1);
-  _multClipsInFS = false;
+  _multClipsUploaded = false;
   multRefreshCounters();
   multRenderClipGrid(type);
 }
@@ -4287,69 +4285,42 @@ function multRenderClipGrid(type) {
   `).join('');
 }
 
-/* ---- FFmpeg carregamento ---- */
+/* ---- Upload de clipes para o servidor ---- */
 
-function _multLoadScript(src) {
-  return new Promise((res, rej) => {
-    const existing = document.querySelector(`script[src="${src}"]`);
-    if (existing) { res(); return; }
-    const s = document.createElement('script');
-    s.src = src; s.crossOrigin = 'anonymous';
-    s.onload = res;
-    s.onerror = () => rej(new Error(`Falha ao carregar: ${src}`));
-    document.head.appendChild(s);
-  });
-}
-
-async function multEnsureFFmpeg() {
-  if (_multFFmpeg) return;
-  if (_multFFmpegLoading) {
-    await new Promise(r => { const t = setInterval(() => { if (_multFFmpeg || !_multFFmpegLoading) { clearInterval(t); r(); } }, 200); });
-    return;
-  }
-  _multFFmpegLoading = true;
+async function multEnsureClipsUploaded() {
+  if (_multClipsUploaded) return;
 
   const progressBox = document.getElementById('mult-upload-progress-box');
   const status      = document.getElementById('mult-upload-status');
   if (progressBox) progressBox.style.display = 'block';
-  if (status) status.textContent = 'Carregando FFmpeg (~25 MB, só na primeira vez)...';
+  if (status) status.textContent = 'Enviando clipes para o servidor...';
 
   try {
-    // Carrega via UMD/script tag — evita problemas com import() de ESM cross-origin
-    await Promise.all([
-      _multLoadScript('https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/umd/ffmpeg.js'),
-      _multLoadScript('https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js'),
-    ]);
-
-    const { FFmpeg }            = window.FFmpegWASM;
-    const { fetchFile, toBlobURL } = window.FFmpegUtil;
-    _multFetchFile = fetchFile;
-
-    const base = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
-    const ff   = new FFmpeg();
-    await ff.load({
-      coreURL: await toBlobURL(`${base}/ffmpeg-core.js`,   'text/javascript'),
-      wasmURL: await toBlobURL(`${base}/ffmpeg-core.wasm`, 'application/wasm'),
-    });
-    _multFFmpeg = ff;
-  } finally {
-    _multFFmpegLoading = false;
-    if (progressBox) progressBox.style.display = 'none';
-  }
-}
-
-/* Escreve todos os clipes no FS virtual do FFmpeg (só quando necessário) */
-async function multWriteClipsToFS() {
-  if (_multClipsInFS) return;
-  const ff = _multFFmpeg;
-  const types = ['gancho', 'corpo', 'cta'];
-  for (const type of types) {
-    for (let i = 0; i < MULT_STATE[type].length; i++) {
-      const clip = MULT_STATE[type][i];
-      await ff.writeFile(`${type}_${i}.mp4`, await _multFetchFile(clip.file));
+    const formData = new FormData();
+    const order = [];
+    for (const type of ['gancho', 'corpo', 'cta']) {
+      for (let i = 0; i < MULT_STATE[type].length; i++) {
+        formData.append('clips', MULT_STATE[type][i].file);
+        order.push({ type, i });
+      }
     }
+
+    const resp = await fetch('/api/multiplicador/prepare', { method: 'POST', body: formData });
+    if (!resp.ok) throw new Error(await resp.text());
+    const { ids } = await resp.json();
+
+    // Mapeia IDs de volta para cada clipe
+    ids.forEach((id, pos) => {
+      const { type, i } = order[pos];
+      MULT_STATE[type][i].serverId = id;
+    });
+
+    MULT_STATE.uploadedClipIds = ids;
+    _multClipsUploaded = true;
+  } finally {
+    if (progressBox) progressBox.style.display = 'none';
+    if (status) status.textContent = '';
   }
-  _multClipsInFS = true;
 }
 
 /* ---- Ordem de postagem ---- */
@@ -4380,31 +4351,44 @@ function multCalcOriginality(idx, total) {
 
 /* ---- Mostrar galeria (instantâneo) ---- */
 
-function multGenerate() {
+async function multGenerate() {
   if (!MULT_STATE.gancho.length || !MULT_STATE.corpo.length || !MULT_STATE.cta.length) {
     showToast('Adicione ao menos 1 Gancho, 1 Corpo e 1 CTA antes de continuar.', 'warning'); return;
   }
+
+  const btn = document.getElementById('btn-mult-generate');
+  if (btn) btn.disabled = true;
+  try {
+    await multEnsureClipsUploaded();
+  } catch (e) {
+    showToast(`Erro ao enviar clipes: ${e.message}`, 'error');
+    if (btn) btn.disabled = false;
+    return;
+  }
+  if (btn) btn.disabled = false;
+
   const order = multBuildPostingOrder(MULT_STATE.gancho.length, MULT_STATE.corpo.length, MULT_STATE.cta.length);
   MULT_STATE.combinations = order.map(({ g, c, cta }, i) => ({
     idx: i, index: i + 1, g, c, cta,
     badge: multCalcOriginality(i, order.length),
-    blobUrl: null
+    videoId: null
   }));
   multRenderGallery(MULT_STATE.combinations);
   showToast(`${order.length} combinações prontas — clique em Gerar em cada uma`, 'success');
-
-  // Pré-carrega FFmpeg em background para a primeira geração ser mais rápida
-  multEnsureFFmpeg().catch(() => {});
 }
 
-/* ---- Gerar vídeo único (FFmpeg concat) ---- */
+/* ---- Gerar vídeo único (concat no servidor) ---- */
 
 async function multGenerateCombo(idx) {
   const combo = MULT_STATE.combinations[idx];
   if (!combo) return;
-  if (combo.blobUrl) {
+
+  // Se já tem videoId, apenas baixa
+  if (combo.videoId) {
     const a = document.createElement('a');
-    a.href = combo.blobUrl; a.download = `video-${String(combo.index).padStart(3,'0')}.mp4`; a.click();
+    a.href = `/api/multiplicador/video/${combo.videoId}`;
+    a.download = `video-${String(combo.index).padStart(3,'0')}.mp4`;
+    a.click();
     return;
   }
 
@@ -4412,23 +4396,25 @@ async function multGenerateCombo(idx) {
   if (actionEl) actionEl.innerHTML = '<span style="font-size:0.72rem;color:var(--accent);"><i class="fa-solid fa-spinner fa-spin"></i> Gerando...</span>';
 
   try {
-    await multEnsureFFmpeg();
-    await multWriteClipsToFS();
+    const ganchoId = MULT_STATE.gancho[combo.g]?.serverId;
+    const corpoId  = MULT_STATE.corpo[combo.c]?.serverId;
+    const ctaId    = MULT_STATE.cta[combo.cta]?.serverId;
+    if (!ganchoId || !corpoId || !ctaId) throw new Error('Clipes não enviados — recarregue e tente novamente');
 
-    const ff = _multFFmpeg;
-    const listTxt = `file 'gancho_${combo.g}.mp4'\nfile 'corpo_${combo.c}.mp4'\nfile 'cta_${combo.cta}.mp4'\n`;
-    await ff.writeFile('list.txt', listTxt);
-    await ff.exec(['-f', 'concat', '-safe', '0', '-i', 'list.txt', '-c', 'copy', 'out.mp4']);
+    const resp = await fetch('/api/multiplicador/concat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gancho: ganchoId, corpo: corpoId, cta: ctaId })
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    const { id } = await resp.json();
 
-    const data = await ff.readFile('out.mp4');
-    await ff.deleteFile('out.mp4');
-
-    const blob = new Blob([data.buffer], { type: 'video/mp4' });
-    combo.blobUrl = URL.createObjectURL(blob);
+    combo.videoId = id;
+    MULT_STATE.generatedVideoIds.push(id);
 
     if (actionEl) {
       actionEl.innerHTML = `
-        <a href="${combo.blobUrl}" download="video-${String(combo.index).padStart(3,'0')}.mp4" class="btn btn-ghost btn-sm" style="color:var(--success);">
+        <a href="/api/multiplicador/video/${id}" download="video-${String(combo.index).padStart(3,'0')}.mp4" class="btn btn-ghost btn-sm" style="color:var(--success);">
           <i class="fa-solid fa-download"></i> Baixar
         </a>`;
     }
@@ -4447,10 +4433,8 @@ async function multGenerateAll() {
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Gerando...'; }
 
   try {
-    await multEnsureFFmpeg();
-    await multWriteClipsToFS();
     for (let i = 0; i < MULT_STATE.combinations.length; i++) {
-      if (MULT_STATE.combinations[i].blobUrl) continue;
+      if (MULT_STATE.combinations[i].videoId) continue;
       await multGenerateCombo(i);
     }
     showToast('Todos os vídeos gerados!', 'success');
