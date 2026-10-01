@@ -70,7 +70,11 @@ const STATE = {
   carouselSlides: [],
   storySlots: ['09:00', '13:00', '18:00', '21:00'],
   storyMediaPool: [],
-  libraryActiveTab: 'captions'
+  libraryActiveTab: 'captions',
+  // YouTube
+  youtubePostType: 'YOUTUBE_SHORT',
+  youtubeFile: null,
+  youtubeBulkFiles: []
 };
 
 const API_BASE = '/api';
@@ -384,7 +388,8 @@ function switchSection(name) {
     'analytics': { t: 'Resultados', s: 'Acompanhe o desempenho das suas contas e publicações.' },
     'new-post': { t: 'Nova publicação', s: 'Escolha a conta, prepare seu conteúdo e defina quando publicar.' },
     'schedule': { t: 'Calendário', s: 'Organize seu calendário de conteúdo.' },
-    'settings': { t: 'Configurações', s: 'Suas contas, integrações e preferências em um só lugar.' }
+    'settings': { t: 'Configurações', s: 'Suas contas, integrações e preferências em um só lugar.' },
+    'youtube': { t: 'YouTube', s: 'Conecte canais e publique vídeos e Shorts no YouTube.' }
   };
   
   if (titles[name]) {
@@ -558,6 +563,12 @@ function renderActiveSection() {
     renderSettings();
     renderSettingsAccounts();
   }
+  if (n === 'youtube') renderYoutubeSection();
+}
+
+/** Ícone de marca por plataforma da conta — tudo aqui era hardcoded pro Instagram. */
+function platformIcon(acc) {
+  return (acc && acc.platform === 'youtube') ? 'fa-brands fa-youtube' : 'fa-brands fa-instagram';
 }
 
 function renderSettings() {
@@ -598,19 +609,22 @@ function updateAvatar(accountId, url) {
 function renderSettingsAccounts() {
   const list = document.getElementById('accounts-list-settings');
   if (!list) return;
-  
-  if (STATE.accounts.length === 0) {
+
+  // Canais do YouTube têm sua própria lista na aba YouTube — aqui só Instagram.
+  const igAccounts = STATE.accounts.filter(a => a.platform !== 'youtube');
+
+  if (igAccounts.length === 0) {
     list.innerHTML = '<p style="color:var(--text-dim); font-size:0.85rem;">Nenhuma conta conectada.</p>';
     return;
   }
-  
-  list.innerHTML = STATE.accounts.map(acc => {
+
+  list.innerHTML = igAccounts.map(acc => {
     const avatarSrc = acc.profilePictureUrl || (!acc.username.startsWith('instagram_') ? `https://unavatar.io/instagram/${acc.username}` : '');
     return `
     <div style="display:flex; align-items:center; justify-content:space-between; padding:1rem; background:rgba(255,255,255,0.03); border-radius:14px; border:1px solid var(--glass-border); margin-bottom:0.8rem; flex-wrap:wrap; gap:10px;">
       <div style="display:flex; align-items:center; gap:12px;">
         <div data-avatar="${acc.accountId}" style="width:38px; height:38px; border-radius:50%; background:linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888); display:flex; align-items:center; justify-content:center; color:white; overflow:hidden; flex-shrink:0;">
-          ${avatarSrc ? `<img src="${avatarSrc}" onerror="this.parentElement.innerHTML='<i class=&quot;fa-brands fa-instagram&quot;></i>'" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fa-brands fa-instagram"></i>'}
+          ${avatarSrc ? `<img src="${avatarSrc}" onerror="this.parentElement.innerHTML='<i class=&quot;${platformIcon(acc)}&quot;></i>'" style="width:100%;height:100%;object-fit:cover;">` : `<i class="${platformIcon(acc)}"></i>`}
         </div>
         <div>
           <div style="display:flex; align-items:center; gap:8px;">
@@ -636,7 +650,7 @@ function renderSettingsAccounts() {
   }).join('');
 
   // Busca estatísticas e atualiza username / foto se Meta retornar dados reais
-  STATE.accounts.forEach(async (acc) => {
+  igAccounts.forEach(async (acc) => {
     const el = document.getElementById(`followers-${acc.accountId}`);
     if (!el) return;
     try {
@@ -707,13 +721,16 @@ function populateAccountSelector() {
     document.getElementById('stories-account-select')
   ];
 
+  // Seletores do Instagram não devem listar canais do YouTube (aba própria).
+  const igAccounts = STATE.accounts.filter(a => a.platform !== 'youtube');
+
   selectors.forEach(sel => {
     if (!sel) return;
     const prev = sel.value;
-    sel.innerHTML = STATE.accounts.map(a => 
+    sel.innerHTML = igAccounts.map(a =>
       `<option value="${a.accountId}" ${a.accountId === prev ? 'selected' : ''}>@${a.username}</option>`
     ).join('');
-    
+
     sel.onchange = () => {
       STATE.activeAccountId = sel.value;
       updateHeaderUI();
@@ -722,8 +739,8 @@ function populateAccountSelector() {
     };
   });
 
-  if (STATE.accounts.length > 0 && !STATE.activeAccountId) {
-    STATE.activeAccountId = STATE.accounts[0].accountId;
+  if (igAccounts.length > 0 && !STATE.activeAccountId) {
+    STATE.activeAccountId = igAccounts[0].accountId;
     updateHeaderUI();
   }
 }
@@ -3783,4 +3800,334 @@ async function syncAccountFromMeta() {
   } finally {
     if (btn) btn.innerHTML = origHtml;
   }
+}
+
+// ============================================================
+// ▶️ YOUTUBE
+// ============================================================
+
+function getYoutubeAccounts() {
+  return STATE.accounts.filter(a => a.platform === 'youtube');
+}
+
+function renderYoutubeSection() {
+  renderYoutubeChannelsList();
+  populateYoutubeAccountSelectors();
+  setupYoutubeDropzone();
+  setupYoutubeBulkDropzone();
+  renderYoutubeQueueList();
+}
+
+function renderYoutubeChannelsList() {
+  const list = document.getElementById('youtube-channels-list');
+  if (!list) return;
+  const channels = getYoutubeAccounts();
+
+  if (channels.length === 0) {
+    list.innerHTML = '<p style="color:var(--text-dim); font-size:0.85rem;">Nenhum canal conectado.</p>';
+    return;
+  }
+
+  list.innerHTML = channels.map(acc => `
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:1rem; background:rgba(255,255,255,0.03); border-radius:14px; border:1px solid var(--glass-border); margin-bottom:0.8rem; flex-wrap:wrap; gap:10px;">
+      <div style="display:flex; align-items:center; gap:12px;">
+        <div data-avatar="${acc.accountId}" style="width:38px; height:38px; border-radius:50%; background:#ff0000; display:flex; align-items:center; justify-content:center; color:white; overflow:hidden; flex-shrink:0;">
+          ${acc.profilePictureUrl ? `<img src="${acc.profilePictureUrl}" onerror="this.parentElement.innerHTML='<i class=&quot;fa-brands fa-youtube&quot;></i>'" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fa-brands fa-youtube"></i>'}
+        </div>
+        <div>
+          <div style="font-weight:700; font-size:0.95rem;">${acc.username}</div>
+          <div style="font-size:0.72rem; margin-top:2px;">
+            ${acc.hasToken
+              ? '<span style="color:var(--success);"><i class="fa-solid fa-circle-check"></i> Conectado</span>'
+              : '<span style="color:var(--error);"><i class="fa-solid fa-triangle-exclamation"></i> Reconecte o canal</span>'}
+          </div>
+        </div>
+      </div>
+      <button class="btn btn-sm btn-ghost btn-delete" onclick="deleteAccount('${acc.accountId}')" title="Desconectar canal" style="padding:0.4rem; width:32px; height:32px; color:var(--error); border-color:rgba(239,68,68,0.2);">
+        <i class="fa-solid fa-trash-can"></i>
+      </button>
+    </div>
+  `).join('');
+}
+
+function populateYoutubeAccountSelectors() {
+  const channels = getYoutubeAccounts();
+  const selectors = [
+    document.getElementById('youtube-account-select'),
+    document.getElementById('youtube-bulk-account-select')
+  ];
+  selectors.forEach(sel => {
+    if (!sel) return;
+    if (channels.length === 0) {
+      sel.innerHTML = '<option value="">Nenhum canal conectado</option>';
+      return;
+    }
+    const prev = sel.value;
+    sel.innerHTML = channels.map(a =>
+      `<option value="${a.accountId}" ${a.accountId === prev ? 'selected' : ''}>${a.username}</option>`
+    ).join('');
+  });
+}
+
+function setYoutubePostType(type) {
+  STATE.youtubePostType = type;
+  [['yt-type-short', 'YOUTUBE_SHORT'], ['yt-type-video', 'YOUTUBE_VIDEO']].forEach(([id, value]) => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    const isActive = value === type;
+    btn.classList.toggle('active', isActive);
+    btn.classList.toggle('btn-primary', isActive);
+    btn.classList.toggle('btn-ghost', !isActive);
+  });
+}
+
+function setupYoutubeDropzone() {
+  const dropzone = document.getElementById('youtube-dropzone');
+  const fileInput = document.getElementById('youtube-file-input');
+  if (!dropzone || !fileInput) return;
+
+  dropzone.onclick = () => fileInput.click();
+  fileInput.onchange = (e) => handleYoutubeFileSelect(e.target.files[0]);
+
+  dropzone.ondragover = (e) => { e.preventDefault(); dropzone.style.borderColor = 'var(--primary)'; };
+  dropzone.ondragleave = () => { dropzone.style.borderColor = 'var(--border-color)'; };
+  dropzone.ondrop = (e) => {
+    e.preventDefault();
+    dropzone.style.borderColor = 'var(--border-color)';
+    if (e.dataTransfer.files?.length) handleYoutubeFileSelect(e.dataTransfer.files[0]);
+  };
+}
+
+function handleYoutubeFileSelect(file) {
+  if (!file || !file.type.startsWith('video/')) {
+    showToast('Selecione um arquivo de vídeo.', 'warning');
+    return;
+  }
+  STATE.youtubeFile = file;
+  const summaryEl = document.getElementById('youtube-file-summary');
+  if (summaryEl) {
+    summaryEl.style.display = 'block';
+    summaryEl.innerHTML = `<i class="fa-solid fa-check-circle"></i> ${file.name}`;
+  }
+  const titleInput = document.getElementById('youtube-title-input');
+  if (titleInput && !titleInput.value) {
+    const guess = file.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
+    titleInput.value = guess.charAt(0).toUpperCase() + guess.slice(1);
+  }
+}
+
+async function submitYoutubePost() {
+  const accountId = document.getElementById('youtube-account-select')?.value;
+  const title = document.getElementById('youtube-title-input')?.value.trim();
+  const description = document.getElementById('youtube-description-input')?.value.trim();
+  const scheduleInput = document.getElementById('youtube-schedule-input')?.value;
+  const mediaType = STATE.youtubePostType || 'YOUTUBE_SHORT';
+  const file = STATE.youtubeFile;
+
+  if (!accountId) return showToast('Conecte e selecione um canal do YouTube primeiro.', 'warning');
+  if (!file) return showToast('Selecione o arquivo de vídeo.', 'warning');
+  if (!title) return showToast('Digite um título.', 'warning');
+
+  const scheduledAt = scheduleInput ? new Date(scheduleInput).toISOString() : new Date().toISOString();
+  const caption = description ? `${title}\n\n${description}` : title;
+
+  const btn = document.getElementById('btn-submit-youtube-post');
+  if (btn) btn.disabled = true;
+  showLoading(true, 'ENVIANDO VÍDEO PARA A NUVEM...');
+
+  try {
+    const videoUrl = await uploadToCloudinary(file);
+    showLoading(true, 'AGENDANDO PUBLICAÇÃO...');
+    const res = await fetch(`${API_BASE}/save-post`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: 'yt_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now(),
+        accountId,
+        mediaType,
+        imageUrl: videoUrl,
+        caption,
+        scheduledAt,
+        platform: 'youtube'
+      })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Falha ao salvar a publicação.');
+
+    showToast('Vídeo agendado para o YouTube!', 'success');
+    document.getElementById('youtube-title-input').value = '';
+    document.getElementById('youtube-description-input').value = '';
+    document.getElementById('youtube-schedule-input').value = '';
+    const summaryEl = document.getElementById('youtube-file-summary');
+    if (summaryEl) summaryEl.style.display = 'none';
+    STATE.youtubeFile = null;
+    await loadData();
+  } catch (err) {
+    showToast(`Erro: ${err.message}`, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+    showLoading(false);
+  }
+}
+
+function setupYoutubeBulkDropzone() {
+  const dropzone = document.getElementById('youtube-bulk-dropzone');
+  const fileInput = document.getElementById('youtube-bulk-file-input');
+  if (!dropzone || !fileInput) return;
+
+  dropzone.onclick = () => fileInput.click();
+  fileInput.onchange = (e) => handleYoutubeBulkFilesSelect(Array.from(e.target.files));
+
+  dropzone.ondragover = (e) => { e.preventDefault(); dropzone.style.borderColor = 'var(--primary)'; };
+  dropzone.ondragleave = () => { dropzone.style.borderColor = 'var(--border-color)'; };
+  dropzone.ondrop = (e) => {
+    e.preventDefault();
+    dropzone.style.borderColor = 'var(--border-color)';
+    if (e.dataTransfer.files?.length) handleYoutubeBulkFilesSelect(Array.from(e.dataTransfer.files));
+  };
+}
+
+function handleYoutubeBulkFilesSelect(files) {
+  const videoFiles = files.filter(f => f.type.startsWith('video/'));
+  if (videoFiles.length === 0) {
+    showToast('Selecione arquivos de vídeo.', 'warning');
+    return;
+  }
+  STATE.youtubeBulkFiles = videoFiles;
+  const summaryEl = document.getElementById('youtube-bulk-files-summary');
+  if (summaryEl) {
+    summaryEl.style.display = 'block';
+    summaryEl.innerHTML = `<i class="fa-solid fa-check-circle"></i> ${videoFiles.length} vídeos selecionados`;
+  }
+}
+
+async function submitYoutubeBulk() {
+  const accountId = document.getElementById('youtube-bulk-account-select')?.value;
+  const mediaType = document.getElementById('youtube-bulk-type-select')?.value || 'YOUTUBE_SHORT';
+  const autoTimes = document.getElementById('youtube-bulk-auto-times')?.checked;
+  const porDia = document.getElementById('youtube-bulk-per-day')?.value;
+  const manualTimes = document.getElementById('youtube-bulk-manual-times')?.value.trim();
+  const startDate = document.getElementById('youtube-bulk-start-date')?.value;
+  const files = STATE.youtubeBulkFiles || [];
+
+  if (!accountId) return showToast('Conecte e selecione um canal do YouTube primeiro.', 'warning');
+  if (files.length === 0) return showToast('Selecione os vídeos primeiro.', 'warning');
+  if (!autoTimes && !manualTimes) return showToast('Informe os horários manuais ou marque "Escolher por mim".', 'warning');
+
+  const cloudName = STATE.globalConfig.cloudinaryName;
+  const cloudPreset = STATE.globalConfig.cloudinaryPreset;
+  if (!cloudName || !cloudPreset) {
+    showToast('Configure Cloud Name e Preset do Cloudinary nas Configurações!', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('btn-submit-youtube-bulk');
+  const progressBox = document.getElementById('youtube-bulk-progress-box');
+  const progressBar = document.getElementById('youtube-bulk-progress-bar');
+  const progressStatus = document.getElementById('youtube-bulk-progress-status');
+  const progressPct = document.getElementById('youtube-bulk-progress-percentage');
+
+  if (btn) btn.disabled = true;
+  if (progressBox) progressBox.style.display = 'block';
+
+  const videos = [];
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    const pct = Math.round((i / files.length) * 100);
+    if (progressBar) progressBar.style.width = `${pct}%`;
+    if (progressPct) progressPct.innerText = `${pct}%`;
+    if (progressStatus) progressStatus.innerText = `Enviando vídeo ${i + 1} de ${files.length} (${file.name})...`;
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('upload_preset', cloudPreset);
+      formData.append('resource_type', 'video');
+      const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/video/upload`, { method: 'POST', body: formData });
+      const uploadData = await uploadRes.json();
+      if (!uploadData.secure_url) throw new Error(uploadData.error?.message || 'Falha no upload do Cloudinary.');
+
+      const guessedTitle = file.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
+      videos.push({
+        title: guessedTitle.charAt(0).toUpperCase() + guessedTitle.slice(1),
+        description: '',
+        isShort: mediaType === 'YOUTUBE_SHORT',
+        videoUrl: uploadData.secure_url,
+        fileName: file.name
+      });
+    } catch (err) {
+      showToast(`Erro ao enviar ${file.name}: ${err.message}`, 'error');
+    }
+  }
+
+  if (videos.length > 0) {
+    if (progressStatus) progressStatus.innerText = 'Calculando horários e salvando agendamentos...';
+    try {
+      const res = await fetch(`${API_BASE}/youtube/bulk-schedule`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accountId,
+          videos,
+          automatic: autoTimes,
+          porDia,
+          horarios: autoTimes ? undefined : manualTimes,
+          comecarEm: startDate || undefined
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`🎉 ${data.count} vídeos agendados no YouTube!`, 'success');
+        STATE.youtubeBulkFiles = [];
+        const summaryEl = document.getElementById('youtube-bulk-files-summary');
+        if (summaryEl) summaryEl.style.display = 'none';
+        await loadData();
+      } else {
+        throw new Error(data.error);
+      }
+    } catch (e) {
+      showToast(`Erro ao salvar o lote: ${e.message}`, 'error');
+    }
+  }
+
+  if (btn) btn.disabled = false;
+  if (progressBox) progressBox.style.display = 'none';
+}
+
+function renderYoutubeQueueList() {
+  const list = document.getElementById('youtube-queue-list');
+  if (!list) return;
+
+  const posts = [...STATE.scheduledPosts, ...STATE.history]
+    .filter(p => p.platform === 'youtube')
+    .sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt));
+
+  if (posts.length === 0) {
+    list.innerHTML = '<p style="color:var(--text-dim); font-size:0.85rem;">Nenhum post agendado.</p>';
+    return;
+  }
+
+  const statusLabel = { pending: 'Agendado', processing: 'Enviando...', success: 'Publicado', error: 'Erro' };
+  const statusColor = { pending: 'var(--accent)', processing: 'var(--warning)', success: 'var(--success)', error: 'var(--error)' };
+
+  list.innerHTML = posts.map(p => {
+    const channel = STATE.accounts.find(a => a.accountId === p.accountId);
+    const title = (p.caption || '').split('\n')[0] || '(sem título)';
+    const when = new Date(p.scheduledAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+    return `
+    <div style="display:flex; align-items:center; justify-content:space-between; background:rgba(255,255,255,0.03); border:1px solid var(--border-color); border-radius:10px; padding:10px 14px; gap:12px;">
+      <div style="flex:1; min-width:0;">
+        <div style="font-weight:600; font-size:0.85rem; color:var(--text-main); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+          ${title}${p.mediaType === 'YOUTUBE_SHORT' ? ' <span style="font-size:0.65rem; color:var(--text-dim);">· Short</span>' : ''}
+        </div>
+        <div style="font-size:0.72rem; color:var(--text-dim); display:flex; gap:8px; align-items:center; margin-top:2px;">
+          <span>${channel ? channel.username : p.accountId}</span>
+          <span><i class="fa-solid fa-clock"></i> ${when}</span>
+          <span style="color:${statusColor[p.status] || 'var(--text-dim)'};">${statusLabel[p.status] || p.status}</span>
+        </div>
+      </div>
+      ${p.status === 'pending' ? `<button class="btn btn-ghost btn-sm" onclick="deletePost('${p.id}')" style="padding:4px 8px; color:var(--error);"><i class="fa-solid fa-trash"></i></button>` : ''}
+    </div>
+  `;
+  }).join('');
 }

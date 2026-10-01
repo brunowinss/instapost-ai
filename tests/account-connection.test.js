@@ -33,6 +33,19 @@ function serverHarness(fetch, accounts = [], postgres = false, config = {}) {
     dotenv: { config() {} },
     './database': { getDB: async () => db, initDB: () => new Promise(() => {}) },
     './auto_importer': {},
+    './youtube': {
+      isConfigured: () => false,
+      getAuthUrl: () => null,
+      exchangeCode: async () => ({ client: {}, tokens: {} }),
+      getChannelInfo: async () => ({ channelId: '', title: '', thumbnail: '' }),
+      publishToYouTube: async () => { throw new Error('not mocked'); },
+      resolveTimes: () => ['18:00'],
+      buildSchedule: () => [],
+      suggestTimes: () => ['18:00'],
+      SUGGESTED_TIMES: {},
+      MAX_PER_DAY: 6,
+      DEFAULT_TIMEZONE: 'America/Sao_Paulo'
+    },
     './aisa-content': { generateContent: (input, key) => require('../aisa-content').generateContent(input, key, fetch) },
     './instagram-profile': {
       ...profileApi,

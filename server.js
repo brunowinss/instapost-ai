@@ -8,6 +8,7 @@ const { readMetaResponse, resolveInstagramProfile, needsProfileSync } = require(
 const webpush = require('web-push');
 const { getDB, initDB } = require('./database');
 const { runAutoImporter } = require('./auto_importer');
+const youtubeService = require('./youtube');
 require('dotenv').config();
 
 /**
@@ -192,6 +193,107 @@ app.get('/auth/instagram', (req, res) => {
   const url = `https://www.instagram.com/oauth/authorize?enable_fb_login=0&force_authentication=1&client_id=${IG_APP_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=${encodeURIComponent(scopes)}`;
   console.log(`[OAUTH] Iniciando login. redirect_uri=${REDIRECT_URI}`);
   res.redirect(url);
+});
+
+// Endpoint para verificar se o app do YouTube está configurado
+app.get('/api/youtube-status', (req, res) => {
+  res.json({ configured: youtubeService.isConfigured() });
+});
+
+app.get('/auth/youtube', (req, res) => {
+  const url = youtubeService.getAuthUrl();
+  if (!url) {
+    return res.status(500).send(`
+      <html><body style="font-family:sans-serif;padding:40px;background:#111;color:#fff;">
+        <h2>⚠️ App do YouTube não configurado</h2>
+        <p>As variáveis de ambiente <code>YOUTUBE_CLIENT_ID</code>, <code>YOUTUBE_CLIENT_SECRET</code> e <code>YOUTUBE_REDIRECT_URI</code> não estão definidas no servidor.</p>
+        <p>Veja o <code>YOUTUBE.md</code> para instruções de como criar o client OAuth no Google Cloud Console.</p>
+        <a href="/" style="color:#a78bfa;">← Voltar</a>
+      </body></html>
+    `);
+  }
+  console.log('[YOUTUBE-OAUTH] Iniciando login.');
+  res.redirect(url);
+});
+
+app.get('/auth/youtube/callback', async (req, res) => {
+  const { code, error, error_description } = req.query;
+  if (error || !code) {
+    const msg = error_description || error || 'Autorização do YouTube cancelada ou código ausente.';
+    console.error('[YOUTUBE-OAUTH] Erro no callback:', msg);
+    return res.redirect('/?error=' + encodeURIComponent(msg));
+  }
+
+  try {
+    const { client, tokens } = await youtubeService.exchangeCode(code);
+    if (!tokens.refresh_token) {
+      throw new Error('O Google não devolveu um refresh token. Revogue o acesso em myaccount.google.com/permissions (app "Insta Post") e conecte o canal de novo.');
+    }
+
+    const info = await youtubeService.getChannelInfo(client);
+
+    const db = await getDB();
+    const isPostgres = !!process.env.DATABASE_URL;
+    const params = [
+      info.channelId, info.title, '', info.thumbnail, new Date().toISOString(),
+      'youtube', tokens.refresh_token, tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : ''
+    ];
+    if (isPostgres) {
+      await db.run(
+        `INSERT INTO accounts ("accountId","username","accessToken","profilePictureUrl","createdAt","platform","refreshToken","tokenExpiry")
+         VALUES (?,?,?,?,?,?,?,?)
+         ON CONFLICT ("accountId") DO UPDATE SET "username"=EXCLUDED."username","profilePictureUrl"=EXCLUDED."profilePictureUrl","platform"=EXCLUDED."platform","refreshToken"=EXCLUDED."refreshToken","tokenExpiry"=EXCLUDED."tokenExpiry"`,
+        params
+      );
+    } else {
+      await db.run(
+        `INSERT OR REPLACE INTO accounts ("accountId","username","accessToken","profilePictureUrl","createdAt","platform","refreshToken","tokenExpiry") VALUES (?,?,?,?,?,?,?,?)`,
+        params
+      );
+    }
+
+    console.log(`[YOUTUBE-OAUTH] ✅ Canal "${info.title}" (ID: ${info.channelId}) conectado.`);
+
+    res.send(`
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Canal Conectado — Insta Post</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+        <style>
+          * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+          body { background: #04070C; color: #F1F5F9; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 1.5rem; }
+          .card { background: #0c121e; border: 1px solid rgba(255,0,0,0.35); border-radius: 16px; padding: 2.5rem 2rem; max-width: 440px; width: 100%; text-align: center; box-shadow: 0 0 35px rgba(255,0,0,0.12); }
+          .avatar-box { width: 72px; height: 72px; border-radius: 50%; background: #ff0000; color: white; display: flex; align-items: center; justify-content: center; font-size: 2rem; margin: 0 auto 1.2rem auto; border: 2px solid rgba(255,0,0,0.5); overflow: hidden; }
+          h1 { font-size: 1.35rem; font-weight: 800; margin-bottom: 0.5rem; }
+          p { color: #94A3B8; font-size: 0.88rem; line-height: 1.5; margin-bottom: 1.5rem; }
+          .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 12px 20px; background: #ff0000; color: #fff; font-weight: 700; font-size: 0.92rem; text-decoration: none; border-radius: 10px; border: none; cursor: pointer; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <div class="avatar-box">
+            ${info.thumbnail ? `<img src="${info.thumbnail}" style="width:100%;height:100%;object-fit:cover;">` : '✓'}
+          </div>
+          <h1>Canal "${info.title}" Conectado!</h1>
+          <p>Seu canal do YouTube foi vinculado com sucesso ao painel <b>Insta Post</b>. Se você abriu em outro navegador ou celular, já pode fechar esta aba e voltar para o seu painel.</p>
+          <a href="/?connected=${encodeURIComponent(info.title)}" class="btn">Abrir Painel</a>
+        </div>
+        <script>
+          if (window.opener) {
+            setTimeout(() => { window.close(); }, 2500);
+          }
+        </script>
+      </body>
+      </html>
+    `);
+  } catch (err) {
+    console.error('[YOUTUBE-OAUTH ERROR]', err.message);
+    res.redirect('/?error=' + encodeURIComponent(err.message));
+  }
 });
 
 function parseIgError(data) {
@@ -794,9 +896,9 @@ app.get('/api/data', requireAuth, async (req, res) => {
     // Segredos nunca saem do servidor: o accessToken do Instagram permite
     // publicar na conta, e a chave VAPID privada permite forjar notificações.
     // O frontend não precisa de nenhum dos dois.
-    const safeAccounts = accounts.map(({ accessToken, ...rest }) => ({
+    const safeAccounts = accounts.map(({ accessToken, refreshToken, ...rest }) => ({
       ...rest,
-      hasToken: !!accessToken
+      hasToken: rest.platform === 'youtube' ? !!refreshToken : !!accessToken
     }));
     delete globalConfig.vapidPrivateKey;
     delete globalConfig.loginPass;
@@ -925,24 +1027,25 @@ app.post('/api/save-post', requireAuth, async (req, res) => {
   
   try {
     const params = [
-      post.id, 
-      post.accountId, 
-      post.mediaType, 
-      post.imageUrl, 
-      post.caption, 
-      post.scheduledAt, 
-      post.status || 'pending', 
-      post.mediaId || '', 
-      post.publishedAt || '', 
-      new Date().toISOString()
+      post.id,
+      post.accountId,
+      post.mediaType,
+      post.imageUrl,
+      post.caption,
+      post.scheduledAt,
+      post.status || 'pending',
+      post.mediaId || '',
+      post.publishedAt || '',
+      new Date().toISOString(),
+      post.platform || 'instagram'
     ];
-    
+
     if (isPostgres) {
-      await db.run(`INSERT INTO posts ("id", "accountId", "mediaType", "imageUrl", "caption", "scheduledAt", "status", "mediaId", "publishedAt", "createdAt") 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) 
+      await db.run(`INSERT INTO posts ("id", "accountId", "mediaType", "imageUrl", "caption", "scheduledAt", "status", "mediaId", "publishedAt", "createdAt", "platform")
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT ("id") DO UPDATE SET "status"=EXCLUDED."status", "mediaId"=EXCLUDED."mediaId", "publishedAt"=EXCLUDED."publishedAt"`, params);
     } else {
-      await db.run('INSERT OR REPLACE INTO posts ("id", "accountId", "mediaType", "imageUrl", "caption", "scheduledAt", "status", "mediaId", "publishedAt", "createdAt") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', params);
+      await db.run('INSERT OR REPLACE INTO posts ("id", "accountId", "mediaType", "imageUrl", "caption", "scheduledAt", "status", "mediaId", "publishedAt", "createdAt", "platform") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', params);
     }
     res.json({ success: true });
   } catch (err) {
@@ -1081,20 +1184,21 @@ app.post('/api/posts/bulk', requireAuth, async (req, res) => {
         new Date().toISOString(),
         p.sourceFile || '',
         p.mediaItems ? JSON.stringify(p.mediaItems) : null,
-        variance
+        variance,
+        p.platform || 'instagram'
       ];
 
       if (isPostgres) {
         await db.run(
-          `INSERT INTO posts ("id", "accountId", "mediaType", "imageUrl", "caption", "scheduledAt", "status", "mediaId", "publishedAt", "createdAt", "sourceFile", "mediaItems", "varianceMinutes")
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `INSERT INTO posts ("id", "accountId", "mediaType", "imageUrl", "caption", "scheduledAt", "status", "mediaId", "publishedAt", "createdAt", "sourceFile", "mediaItems", "varianceMinutes", "platform")
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT ("id") DO UPDATE SET "scheduledAt"=EXCLUDED."scheduledAt", "caption"=EXCLUDED."caption"`,
           params
         );
       } else {
         await db.run(
-          `INSERT OR REPLACE INTO posts ("id", "accountId", "mediaType", "imageUrl", "caption", "scheduledAt", "status", "mediaId", "publishedAt", "createdAt", "sourceFile", "mediaItems", "varianceMinutes")
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT OR REPLACE INTO posts ("id", "accountId", "mediaType", "imageUrl", "caption", "scheduledAt", "status", "mediaId", "publishedAt", "createdAt", "sourceFile", "mediaItems", "varianceMinutes", "platform")
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           params
         );
       }
@@ -1104,6 +1208,75 @@ app.post('/api/posts/bulk', requireAuth, async (req, res) => {
     res.json({ success: true, count: created.length, posts: created });
   } catch (err) {
     console.error('[BULK ERROR]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * 📺 Agendamento em Massa para o YouTube
+ *
+ * Porta de core/agenda.py do postador-yt: distribui N vídeos nos horários
+ * sugeridos (ou informados) por dia, continuando depois do que já está
+ * agendado pra mesma conta — pra um lote novo não cair em cima do anterior.
+ */
+app.post('/api/youtube/bulk-schedule', requireAuth, async (req, res) => {
+  const { accountId, videos, horarios, porDia, comecarEm, automatic } = req.body;
+  if (!accountId) return res.status(400).json({ error: 'accountId é obrigatório.' });
+  if (!videos || !Array.isArray(videos) || videos.length === 0) {
+    return res.status(400).json({ error: 'Nenhum vídeo fornecido para agendamento em massa.' });
+  }
+
+  const db = await getDB();
+  const isPostgres = !!process.env.DATABASE_URL;
+
+  try {
+    const resolvedTimes = youtubeService.resolveTimes({ horarios, porDia, automatic });
+
+    const existing = await db.all('SELECT "scheduledAt" FROM posts WHERE "accountId" = ? AND "status" = \'pending\'', [accountId]);
+    const lastScheduled = existing.reduce((max, p) => {
+      const d = new Date(p.scheduledAt);
+      return (!isNaN(d) && (!max || d > max)) ? d : max;
+    }, null);
+
+    const times = youtubeService.buildSchedule({
+      quantidade: videos.length,
+      horarios: resolvedTimes,
+      comecarEm,
+      after: lastScheduled
+    });
+
+    const created = [];
+    for (let i = 0; i < videos.length; i++) {
+      const v = videos[i];
+      const id = 'yt_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now();
+      const scheduledAt = times[i].toISOString();
+      const caption = v.title ? `${v.title}\n\n${v.description || ''}`.trim() : (v.caption || '');
+
+      const params = [
+        id, accountId, v.isShort ? 'YOUTUBE_SHORT' : 'YOUTUBE_VIDEO', v.videoUrl || '', caption,
+        scheduledAt, 'pending', '', '', new Date().toISOString(), v.fileName || '', null, 0, 'youtube'
+      ];
+
+      if (isPostgres) {
+        await db.run(
+          `INSERT INTO posts ("id", "accountId", "mediaType", "imageUrl", "caption", "scheduledAt", "status", "mediaId", "publishedAt", "createdAt", "sourceFile", "mediaItems", "varianceMinutes", "platform")
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT ("id") DO UPDATE SET "scheduledAt"=EXCLUDED."scheduledAt"`,
+          params
+        );
+      } else {
+        await db.run(
+          `INSERT OR REPLACE INTO posts ("id", "accountId", "mediaType", "imageUrl", "caption", "scheduledAt", "status", "mediaId", "publishedAt", "createdAt", "sourceFile", "mediaItems", "varianceMinutes", "platform")
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          params
+        );
+      }
+      created.push({ id, accountId, scheduledAt });
+    }
+
+    res.json({ success: true, count: created.length, posts: created });
+  } catch (err) {
+    console.error('[YOUTUBE BULK ERROR]', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1642,7 +1815,7 @@ app.post('/api/publish-now', requireAuth, async (req, res) => {
   const db = await getDB();
   try {
     await db.run('UPDATE posts SET "status" = \'processing\' WHERE "id" = ?', [post.id]);
-    const mediaId = await publishToInstagram(post);
+    const mediaId = post.platform === 'youtube' ? await youtubeService.publishToYouTube(post) : await publishToInstagram(post);
     await db.run('UPDATE posts SET "status" = \'success\', "mediaId" = ?, "publishedAt" = ? WHERE "id" = ?', [mediaId, new Date().toISOString(), post.id]);
     
     // ✅ Notifica Telegram e WebPush sobre publicação manual
@@ -2028,7 +2201,7 @@ async function cron() {
         console.log(`[CRON] Iniciando publicação do post ${post.id} (@${post.accountId})...`);
 
         try {
-          const mediaId = await publishToInstagram(post);
+          const mediaId = post.platform === 'youtube' ? await youtubeService.publishToYouTube(post) : await publishToInstagram(post);
           await db.run('UPDATE posts SET "status" = \'success\', "mediaId" = ?, "publishedAt" = ? WHERE "id" = ?', [mediaId, new Date().toISOString(), post.id]);
           console.log(`✅ Publicado: ${post.id}`);
           await notifyAll(post, 'success');

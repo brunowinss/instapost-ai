@@ -79,7 +79,10 @@ async function initDB() {
       "username" TEXT,
       "accessToken" TEXT,
       "profilePictureUrl" TEXT,
-      "createdAt" TEXT
+      "createdAt" TEXT,
+      "platform" TEXT DEFAULT 'instagram',
+      "refreshToken" TEXT,
+      "tokenExpiry" TEXT
     );
     CREATE TABLE IF NOT EXISTS posts (
       "id" TEXT PRIMARY KEY,
@@ -94,7 +97,8 @@ async function initDB() {
       "createdAt" TEXT,
       "sourceFile" TEXT,
       "mediaItems" TEXT,
-      "varianceMinutes" INTEGER DEFAULT 0
+      "varianceMinutes" INTEGER DEFAULT 0,
+      "platform" TEXT DEFAULT 'instagram'
     );
     CREATE TABLE IF NOT EXISTS push_subscriptions (
       "endpoint" TEXT PRIMARY KEY,
@@ -158,6 +162,18 @@ async function initDB() {
         console.log('🌐 [MIGRATION] PostgreSQL: Adding "varianceMinutes" column to posts...');
         await db.exec('ALTER TABLE posts ADD COLUMN "varianceMinutes" INTEGER DEFAULT 0');
       }
+      const checkAccPlatform = await db.all("SELECT column_name FROM information_schema.columns WHERE table_name = 'accounts' AND column_name = 'platform'");
+      if (checkAccPlatform.length === 0) {
+        console.log('🌐 [MIGRATION] PostgreSQL: Adding "platform"/"refreshToken"/"tokenExpiry" columns to accounts...');
+        await db.exec("ALTER TABLE accounts ADD COLUMN \"platform\" TEXT DEFAULT 'instagram'");
+        await db.exec('ALTER TABLE accounts ADD COLUMN "refreshToken" TEXT');
+        await db.exec('ALTER TABLE accounts ADD COLUMN "tokenExpiry" TEXT');
+      }
+      const checkPostPlatform = await db.all("SELECT column_name FROM information_schema.columns WHERE table_name = 'posts' AND column_name = 'platform'");
+      if (checkPostPlatform.length === 0) {
+        console.log('🌐 [MIGRATION] PostgreSQL: Adding "platform" column to posts...');
+        await db.exec("ALTER TABLE posts ADD COLUMN \"platform\" TEXT DEFAULT 'instagram'");
+      }
     } else {
       // SQLite Migration Logic
       const accColumns = await db.all('PRAGMA table_info(accounts)');
@@ -177,6 +193,16 @@ async function initDB() {
       if (!postColumns.some(c => c.name === 'varianceMinutes')) {
         console.log('🏠 [MIGRATION] SQLite: Adding "varianceMinutes" column to posts...');
         await db.exec('ALTER TABLE posts ADD COLUMN "varianceMinutes" INTEGER DEFAULT 0');
+      }
+      if (!accColumns.some(c => c.name === 'platform')) {
+        console.log('🏠 [MIGRATION] SQLite: Adding "platform"/"refreshToken"/"tokenExpiry" columns to accounts...');
+        await db.exec("ALTER TABLE accounts ADD COLUMN \"platform\" TEXT DEFAULT 'instagram'");
+        await db.exec('ALTER TABLE accounts ADD COLUMN "refreshToken" TEXT');
+        await db.exec('ALTER TABLE accounts ADD COLUMN "tokenExpiry" TEXT');
+      }
+      if (!postColumns.some(c => c.name === 'platform')) {
+        console.log('🏠 [MIGRATION] SQLite: Adding "platform" column to posts...');
+        await db.exec("ALTER TABLE posts ADD COLUMN \"platform\" TEXT DEFAULT 'instagram'");
       }
     }
   } catch (err) {

@@ -105,6 +105,8 @@
       <a href="#captions" class="nav-item" data-section="captions" title="Legendas e tags"><i class="fa-solid fa-bookmark" aria-hidden="true"></i><span>Legendas e tags</span></a>
       <a href="#drive" class="nav-item" data-section="drive" title="Acervo de mídias"><i class="fa-solid fa-folder-open" aria-hidden="true"></i><span>Acervo de mídias</span></a>
       <a href="#settings" class="nav-item" data-section="settings" title="Configurações"><i class="fa-solid fa-sliders" aria-hidden="true"></i><span>Configurações</span></a></div>
+      <div class="nav-group"><p class="nav-group-label">YouTube</p>
+      <a href="#youtube" class="nav-item" data-section="youtube" title="YouTube"><i class="fa-brands fa-youtube" aria-hidden="true"></i><span>YouTube</span></a></div>
     </nav>
     <div class="sidebar-footer">
       <div class="status-badge" id="scheduler-badge">
@@ -1009,6 +1011,147 @@
         <div style="overflow-x:auto; padding-bottom:6px;">
           <div id="best-times-heatmap-grid" style="min-width:680px; display:flex; flex-direction:column; gap:6px;">
             <!-- Heatmap rows rendered here -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════ YOUTUBE ═══════════════ -->
+    <section id="section-youtube" class="section">
+      <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+
+        <!-- Canais conectados -->
+        <div class="card">
+          <div class="card-title"><i class="fa-brands fa-youtube" style="color:#ff0000;"></i> Canais do YouTube</div>
+          <div id="youtube-channels-list" style="margin-top:1rem;">
+            <p style="color:var(--text-dim); font-size:0.85rem;">Nenhum canal conectado.</p>
+          </div>
+          <a href="/auth/youtube" target="_blank" class="btn btn-primary" style="width:100%; margin-top:1rem; text-decoration:none; display:flex; align-items:center; justify-content:center; gap:8px;">
+            <i class="fa-brands fa-youtube"></i> Conectar canal
+          </a>
+          <p style="font-size:0.72rem; color:var(--text-dim); margin-top:0.6rem;">Requer <code>YOUTUBE_CLIENT_ID</code>/<code>YOUTUBE_CLIENT_SECRET</code>/<code>YOUTUBE_REDIRECT_URI</code> configurados no servidor. Veja o <code>YOUTUBE.md</code>.</p>
+        </div>
+
+        <!-- Nova publicação -->
+        <div class="card">
+          <div class="card-title"><i class="fa-solid fa-circle-plus"></i> Nova publicação</div>
+          <form id="youtube-post-form" style="margin-top:1rem;" onsubmit="return false;">
+            <div class="form-group">
+              <label class="label"><i class="fa-solid fa-user-circle"></i> Canal de Destino</label>
+              <select id="youtube-account-select" class="input"><option>Carregando canais...</option></select>
+            </div>
+
+            <div class="form-group">
+              <label class="label"><i class="fa-solid fa-film"></i> Tipo</label>
+              <div style="display:flex; gap:10px;">
+                <button type="button" class="btn btn-primary btn-tab active" id="yt-type-short" onclick="setYoutubePostType('YOUTUBE_SHORT')">Short</button>
+                <button type="button" class="btn btn-ghost btn-tab" id="yt-type-video" onclick="setYoutubePostType('YOUTUBE_VIDEO')">Vídeo</button>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="label"><i class="fa-solid fa-video"></i> Arquivo de Vídeo</label>
+              <div class="dropzone" id="youtube-dropzone" style="padding:1.4rem 1rem; border-style:dashed;">
+                <i class="fa-solid fa-cloud-arrow-up" style="font-size:2rem; color:var(--primary); margin-bottom:0.6rem;"></i>
+                <p style="font-weight:600; color:var(--text-main);">Arraste o vídeo ou clique</p>
+                <input type="file" id="youtube-file-input" accept="video/*" hidden>
+              </div>
+              <div id="youtube-file-summary" style="display:none; margin-top:0.6rem; font-size:0.82rem; color:var(--accent); font-weight:600;"></div>
+            </div>
+
+            <div class="form-group">
+              <label class="label"><i class="fa-solid fa-heading"></i> Título</label>
+              <input type="text" class="input" id="youtube-title-input" maxlength="100" placeholder="Título do vídeo">
+            </div>
+            <div class="form-group">
+              <label class="label"><i class="fa-solid fa-align-left"></i> Descrição</label>
+              <textarea class="textarea" id="youtube-description-input" rows="3" placeholder="Descrição do vídeo — #hashtags aqui também viram tags do vídeo"></textarea>
+            </div>
+            <div class="form-group">
+              <label class="label"><i class="fa-solid fa-calendar-days"></i> Agendar para</label>
+              <input type="datetime-local" class="input" id="youtube-schedule-input">
+            </div>
+
+            <button type="button" class="btn btn-primary" id="btn-submit-youtube-post" style="width:100%; padding:1rem;" onclick="submitYoutubePost()">
+              <i class="fa-solid fa-paper-plane"></i> Agendar publicação
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Envio em massa -->
+      <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 1.5rem;">
+        <div class="card">
+          <div class="card-title"><i class="fa-solid fa-bolt-lightning"></i> Envio em Massa</div>
+          <form id="youtube-bulk-form" style="margin-top:1rem;" onsubmit="return false;">
+            <div class="form-group">
+              <label class="label"><i class="fa-solid fa-user-circle"></i> Canal de Destino</label>
+              <select id="youtube-bulk-account-select" class="input"><option>Carregando canais...</option></select>
+            </div>
+            <div class="form-group">
+              <label class="label"><i class="fa-solid fa-film"></i> Tipo dos vídeos</label>
+              <select id="youtube-bulk-type-select" class="input">
+                <option value="YOUTUBE_SHORT">Shorts</option>
+                <option value="YOUTUBE_VIDEO">Vídeos</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="label"><i class="fa-solid fa-video"></i> Vídeos (selecione vários)</label>
+              <div class="dropzone" id="youtube-bulk-dropzone" style="padding:1.4rem 1rem; border-style:dashed;">
+                <i class="fa-solid fa-cloud-arrow-up" style="font-size:2rem; color:var(--primary); margin-bottom:0.6rem;"></i>
+                <p style="font-weight:600; color:var(--text-main);">Arraste vários vídeos ou clique</p>
+                <p style="font-size:0.78rem; color:var(--text-dim); margin-top:4px;">O título de cada vídeo vem do nome do arquivo</p>
+                <input type="file" id="youtube-bulk-file-input" multiple accept="video/*" hidden>
+              </div>
+              <div id="youtube-bulk-files-summary" style="display:none; margin-top:0.6rem; font-size:0.82rem; color:var(--accent); font-weight:600;"></div>
+            </div>
+            <div class="form-group">
+              <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+                <input type="checkbox" id="youtube-bulk-auto-times" checked style="width:16px; height:16px; accent-color:var(--primary);">
+                <label for="youtube-bulk-auto-times" style="font-size:0.82rem; color:var(--text-secondary); cursor:pointer;">Escolher os horários por mim (picos de audiência)</label>
+              </div>
+              <div class="col-2" style="gap:12px;">
+                <div>
+                  <label class="label" style="font-size:0.7rem;">Por dia (se automático)</label>
+                  <select class="input" id="youtube-bulk-per-day">
+                    <option value="1">1 — 19:00</option>
+                    <option value="2">2 — 12:00 · 19:00</option>
+                    <option value="3" selected>3 — 09:00 · 13:00 · 20:00</option>
+                    <option value="4">4 — 08:00 · 12:00 · 17:00 · 21:00</option>
+                    <option value="5">5 — 08:00 · 11:00 · 14:00 · 18:00 · 21:00</option>
+                    <option value="6">6 — 07:30 · 10:00 · 12:30 · 16:00 · 19:00 · 21:30</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="label" style="font-size:0.7rem;">Horários manuais (se desmarcado)</label>
+                  <input type="text" class="input" id="youtube-bulk-manual-times" placeholder="12:00,18:30">
+                </div>
+              </div>
+              <div style="margin-top:10px;">
+                <label class="label" style="font-size:0.7rem;">Começar em (opcional — padrão: continua depois do que já está agendado)</label>
+                <input type="date" class="input" id="youtube-bulk-start-date">
+              </div>
+            </div>
+
+            <div id="youtube-bulk-progress-box" style="display:none; margin-bottom:1rem;">
+              <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-bottom:4px;">
+                <span id="youtube-bulk-progress-status" style="color:var(--accent);">Enviando vídeos...</span>
+                <span id="youtube-bulk-progress-percentage" style="font-weight:700;">0%</span>
+              </div>
+              <div class="progress-bar"><div class="progress-fill" id="youtube-bulk-progress-bar" style="width:0%;"></div></div>
+            </div>
+
+            <button type="button" class="btn btn-primary" id="btn-submit-youtube-bulk" style="width:100%; padding:1rem;" onclick="submitYoutubeBulk()">
+              <i class="fa-solid fa-calendar-check"></i> Agendar lote
+            </button>
+          </form>
+        </div>
+
+        <!-- Fila do YouTube -->
+        <div class="card" style="display:flex; flex-direction:column;">
+          <div class="card-title"><i class="fa-solid fa-list-ol"></i> Fila do YouTube</div>
+          <div id="youtube-queue-list" style="margin-top:1rem; display:flex; flex-direction:column; gap:10px; max-height:560px; overflow-y:auto; padding-right:4px;">
+            <p style="color:var(--text-dim); font-size:0.85rem;">Nenhum post agendado.</p>
           </div>
         </div>
       </div>
