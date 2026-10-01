@@ -4362,13 +4362,14 @@ async function multGenerate() {
     const p = Math.round((done / total) * 100);
     if (bar) bar.style.width = `${p}%`;
     if (pct) pct.textContent = `${p}%`;
-    if (status) status.textContent = `Enviando clipe ${done} de ${total}...`;
+    if (status) status.textContent = `Enviando clipes em paralelo... (${done}/${total})`;
   };
 
   try {
-    for (const { type, index } of allClips) {
-      await multUploadClip(type, index, cloudName, cloudPreset, updateBar);
-    }
+    // Upload todos os clipes em paralelo — muito mais rápido que sequencial
+    await Promise.all(allClips.map(({ type, index }) =>
+      multUploadClip(type, index, cloudName, cloudPreset, updateBar)
+    ));
     if (status) status.textContent = 'Gerando combinações...';
 
     // Build all combinations in best posting order
