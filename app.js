@@ -3815,6 +3815,7 @@ function renderYoutubeSection() {
   populateYoutubeAccountSelectors();
   setupYoutubeDropzone();
   setupYoutubeBulkDropzone();
+  renderYoutubeBulkPreviewList();
   renderYoutubeQueueList();
 }
 
@@ -3898,6 +3899,12 @@ function setupYoutubeDropzone() {
   };
 }
 
+/** Título a partir do nome do arquivo, igual ao 3º critério do postador-yt (limpa _/- e capitaliza). */
+function guessTitleFromFilename(name) {
+  const guess = name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
+  return guess.charAt(0).toUpperCase() + guess.slice(1);
+}
+
 function handleYoutubeFileSelect(file) {
   if (!file || !file.type.startsWith('video/')) {
     showToast('Selecione um arquivo de vídeo.', 'warning');
@@ -3911,8 +3918,7 @@ function handleYoutubeFileSelect(file) {
   }
   const titleInput = document.getElementById('youtube-title-input');
   if (titleInput && !titleInput.value) {
-    const guess = file.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
-    titleInput.value = guess.charAt(0).toUpperCase() + guess.slice(1);
+    titleInput.value = guessTitleFromFilename(file.name);
   }
 }
 
@@ -3993,11 +3999,52 @@ function handleYoutubeBulkFilesSelect(files) {
     showToast('Selecione arquivos de vídeo.', 'warning');
     return;
   }
-  STATE.youtubeBulkFiles = videoFiles;
+  STATE.youtubeBulkFiles = videoFiles.map(file => ({ file, title: guessTitleFromFilename(file.name) }));
   const summaryEl = document.getElementById('youtube-bulk-files-summary');
   if (summaryEl) {
     summaryEl.style.display = 'block';
     summaryEl.innerHTML = `<i class="fa-solid fa-check-circle"></i> ${videoFiles.length} vídeos selecionados`;
+  }
+  renderYoutubeBulkPreviewList();
+}
+
+function renderYoutubeBulkPreviewList() {
+  const list = document.getElementById('youtube-bulk-preview-list');
+  if (!list) return;
+  const items = STATE.youtubeBulkFiles || [];
+
+  if (items.length === 0) {
+    list.style.display = 'none';
+    list.innerHTML = '';
+    return;
+  }
+
+  list.style.display = 'flex';
+  list.innerHTML = items.map((item, idx) => `
+    <div style="display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.03); border:1px solid var(--border-color); border-radius:10px; padding:8px 10px;">
+      <div style="width:28px; height:28px; border-radius:8px; background:var(--primary-bg); color:var(--primary); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:0.75rem; flex-shrink:0;">
+        #${idx + 1}
+      </div>
+      <div style="flex:1; min-width:0;">
+        <input type="text" class="input" style="padding:6px 10px; font-size:0.82rem;" value="${item.title.replace(/"/g, '&quot;')}" oninput="updateYoutubeBulkFileTitle(${idx}, this.value)">
+        <div style="font-size:0.68rem; color:var(--text-dim); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${item.file.name}</div>
+      </div>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="removeYoutubeBulkFile(${idx})" style="padding:4px 8px; color:var(--error); flex-shrink:0;"><i class="fa-solid fa-trash"></i></button>
+    </div>
+  `).join('');
+}
+
+function updateYoutubeBulkFileTitle(index, value) {
+  if (STATE.youtubeBulkFiles[index]) STATE.youtubeBulkFiles[index].title = value;
+}
+
+function removeYoutubeBulkFile(index) {
+  STATE.youtubeBulkFiles.splice(index, 1);
+  renderYoutubeBulkPreviewList();
+  const summaryEl = document.getElementById('youtube-bulk-files-summary');
+  if (summaryEl) {
+    if (STATE.youtubeBulkFiles.length === 0) summaryEl.style.display = 'none';
+    else summaryEl.innerHTML = `<i class="fa-solid fa-check-circle"></i> ${STATE.youtubeBulkFiles.length} vídeos selecionados`;
   }
 }
 
@@ -4032,7 +4079,7 @@ async function submitYoutubeBulk() {
 
   const videos = [];
   for (let i = 0; i < files.length; i++) {
-    const file = files[i];
+    const { file, title } = files[i];
     const pct = Math.round((i / files.length) * 100);
     if (progressBar) progressBar.style.width = `${pct}%`;
     if (progressPct) progressPct.innerText = `${pct}%`;
@@ -4047,9 +4094,8 @@ async function submitYoutubeBulk() {
       const uploadData = await uploadRes.json();
       if (!uploadData.secure_url) throw new Error(uploadData.error?.message || 'Falha no upload do Cloudinary.');
 
-      const guessedTitle = file.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
       videos.push({
-        title: guessedTitle.charAt(0).toUpperCase() + guessedTitle.slice(1),
+        title: title || guessTitleFromFilename(file.name),
         description: '',
         isShort: mediaType === 'YOUTUBE_SHORT',
         videoUrl: uploadData.secure_url,
@@ -4081,6 +4127,7 @@ async function submitYoutubeBulk() {
         STATE.youtubeBulkFiles = [];
         const summaryEl = document.getElementById('youtube-bulk-files-summary');
         if (summaryEl) summaryEl.style.display = 'none';
+        renderYoutubeBulkPreviewList();
         await loadData();
       } else {
         throw new Error(data.error);
