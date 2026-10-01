@@ -238,3 +238,135 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 @media (prefers-reduced-motion: reduce) {
   .sidebar { transition: none; }
 }
+
+/* ===================== MULTIPLICADOR DE VÍDEOS ===================== */
+.mult-counter-box {
+  flex: 1;
+  background: rgba(255,255,255,.04);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 8px 12px;
+  text-align: center;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+.mult-result-box {
+  background: rgba(70,207,218,.08);
+  border-color: rgba(70,207,218,.3);
+  color: var(--accent);
+}
+.mult-clip-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+.mult-clip-thumb {
+  position: relative;
+  aspect-ratio: 9/16;
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(255,255,255,.04);
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+}
+.mult-clip-thumb video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+.mult-clip-thumb .mult-thumb-label {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0,0,0,.65);
+  font-size: 0.6rem;
+  color: #fff;
+  padding: 3px 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mult-clip-thumb .mult-thumb-remove {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(220,50,50,.85);
+  color: #fff;
+  border: none;
+  font-size: 0.55rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity .15s;
+}
+.mult-clip-thumb:hover .mult-thumb-remove { opacity: 1; }
+.mult-clip-thumb.uploading::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(70,207,218,.18);
+  animation: mult-pulse 1s ease-in-out infinite alternate;
+}
+@keyframes mult-pulse { from { opacity:.4 } to { opacity:1 } }
+
+.mult-combo-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: rgba(255,255,255,.025);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  transition: border-color .15s;
+}
+.mult-combo-row:hover { border-color: var(--border-hover); }
+.mult-combo-index {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  width: 22px;
+  flex-shrink: 0;
+  text-align: center;
+}
+.mult-combo-chips {
+  display: flex;
+  gap: 5px;
+  flex: 1;
+  flex-wrap: wrap;
+}
+.mult-chip {
+  font-size: 0.65rem;
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-weight: 600;
+}
+.mult-chip-g { background: rgba(70,207,218,.15); color: var(--accent); }
+.mult-chip-c { background: rgba(168,85,247,.15); color: #c084fc; }
+.mult-chip-cta { background: rgba(251,191,36,.15); color: #fbbf24; }
+
+.mult-badge {
+  font-size: 0.65rem;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.mult-badge-original  { background: rgba(16,185,129,.18); color: #34d399; border: 1px solid rgba(52,211,153,.25); }
+.mult-badge-medium    { background: rgba(251,191,36,.12); color: #fbbf24; border: 1px solid rgba(251,191,36,.25); }
+.mult-badge-similar   { background: rgba(239,68,68,.10);  color: #f87171; border: 1px solid rgba(248,113,113,.2); }
+
+.mult-combo-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.mult-combo-actions a, .mult-combo-actions button {
+  font-size: 0.72rem;
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+/* ===================== FIM MULTIPLICADOR =========================== */

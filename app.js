@@ -4207,6 +4207,263 @@ async function submitYoutubeBulk() {
   if (progressBox) progressBox.style.display = 'none';
 }
 
+/* =====================================================================
+   MULTIPLICADOR DE VÍDEOS
+   ===================================================================== */
+
+const MULT_LIMITS = { gancho: 10, corpo: 5, cta: 3 };
+
+const MULT_STATE = {
+  gancho: [],  // { file, publicId, url, name }
+  corpo:  [],
+  cta:    [],
+  combinations: []
+};
+
+function multOpenPicker(type) {
+  document.getElementById(`mult-${type}-input`).click();
+}
+
+function multHandleFiles(type, files) {
+  const limit = MULT_LIMITS[type];
+  const arr = MULT_STATE[type];
+  const remaining = limit - arr.length;
+  const toAdd = Array.from(files).slice(0, remaining);
+  toAdd.forEach(f => arr.push({ file: f, publicId: null, url: null, name: f.name }));
+  multRefreshCounters();
+  multRenderClipGrid(type);
+  document.getElementById(`mult-${type}-input`).value = '';
+}
+
+function multRemoveClip(type, index) {
+  MULT_STATE[type].splice(index, 1);
+  multRefreshCounters();
+  multRenderClipGrid(type);
+}
+
+function multRefreshCounters() {
+  const g = MULT_STATE.gancho.length;
+  const c = MULT_STATE.corpo.length;
+  const cta = MULT_STATE.cta.length;
+  const total = g * c * cta;
+  document.getElementById('mult-gancho-count').textContent = g;
+  document.getElementById('mult-corpo-count').textContent = c;
+  document.getElementById('mult-cta-count').textContent = cta;
+  document.getElementById('mult-total-count').textContent = total;
+  document.getElementById('mult-gancho-remaining').textContent = MULT_LIMITS.gancho - g;
+  document.getElementById('mult-corpo-remaining').textContent = MULT_LIMITS.corpo - c;
+  document.getElementById('mult-cta-remaining').textContent = MULT_LIMITS.cta - cta;
+  const btn = document.getElementById('btn-mult-generate');
+  if (btn) {
+    document.getElementById('mult-btn-total').textContent = total || 150;
+    btn.disabled = (g === 0 || c === 0 || cta === 0);
+  }
+}
+
+function multRenderClipGrid(type) {
+  const grid = document.getElementById(`mult-${type}-grid`);
+  if (!grid) return;
+  const arr = MULT_STATE[type];
+  if (arr.length === 0) { grid.innerHTML = ''; return; }
+  grid.innerHTML = arr.map((clip, i) => `
+    <div class="mult-clip-thumb${clip.publicId === 'uploading' ? ' uploading' : ''}">
+      ${clip.url ? `<video src="${clip.url}" muted playsinline preload="metadata"></video>` : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:1.3rem;"><i class="fa-solid fa-video"></i></div>'}
+      <div class="mult-thumb-label">${clip.name}</div>
+      <button class="mult-thumb-remove" onclick="multRemoveClip('${type}',${i})" title="Remover"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+  `).join('');
+}
+
+function multBuildCloudinaryConcatUrl(cloudName, ganchoPid, corpoPid, ctaPid) {
+  const esc = pid => pid.replace(/\//g, ':');
+  return `https://res.cloudinary.com/${cloudName}/video/upload/l_video:${esc(corpoPid)}/fl_splice/l_video:${esc(ctaPid)}/fl_splice/${esc(ganchoPid)}.mp4`;
+}
+
+function multCalcOriginality(idx, total) {
+  const ratio = idx / total;
+  if (ratio < 0.4) return 'original';
+  if (ratio < 0.72) return 'medium';
+  return 'similar';
+}
+
+function multBuildPostingOrder(gLen, cLen, ctaLen) {
+  // Interleave combos to maximise variety in early positions
+  // Strategy: step through each dimension by prime-like strides
+  const results = [];
+  const visited = new Set();
+  for (let pass = 0; pass < gLen * cLen * ctaLen; pass++) {
+    const g   = pass % gLen;
+    const c   = Math.floor(pass / gLen) % cLen;
+    const cta = Math.floor(pass / (gLen * cLen)) % ctaLen;
+    const key = `${g}-${c}-${cta}`;
+    if (!visited.has(key)) { visited.add(key); results.push({ g, c, cta }); }
+  }
+  // Fill any missed combos (shouldn't happen but safety)
+  for (let g = 0; g < gLen; g++)
+    for (let c = 0; c < cLen; c++)
+      for (let cta = 0; cta < ctaLen; cta++) {
+        const key = `${g}-${c}-${cta}`;
+        if (!visited.has(key)) { visited.add(key); results.push({ g, c, cta }); }
+      }
+  return results;
+}
+
+async function multUploadClip(type, index, cloudName, cloudPreset, onProgress) {
+  const clip = MULT_STATE[type][index];
+  if (clip.publicId && clip.publicId !== 'uploading') return; // already done
+  clip.publicId = 'uploading';
+  multRenderClipGrid(type);
+
+  const fd = new FormData();
+  fd.append('file', clip.file);
+  fd.append('upload_preset', cloudPreset);
+  fd.append('resource_type', 'video');
+
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/video/upload`, { method: 'POST', body: fd });
+  const data = await res.json();
+  if (!data.secure_url) throw new Error(data.error?.message || 'Upload falhou');
+
+  clip.publicId = data.public_id;
+  clip.url = data.secure_url;
+  multRenderClipGrid(type);
+  onProgress && onProgress();
+}
+
+async function multGenerate() {
+  const cloudName   = (STATE.globalConfig.cloudinaryName  || '').trim();
+  const cloudPreset = (STATE.globalConfig.cloudinaryPreset || '').trim();
+  if (!cloudName || !cloudPreset) {
+    showToast('Configure o Cloudinary nas Configurações primeiro!', 'error'); return;
+  }
+  if (!MULT_STATE.gancho.length || !MULT_STATE.corpo.length || !MULT_STATE.cta.length) {
+    showToast('Adicione ao menos 1 Gancho, 1 Corpo e 1 CTA antes de gerar.', 'warning'); return;
+  }
+
+  const btn = document.getElementById('btn-mult-generate');
+  const progressBox = document.getElementById('mult-upload-progress-box');
+  const bar = document.getElementById('mult-upload-bar');
+  const status = document.getElementById('mult-upload-status');
+  const pct = document.getElementById('mult-upload-pct');
+
+  if (btn) btn.disabled = true;
+  if (progressBox) progressBox.style.display = 'block';
+
+  const allClips = [
+    ...MULT_STATE.gancho.map((_, i) => ({ type: 'gancho', index: i })),
+    ...MULT_STATE.corpo.map((_,  i) => ({ type: 'corpo',  index: i })),
+    ...MULT_STATE.cta.map((_,   i) => ({ type: 'cta',    index: i })),
+  ].filter(({ type, index }) => !MULT_STATE[type][index].publicId || MULT_STATE[type][index].publicId === 'uploading');
+
+  let done = 0;
+  const total = MULT_STATE.gancho.length + MULT_STATE.corpo.length + MULT_STATE.cta.length;
+
+  const updateBar = () => {
+    done++;
+    const p = Math.round((done / total) * 100);
+    if (bar) bar.style.width = `${p}%`;
+    if (pct) pct.textContent = `${p}%`;
+    if (status) status.textContent = `Enviando clipe ${done} de ${total}...`;
+  };
+
+  try {
+    for (const { type, index } of allClips) {
+      await multUploadClip(type, index, cloudName, cloudPreset, updateBar);
+    }
+    if (status) status.textContent = 'Gerando combinações...';
+
+    // Build all combinations in best posting order
+    const order = multBuildPostingOrder(MULT_STATE.gancho.length, MULT_STATE.corpo.length, MULT_STATE.cta.length);
+    const totalCombos = order.length;
+
+    MULT_STATE.combinations = order.map(({ g, c, cta }, i) => {
+      const gancho = MULT_STATE.gancho[g];
+      const corpo  = MULT_STATE.corpo[c];
+      const ctaClip = MULT_STATE.cta[cta];
+      const url = multBuildCloudinaryConcatUrl(cloudName, gancho.publicId, corpo.publicId, ctaClip.publicId);
+      const badge = multCalcOriginality(i, totalCombos);
+      return { index: i + 1, g: g + 1, c: c + 1, cta: cta + 1, url, badge,
+               gName: gancho.name, cName: corpo.name, ctaName: ctaClip.name };
+    });
+
+    multRenderGallery(MULT_STATE.combinations);
+    showToast(`✅ ${totalCombos} vídeos únicos gerados com sucesso!`, 'success');
+  } catch (e) {
+    showToast(`Erro ao gerar: ${e.message}`, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+    if (progressBox) progressBox.style.display = 'none';
+  }
+}
+
+const MULT_BADGE_LABEL = {
+  original: '⭐ Original',
+  medium:   '🔶 Repete um pouco',
+  similar:  '🔸 Bem parecido'
+};
+
+function multRenderGallery(combos) {
+  const list  = document.getElementById('mult-gallery-list');
+  const empty = document.getElementById('mult-gallery-empty');
+  const count = document.getElementById('mult-gallery-count');
+  const legend = document.getElementById('mult-legend');
+  const dlBtn = document.getElementById('mult-download-all-btn');
+
+  if (!list) return;
+
+  if (!combos || combos.length === 0) {
+    list.style.display = 'none';
+    if (empty) empty.style.display = 'flex';
+    if (count) count.textContent = '0';
+    return;
+  }
+
+  if (empty) empty.style.display = 'none';
+  if (legend) legend.style.display = 'block';
+  if (dlBtn) dlBtn.style.display = 'inline-flex';
+  if (count) count.textContent = combos.length;
+  list.style.display = 'flex';
+
+  list.innerHTML = combos.map(combo => `
+    <div class="mult-combo-row" data-badge="${combo.badge}">
+      <div class="mult-combo-index">${combo.index}</div>
+      <div class="mult-combo-chips">
+        <span class="mult-chip mult-chip-g">G${combo.g}</span>
+        <span class="mult-chip mult-chip-c">C${combo.c}</span>
+        <span class="mult-chip mult-chip-cta">CTA${combo.cta}</span>
+        <span class="mult-badge mult-badge-${combo.badge}">${MULT_BADGE_LABEL[combo.badge]}</span>
+      </div>
+      <div class="mult-combo-actions">
+        <a href="${combo.url}" target="_blank" download class="btn btn-ghost btn-sm" title="Abrir / Baixar vídeo">
+          <i class="fa-solid fa-download"></i>
+        </a>
+        <button class="btn btn-ghost btn-sm" onclick="multCopyUrl('${combo.url}')" title="Copiar link">
+          <i class="fa-solid fa-link"></i>
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function multFilterGallery(filter) {
+  const rows = document.querySelectorAll('.mult-combo-row');
+  rows.forEach(row => {
+    const badge = row.dataset.badge;
+    row.style.display = (filter === 'all' || badge === filter) ? '' : 'none';
+  });
+}
+
+function multCopyUrl(url) {
+  navigator.clipboard.writeText(url).then(() => showToast('Link copiado!', 'success'));
+}
+
+function multDownloadAll() {
+  if (!MULT_STATE.combinations.length) return;
+  const lines = MULT_STATE.combinations.map(c => `${c.index}\t${MULT_BADGE_LABEL[c.badge]}\t${c.url}`);
+  const blob = new Blob(['#\tEtiqueta\tURL\n' + lines.join('\n')], { type: 'text/plain' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'multiplicador-videos.txt'; a.click();
+}
+
 function renderYoutubeQueueList() {
   const list = document.getElementById('youtube-queue-list');
   if (!list) return;

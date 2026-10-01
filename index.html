@@ -107,6 +107,8 @@
       <a href="#settings" class="nav-item" data-section="settings" title="Configurações"><i class="fa-solid fa-sliders" aria-hidden="true"></i><span>Configurações</span></a></div>
       <div class="nav-group"><p class="nav-group-label">YouTube</p>
       <a href="#youtube" class="nav-item" data-section="youtube" title="YouTube"><i class="fa-brands fa-youtube" aria-hidden="true"></i><span>YouTube</span></a></div>
+      <div class="nav-group"><p class="nav-group-label">Ferramentas</p>
+      <a href="#multiplicador" class="nav-item" data-section="multiplicador" title="Multiplicador de Vídeos"><i class="fa-solid fa-infinity" aria-hidden="true"></i><span>Multiplicador</span></a></div>
     </nav>
     <div class="sidebar-footer">
       <div class="status-badge" id="scheduler-badge">
@@ -1157,6 +1159,151 @@
         </div>
       </div>
     </section>
+
+    <!-- ===================== MULTIPLICADOR DE VÍDEOS ===================== -->
+    <section id="section-multiplicador" class="section">
+      <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+
+        <!-- LEFT: Upload das peças -->
+        <div style="display:flex; flex-direction:column; gap:1.2rem;">
+
+          <!-- Header card -->
+          <div class="card" style="background:linear-gradient(135deg,rgba(70,207,218,.08),rgba(255,0,100,.06)); border-color:rgba(70,207,218,.2);">
+            <div style="display:flex; gap:14px; align-items:center;">
+              <div style="width:42px; height:42px; border-radius:12px; background:linear-gradient(135deg,#46cfda,#a855f7); display:flex; align-items:center; justify-content:center; color:#000; font-size:1.2rem; flex-shrink:0;">
+                <i class="fa-solid fa-infinity"></i>
+              </div>
+              <div>
+                <div style="font-weight:700; font-size:1.05rem; color:var(--text-main);">Multiplicador de Vídeos</div>
+                <div style="font-size:0.75rem; color:var(--text-dim);">Grave 18 pedaços e receba <strong style="color:var(--accent);">150 vídeos únicos</strong> prontos pra postar</div>
+              </div>
+            </div>
+            <div style="display:flex; gap:1rem; margin-top:1.2rem;">
+              <div class="mult-counter-box">
+                <span id="mult-gancho-count">0</span><span>/10</span>
+                <div style="font-size:0.65rem; color:var(--text-dim); margin-top:2px;">GANCHO</div>
+              </div>
+              <div style="display:flex; align-items:center; color:var(--text-dim); font-size:0.9rem;">×</div>
+              <div class="mult-counter-box">
+                <span id="mult-corpo-count">0</span><span>/5</span>
+                <div style="font-size:0.65rem; color:var(--text-dim); margin-top:2px;">CORPO</div>
+              </div>
+              <div style="display:flex; align-items:center; color:var(--text-dim); font-size:0.9rem;">×</div>
+              <div class="mult-counter-box">
+                <span id="mult-cta-count">0</span><span>/3</span>
+                <div style="font-size:0.65rem; color:var(--text-dim); margin-top:2px;">CTA</div>
+              </div>
+              <div style="display:flex; align-items:center; color:var(--text-dim); font-size:0.9rem;">=</div>
+              <div class="mult-counter-box mult-result-box">
+                <span id="mult-total-count">0</span>
+                <div style="font-size:0.65rem; color:var(--accent); margin-top:2px;">VÍDEOS</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Gancho upload -->
+          <div class="card">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.9rem;">
+              <div>
+                <div style="font-weight:700; color:var(--text-main); font-size:0.95rem;"><span style="background:#46cfda22; color:var(--accent); padding:2px 8px; border-radius:6px; font-size:0.72rem; margin-right:6px;">10 clipes</span>Gancho</div>
+                <div style="font-size:0.72rem; color:var(--text-dim); margin-top:2px;">A abertura que prende a atenção nos primeiros segundos</div>
+              </div>
+            </div>
+            <div id="mult-gancho-grid" class="mult-clip-grid"></div>
+            <button type="button" class="btn btn-ghost btn-sm" style="width:100%; margin-top:8px; border-style:dashed;" onclick="multOpenPicker('gancho')">
+              <i class="fa-solid fa-plus"></i> Adicionar Gancho (<span id="mult-gancho-remaining">10</span> restantes)
+            </button>
+            <input type="file" id="mult-gancho-input" multiple accept="video/*" hidden onchange="multHandleFiles('gancho', this.files)">
+          </div>
+
+          <!-- Corpo upload -->
+          <div class="card">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.9rem;">
+              <div>
+                <div style="font-weight:700; color:var(--text-main); font-size:0.95rem;"><span style="background:#a855f722; color:#c084fc; padding:2px 8px; border-radius:6px; font-size:0.72rem; margin-right:6px;">5 clipes</span>Corpo</div>
+                <div style="font-size:0.72rem; color:var(--text-dim); margin-top:2px;">O conteúdo principal — produto, demonstração, história</div>
+              </div>
+            </div>
+            <div id="mult-corpo-grid" class="mult-clip-grid"></div>
+            <button type="button" class="btn btn-ghost btn-sm" style="width:100%; margin-top:8px; border-style:dashed;" onclick="multOpenPicker('corpo')">
+              <i class="fa-solid fa-plus"></i> Adicionar Corpo (<span id="mult-corpo-remaining">5</span> restantes)
+            </button>
+            <input type="file" id="mult-corpo-input" multiple accept="video/*" hidden onchange="multHandleFiles('corpo', this.files)">
+          </div>
+
+          <!-- CTA upload -->
+          <div class="card">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.9rem;">
+              <div>
+                <div style="font-weight:700; color:var(--text-main); font-size:0.95rem;"><span style="background:#f59e0b22; color:#fbbf24; padding:2px 8px; border-radius:6px; font-size:0.72rem; margin-right:6px;">3 clipes</span>CTA</div>
+                <div style="font-size:0.72rem; color:var(--text-dim); margin-top:2px;">A chamada pra ação final — link, comprar, seguir</div>
+              </div>
+            </div>
+            <div id="mult-cta-grid" class="mult-clip-grid"></div>
+            <button type="button" class="btn btn-ghost btn-sm" style="width:100%; margin-top:8px; border-style:dashed;" onclick="multOpenPicker('cta')">
+              <i class="fa-solid fa-plus"></i> Adicionar CTA (<span id="mult-cta-remaining">3</span> restantes)
+            </button>
+            <input type="file" id="mult-cta-input" multiple accept="video/*" hidden onchange="multHandleFiles('cta', this.files)">
+          </div>
+
+          <!-- Botão gerar -->
+          <div class="card" style="border-color:rgba(70,207,218,.2);">
+            <div id="mult-upload-progress-box" style="display:none; margin-bottom:1rem;">
+              <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-bottom:4px;">
+                <span id="mult-upload-status" style="color:var(--accent);">Enviando clipes...</span>
+                <span id="mult-upload-pct" style="font-weight:700;">0%</span>
+              </div>
+              <div class="progress-bar"><div class="progress-fill" id="mult-upload-bar" style="width:0%;"></div></div>
+            </div>
+            <button type="button" id="btn-mult-generate" class="btn btn-primary" style="width:100%; padding:1rem; font-size:1rem; background:linear-gradient(135deg,#46cfda,#a855f7); border:none;" onclick="multGenerate()">
+              <i class="fa-solid fa-infinity"></i> Gerar <span id="mult-btn-total">150</span> Vídeos Únicos
+            </button>
+            <p style="font-size:0.72rem; color:var(--text-dim); text-align:center; margin-top:8px;">Os clipes serão enviados ao Cloudinary e as combinações geradas automaticamente</p>
+          </div>
+        </div>
+
+        <!-- RIGHT: Galeria de combinações -->
+        <div class="card" style="display:flex; flex-direction:column; min-height:600px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+            <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-film"></i> Vídeos Gerados (<span id="mult-gallery-count">0</span>)</div>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <select id="mult-filter-select" class="input" style="font-size:0.75rem; padding:4px 8px; height:auto;" onchange="multFilterGallery(this.value)">
+                <option value="all">Todos</option>
+                <option value="original">⭐ Original</option>
+                <option value="medium">🔶 Repete um pouco</option>
+                <option value="similar">🔸 Bem parecido</option>
+              </select>
+              <button class="btn btn-ghost btn-sm" onclick="multDownloadAll()" style="font-size:0.72rem; display:none;" id="mult-download-all-btn">
+                <i class="fa-solid fa-download"></i> Baixar lista
+              </button>
+            </div>
+          </div>
+
+          <!-- Legenda de etiquetas -->
+          <div id="mult-legend" style="display:none; background:rgba(255,255,255,0.03); border-radius:10px; padding:10px 14px; margin-bottom:1rem; font-size:0.75rem; color:var(--text-dim);">
+            <div style="display:flex; gap:16px; flex-wrap:wrap;">
+              <span><span class="mult-badge mult-badge-original">⭐ Original</span> — poste primeiro, sem risco</span>
+              <span><span class="mult-badge mult-badge-medium">🔶 Repete um pouco</span> — diferencie a legenda</span>
+              <span><span class="mult-badge mult-badge-similar">🔸 Bem parecido</span> — deixe por último</span>
+            </div>
+          </div>
+
+          <!-- Estado vazio -->
+          <div id="mult-gallery-empty" style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; color:var(--text-dim); padding:3rem 1rem;">
+            <div style="font-size:3rem; margin-bottom:1rem; opacity:0.3;"><i class="fa-solid fa-infinity"></i></div>
+            <p style="font-weight:600; color:var(--text-secondary);">Nenhum vídeo gerado ainda</p>
+            <p style="font-size:0.8rem; margin-top:4px; max-width:280px;">Adicione os clipes nas 3 categorias ao lado e clique em "Gerar Vídeos"</p>
+          </div>
+
+          <!-- Galeria -->
+          <div id="mult-gallery-list" style="display:none; flex-direction:column; gap:8px; overflow-y:auto; max-height:680px; padding-right:4px; flex:1;">
+            <!-- preenchido via JS -->
+          </div>
+        </div>
+
+      </div>
+    </section>
+    <!-- ===================== FIM MULTIPLICADOR ========================== -->
 
   </main>
 
