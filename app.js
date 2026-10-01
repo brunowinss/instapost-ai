@@ -3913,8 +3913,20 @@ function handleYoutubeFileSelect(file) {
   STATE.youtubeFile = file;
   const summaryEl = document.getElementById('youtube-file-summary');
   if (summaryEl) {
-    summaryEl.style.display = 'block';
-    summaryEl.innerHTML = `<i class="fa-solid fa-check-circle"></i> ${file.name}`;
+    summaryEl.style.display = 'flex';
+    summaryEl.style.alignItems = 'center';
+    summaryEl.style.gap = '10px';
+    summaryEl.innerHTML = `
+      <div style="width:48px; height:48px; border-radius:8px; overflow:hidden; background:var(--primary-bg); color:var(--primary); display:flex; align-items:center; justify-content:center; flex-shrink:0;" id="youtube-file-thumb">
+        <i class="fa-solid fa-video"></i>
+      </div>
+      <span><i class="fa-solid fa-check-circle"></i> ${file.name}</span>
+    `;
+    generateVideoThumbnail(file).then(thumb => {
+      if (STATE.youtubeFile !== file || !thumb) return;
+      const box = document.getElementById('youtube-file-thumb');
+      if (box) box.innerHTML = `<img src="${thumb}" style="width:100%;height:100%;object-fit:cover;">`;
+    });
   }
   const titleInput = document.getElementById('youtube-title-input');
   if (titleInput && !titleInput.value) {
@@ -3993,19 +4005,73 @@ function setupYoutubeBulkDropzone() {
   };
 }
 
+/**
+ * Gera uma miniatura (JPEG em data URL) a partir do primeiro(s) frame(s) do
+ * próprio arquivo de vídeo, direto no navegador — nada é enviado a lugar
+ * nenhum só pra gerar a prévia.
+ */
+function generateVideoThumbnail(file) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const video = document.createElement('video');
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = 'metadata';
+    video.src = url;
+
+    const finish = (result) => {
+      URL.revokeObjectURL(url);
+      resolve(result);
+    };
+    const timeout = setTimeout(() => finish(null), 5000);
+
+    video.onloadeddata = () => {
+      try {
+        video.currentTime = Math.min(0.2, (video.duration || 1) / 2);
+      } catch {
+        clearTimeout(timeout);
+        finish(null);
+      }
+    };
+    video.onseeked = () => {
+      clearTimeout(timeout);
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = 160;
+        canvas.height = Math.round(160 * ((video.videoHeight || 1) / (video.videoWidth || 1)));
+        canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+        finish(canvas.toDataURL('image/jpeg', 0.75));
+      } catch {
+        finish(null);
+      }
+    };
+    video.onerror = () => { clearTimeout(timeout); finish(null); };
+  });
+}
+
 function handleYoutubeBulkFilesSelect(files) {
   const videoFiles = files.filter(f => f.type.startsWith('video/'));
   if (videoFiles.length === 0) {
     showToast('Selecione arquivos de vídeo.', 'warning');
     return;
   }
-  STATE.youtubeBulkFiles = videoFiles.map(file => ({ file, title: guessTitleFromFilename(file.name) }));
+  STATE.youtubeBulkFiles = videoFiles.map(file => ({ file, title: guessTitleFromFilename(file.name), thumbnail: null }));
   const summaryEl = document.getElementById('youtube-bulk-files-summary');
   if (summaryEl) {
     summaryEl.style.display = 'block';
     summaryEl.innerHTML = `<i class="fa-solid fa-check-circle"></i> ${videoFiles.length} vídeos selecionados`;
   }
   renderYoutubeBulkPreviewList();
+
+  STATE.youtubeBulkFiles.forEach((item) => {
+    generateVideoThumbnail(item.file).then(thumb => {
+      // O item pode ter sido removido da lista enquanto a miniatura gerava.
+      const idx = STATE.youtubeBulkFiles.indexOf(item);
+      if (idx === -1) return;
+      item.thumbnail = thumb;
+      renderYoutubeBulkPreviewList();
+    });
+  });
 }
 
 function renderYoutubeBulkPreviewList() {
@@ -4022,12 +4088,12 @@ function renderYoutubeBulkPreviewList() {
   list.style.display = 'flex';
   list.innerHTML = items.map((item, idx) => `
     <div style="display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.03); border:1px solid var(--border-color); border-radius:10px; padding:8px 10px;">
-      <div style="width:28px; height:28px; border-radius:8px; background:var(--primary-bg); color:var(--primary); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:0.75rem; flex-shrink:0;">
-        #${idx + 1}
+      <div style="width:48px; height:48px; border-radius:8px; overflow:hidden; background:var(--primary-bg); color:var(--primary); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+        ${item.thumbnail ? `<img src="${item.thumbnail}" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fa-solid fa-video"></i>'}
       </div>
       <div style="flex:1; min-width:0;">
         <input type="text" class="input" style="padding:6px 10px; font-size:0.82rem;" value="${item.title.replace(/"/g, '&quot;')}" oninput="updateYoutubeBulkFileTitle(${idx}, this.value)">
-        <div style="font-size:0.68rem; color:var(--text-dim); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${item.file.name}</div>
+        <div style="font-size:0.68rem; color:var(--text-dim); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">#${idx + 1} · ${item.file.name}</div>
       </div>
       <button type="button" class="btn btn-ghost btn-sm" onclick="removeYoutubeBulkFile(${idx})" style="padding:4px 8px; color:var(--error); flex-shrink:0;"><i class="fa-solid fa-trash"></i></button>
     </div>
