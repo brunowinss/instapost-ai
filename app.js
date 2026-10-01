@@ -4289,9 +4289,24 @@ function multRenderClipGrid(type) {
 
 /* ---- FFmpeg carregamento ---- */
 
+function _multLoadScript(src) {
+  return new Promise((res, rej) => {
+    const existing = document.querySelector(`script[src="${src}"]`);
+    if (existing) { res(); return; }
+    const s = document.createElement('script');
+    s.src = src; s.crossOrigin = 'anonymous';
+    s.onload = res;
+    s.onerror = () => rej(new Error(`Falha ao carregar: ${src}`));
+    document.head.appendChild(s);
+  });
+}
+
 async function multEnsureFFmpeg() {
   if (_multFFmpeg) return;
-  if (_multFFmpegLoading) { await new Promise(r => { const t = setInterval(() => { if (_multFFmpeg || !_multFFmpegLoading) { clearInterval(t); r(); } }, 200); }); return; }
+  if (_multFFmpegLoading) {
+    await new Promise(r => { const t = setInterval(() => { if (_multFFmpeg || !_multFFmpegLoading) { clearInterval(t); r(); } }, 200); });
+    return;
+  }
   _multFFmpegLoading = true;
 
   const progressBox = document.getElementById('mult-upload-progress-box');
@@ -4300,10 +4315,15 @@ async function multEnsureFFmpeg() {
   if (status) status.textContent = 'Carregando FFmpeg (~25 MB, só na primeira vez)...';
 
   try {
-    const { FFmpeg }  = await import('https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/esm/ffmpeg.js');
-    const utilModule  = await import('https://unpkg.com/@ffmpeg/util@0.12.1/dist/esm/index.js');
-    _multFetchFile    = utilModule.fetchFile;
-    const { toBlobURL } = utilModule;
+    // Carrega via UMD/script tag — evita problemas com import() de ESM cross-origin
+    await Promise.all([
+      _multLoadScript('https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/umd/ffmpeg.js'),
+      _multLoadScript('https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js'),
+    ]);
+
+    const { FFmpeg }            = window.FFmpegWASM;
+    const { fetchFile, toBlobURL } = window.FFmpegUtil;
+    _multFetchFile = fetchFile;
 
     const base = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
     const ff   = new FFmpeg();
