@@ -1281,6 +1281,40 @@ app.post('/api/youtube/bulk-schedule', requireAuth, async (req, res) => {
   }
 });
 
+// Métricas do YouTube: cada consulta gasta cota da API, e os números do
+// YouTube já atrasam alguns minutos, então 5 min de cache não perde precisão.
+const ytStatsCache = new Map(); // accountId -> { data, ts }
+const YT_STATS_TTL_MS = 5 * 60 * 1000;
+
+app.get('/api/youtube/stats', requireAuth, async (req, res) => {
+  const { accountId } = req.query;
+  if (!accountId) return res.status(400).json({ error: 'accountId é obrigatório.' });
+
+  const cached = ytStatsCache.get(accountId);
+  if (cached && Date.now() - cached.ts < YT_STATS_TTL_MS) return res.json(cached.data);
+
+  try {
+    const db = await getDB();
+    const account = await db.get('SELECT * FROM accounts WHERE "accountId" = ?', [accountId]);
+    if (!account || account.platform !== 'youtube') {
+      return res.status(404).json({ error: 'Canal do YouTube não encontrado.' });
+    }
+
+    const published = await db.all(
+      'SELECT "mediaId" FROM posts WHERE "accountId" = ? AND "platform" = \'youtube\' AND "status" = \'success\' AND "mediaId" != \'\' ORDER BY "publishedAt" DESC LIMIT 50',
+      [accountId]
+    );
+    const videoIds = published.map(p => p.mediaId).filter(Boolean);
+
+    const data = await youtubeService.getYouTubeStats(account, videoIds);
+    ytStatsCache.set(accountId, { data, ts: Date.now() });
+    res.json(data);
+  } catch (err) {
+    console.error('[YOUTUBE-STATS]', err.message);
+    res.status(502).json({ error: err.message });
+  }
+});
+
 /**
  * 📚 Gerenciamento de Legendas Rotativas (Captions)
  */

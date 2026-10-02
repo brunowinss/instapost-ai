@@ -12,17 +12,18 @@ function response(data, status = 200) {
 
 // Run the actual route handlers with isolated HTTP/database dependencies.
 // No listening socket, scheduler, real credentials or production writes.
-function serverHarness(fetch, accounts = [], postgres = false, config = {}) {
+function serverHarness(fetch, accounts = [], postgres = false, config = {}, publishedPosts = []) {
   const routes = new Map();
   const writes = [];
   const logs = [];
+  const youtubeCalls = [];
   const app = { use() {}, listen() {} };
   for (const method of ['get', 'post', 'delete']) {
     app[method] = (route, ...handlers) => routes.set(`${method} ${route}`, handlers.at(-1));
   }
   const express = Object.assign(() => app, { json() {}, static() {} });
   const db = {
-    all: async sql => sql === 'SELECT * FROM accounts' ? accounts.map(a => ({ ...a })) : sql === 'SELECT * FROM global_config' ? Object.entries(config).map(([key, value]) => ({ key, value: JSON.stringify(value) })) : [],
+    all: async sql => sql === 'SELECT * FROM accounts' ? accounts.map(a => ({ ...a })) : sql === 'SELECT * FROM global_config' ? Object.entries(config).map(([key, value]) => ({ key, value: JSON.stringify(value) })) : sql.includes('"mediaId" FROM posts') ? publishedPosts : [],
     get: async (sql, params) => sql.includes('global_config') ? (config[params?.[0]] ? { value: JSON.stringify(config[params[0]]) } : undefined) : accounts.find(a => a.accountId === params?.[0]),
     run: async (sql, params) => { writes.push({ sql, params }); if (sql.includes('INTO global_config')) config[params[0]] = JSON.parse(params[1]); }
   };
@@ -38,6 +39,11 @@ function serverHarness(fetch, accounts = [], postgres = false, config = {}) {
       getAuthUrl: () => null,
       exchangeCode: async () => ({ client: {}, tokens: {} }),
       getChannelInfo: async () => ({ channelId: '', title: '', thumbnail: '' }),
+      getYouTubeStats: async (account, ids) => {
+        youtubeCalls.push({ account, ids });
+        if (account.username === 'broken') throw new Error('[YouTube] invalid_grant');
+        return { channel: { subscribers: 10, views: 200, videos: 3 }, videos: Object.fromEntries(ids.map(id => [id, { views: 5, likes: 1, comments: 0 }])) };
+      },
       publishToYouTube: async () => { throw new Error('not mocked'); },
       resolveTimes: () => ['18:00'],
       buildSchedule: () => [],
@@ -60,7 +66,7 @@ function serverHarness(fetch, accounts = [], postgres = false, config = {}) {
     setInterval() {}, URLSearchParams, Buffer
   });
   return {
-    writes, logs,
+    writes, logs, youtubeCalls,
     async invoke(method, route, req = {}) {
       const res = {
         statusCode: 200,
@@ -227,4 +233,35 @@ test('manual token connection saves the profile returned by Instagram', async ()
   assert.equal(res.body.success, true);
   assert.equal(res.body.account.accountId, '123');
   assert.equal(res.body.account.profilePictureUrl, 'https://cdn.example/photo.jpg');
+});
+
+test('YouTube stats pass published video ids, return channel+video metrics and cache the result', async () => {
+  const server = serverHarness(async () => response({}), [
+    { accountId: 'UC1', username: 'Meu Canal', platform: 'youtube', refreshToken: 'secret-refresh' }
+  ], false, {}, [{ mediaId: 'vid1' }, { mediaId: 'vid2' }]);
+
+  const first = await server.invoke('get', '/api/youtube/stats', { query: { accountId: 'UC1' } });
+  assert.equal(first.statusCode, 200);
+  assert.deepEqual(first.body.channel, { subscribers: 10, views: 200, videos: 3 });
+  assert.deepEqual(Object.keys(first.body.videos), ['vid1', 'vid2']);
+  assert.deepEqual(server.youtubeCalls[0].ids, ['vid1', 'vid2']);
+  assert.ok(!JSON.stringify(first.body).includes('secret-refresh'));
+
+  await server.invoke('get', '/api/youtube/stats', { query: { accountId: 'UC1' } });
+  assert.equal(server.youtubeCalls.length, 1, 'second call within 5 min must come from cache');
+});
+
+test('YouTube stats reject missing/non-YouTube accounts and surface API failures as 502', async () => {
+  const server = serverHarness(async () => response({}), [
+    { accountId: 'IG1', username: 'insta', platform: 'instagram', accessToken: 'IGAA' },
+    { accountId: 'UC2', username: 'broken', platform: 'youtube', refreshToken: 'x' }
+  ]);
+
+  assert.equal((await server.invoke('get', '/api/youtube/stats')).statusCode, 400);
+  assert.equal((await server.invoke('get', '/api/youtube/stats', { query: { accountId: 'IG1' } })).statusCode, 404);
+  assert.equal((await server.invoke('get', '/api/youtube/stats', { query: { accountId: 'nope' } })).statusCode, 404);
+
+  const failed = await server.invoke('get', '/api/youtube/stats', { query: { accountId: 'UC2' } });
+  assert.equal(failed.statusCode, 502);
+  assert.match(failed.body.error, /invalid_grant/);
 });

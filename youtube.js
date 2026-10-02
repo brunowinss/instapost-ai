@@ -73,6 +73,43 @@ async function getChannelInfo(oauthClient) {
   };
 }
 
+/**
+ * Métricas do canal e dos vídeos já publicados por este app.
+ * Usa o escopo youtube.readonly (já pedido no OAuth) e custa 1 unidade de
+ * cota por chamada — por isso o server.js guarda o resultado em cache.
+ */
+async function getYouTubeStats(account, videoIds = []) {
+  const youtube = google.youtube({ version: 'v3', auth: buildAuthorizedClient(account) });
+  try {
+    const channelRes = await youtube.channels.list({ mine: true, part: 'statistics' });
+    const stats = channelRes.data.items?.[0]?.statistics;
+    if (!stats) throw new Error('O YouTube não retornou estatísticas do canal.');
+
+    const channel = {
+      subscribers: stats.hiddenSubscriberCount ? null : Number(stats.subscriberCount),
+      views: Number(stats.viewCount),
+      videos: Number(stats.videoCount)
+    };
+
+    const videos = {};
+    if (videoIds.length > 0) {
+      const videosRes = await youtube.videos.list({ part: 'statistics', id: videoIds.slice(0, 50).join(',') });
+      for (const item of videosRes.data.items || []) {
+        const s = item.statistics || {};
+        videos[item.id] = {
+          views: Number(s.viewCount || 0),
+          likes: s.likeCount === undefined ? null : Number(s.likeCount),
+          comments: s.commentCount === undefined ? null : Number(s.commentCount)
+        };
+      }
+    }
+    return { channel, videos };
+  } catch (err) {
+    const apiMsg = err?.response?.data?.error?.message || err.message;
+    throw new Error(`[YouTube] ${apiMsg}`);
+  }
+}
+
 function buildAuthorizedClient(account) {
   const client = getOAuthClient();
   if (!client) throw new Error('App do YouTube não configurado (faltam YOUTUBE_CLIENT_ID/SECRET/REDIRECT_URI).');
@@ -244,6 +281,7 @@ module.exports = {
   getAuthUrl,
   exchangeCode,
   getChannelInfo,
+  getYouTubeStats,
   publishToYouTube,
   suggestTimes,
   resolveTimes,
