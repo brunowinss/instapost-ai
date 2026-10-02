@@ -636,6 +636,71 @@ app.get('/api/account-stats', requireAuth, async (req, res) => {
   }
 });
 
+/**
+ * Desempenho das últimas publicações do Instagram (curtidas e comentários).
+ *
+ * Usa só campos do escopo instagram_business_basic que a conta já concedeu.
+ * Alcance/visualizações exigiriam instagram_business_manage_insights, que o
+ * login atual não pede — por isso ficam de fora.
+ */
+const igMediaStatsCache = new Map(); // accountId -> { data, ts }
+
+app.get('/api/instagram/media-stats', requireAuth, async (req, res) => {
+  const { accountId } = req.query;
+  if (!accountId) return res.status(400).json({ error: 'accountId é obrigatório.' });
+
+  const cached = igMediaStatsCache.get(accountId);
+  if (req.query.refresh !== '1' && cached && Date.now() - cached.ts < STATS_TTL_MS) return res.json(cached.data);
+
+  try {
+    const db = await getDB();
+    const account = await db.get('SELECT * FROM accounts WHERE "accountId" = ?', [accountId]);
+    if (!account || account.platform === 'youtube' || !account.accessToken) {
+      return res.status(404).json({ error: 'Conta do Instagram não encontrada.' });
+    }
+
+    const token = account.accessToken;
+    const facebookToken = token.startsWith('EAA');
+    const host = facebookToken ? 'graph.facebook.com' : 'graph.instagram.com';
+    const node = encodeURIComponent(facebookToken ? accountId : 'me');
+    const query = new URLSearchParams({
+      fields: 'id,caption,media_type,media_product_type,permalink,timestamp,like_count,comments_count,thumbnail_url,media_url',
+      limit: '25',
+      access_token: token
+    });
+
+    const r = await fetch(`https://${host}/${IG_API_VERSION}/${node}/media?${query}`, { timeout: 10000 });
+    const body = await r.json();
+    if (!r.ok || body.error) {
+      const e = body.error || {};
+      throw new Error(e.error_user_msg || e.message || `Instagram retornou ${r.status}`);
+    }
+
+    const posts = (body.data || []).map(m => ({
+      id: m.id,
+      caption: m.caption || '',
+      mediaType: m.media_product_type === 'REELS' ? 'REELS' : m.media_type,
+      permalink: m.permalink || null,
+      timestamp: m.timestamp || null,
+      likes: m.like_count ?? null,
+      comments: m.comments_count ?? null,
+      thumbnail: m.thumbnail_url || (m.media_type === 'VIDEO' ? null : m.media_url) || null
+    }));
+
+    const sum = (key) => posts.reduce((total, p) => total + (p[key] || 0), 0);
+    const data = {
+      posts,
+      totals: { posts: posts.length, likes: sum('likes'), comments: sum('comments') },
+      updatedAt: new Date().toISOString()
+    };
+    igMediaStatsCache.set(accountId, { data, ts: Date.now() });
+    res.json(data);
+  } catch (err) {
+    console.error('[IG-MEDIA-STATS]', err.message);
+    res.status(502).json({ error: err.message });
+  }
+});
+
 // Atualizar Perfil (Nome de Usuário e Foto)
 app.post('/api/accounts/update-profile', requireAuth, async (req, res) => {
   const { accountId, username, profilePictureUrl } = req.body;

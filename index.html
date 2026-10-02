@@ -1014,6 +1014,21 @@
           </div>
         </div>
       </div>
+
+      <!-- Desempenho das publicações (curtidas e comentários direto do Instagram) -->
+      <div class="card" style="margin-top:2rem;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:1rem;">
+          <div>
+            <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-heart" style="color:var(--accent);"></i> Desempenho das Publicações</div>
+            <p style="font-size:0.8rem; color:var(--text-dim); margin-top:2px;">Curtidas e comentários das últimas 25 publicações da conta <span id="ig-media-updated"></span></p>
+          </div>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <select id="ig-media-account-select" class="input" style="min-width:200px;" onchange="renderInstagramPostsPerformance()"></select>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="renderInstagramPostsPerformance(true)"><i class="fa-solid fa-rotate"></i> Atualizar</button>
+          </div>
+        </div>
+        <div id="ig-media-body"></div>
+      </div>
     </section>
 
     <!-- ═══════════════ YOUTUBE ═══════════════ -->

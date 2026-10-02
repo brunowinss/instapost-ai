@@ -3257,9 +3257,110 @@ async function renderAnalyticsSection() {
 
     // Carregar Heatmap de Melhores Horários (Feature 4)
     loadBestTimesHeatmap();
+    renderInstagramPostsPerformance();
   } catch (err) {
     console.error('Error rendering analytics:', err);
   }
+}
+
+/** Curtidas e comentários das últimas publicações da conta, direto do Instagram (cache de 5 min aqui, 10 no servidor). */
+async function renderInstagramPostsPerformance(force = false) {
+  const select = document.getElementById('ig-media-account-select');
+  const body = document.getElementById('ig-media-body');
+  const updated = document.getElementById('ig-media-updated');
+  if (!select || !body || !updated) return;
+
+  const prev = select.value;
+  select.innerHTML = STATE.accounts.map(a =>
+    `<option value="${escapeHtml(a.accountId)}" ${a.accountId === prev ? 'selected' : ''}>@${escapeHtml(a.username)}</option>`
+  ).join('');
+
+  const notice = (icon, text) => `
+    <div style="text-align:center; padding:2rem 1rem; color:var(--text-dim);">
+      <i class="fa-solid ${icon}" style="font-size:2rem; opacity:0.4; margin-bottom:0.8rem;"></i>
+      <p style="font-size:0.85rem;">${text}</p>
+    </div>`;
+
+  updated.textContent = '';
+  if (STATE.accounts.length === 0) {
+    body.innerHTML = notice('fa-plug', 'Conecte uma conta do Instagram para ver o desempenho.');
+    return;
+  }
+
+  const accountId = select.value;
+  STATE.igMediaStats = STATE.igMediaStats || {};
+  let entry = STATE.igMediaStats[accountId];
+  if (force === true || !entry || Date.now() - entry.ts > 5 * 60 * 1000) {
+    body.innerHTML = notice('fa-spinner fa-spin', 'Carregando publicações…');
+    try {
+      const res = await fetch(`${API_BASE}/instagram/media-stats?accountId=${encodeURIComponent(accountId)}${force === true ? '&refresh=1' : ''}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      entry = STATE.igMediaStats[accountId] = { ts: Date.now(), data };
+    } catch (err) {
+      delete STATE.igMediaStats[accountId];
+      if (STATE.activeSection === 'analytics' && select.value === accountId) {
+        body.innerHTML = notice('fa-circle-exclamation', `Não foi possível carregar: ${escapeHtml(err.message)}`);
+      }
+      return;
+    }
+  }
+
+  // Quem está olhando pode ter trocado de conta ou de tela enquanto carregava.
+  if (STATE.activeSection !== 'analytics' || select.value !== accountId) return;
+
+  const fmt = (n) => (n === null || n === undefined) ? '—' : Number(n).toLocaleString('pt-BR');
+  const { posts, totals } = entry.data;
+  updated.textContent = `· atualizado às ${new Date(entry.data.updatedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+
+  if (posts.length === 0) {
+    body.innerHTML = notice('fa-image', 'Essa conta ainda não tem publicações.');
+    return;
+  }
+
+  const withLikes = posts.filter(p => p.likes !== null).length;
+  const chip = (label, value) => `
+    <div style="flex:1; min-width:130px; background:rgba(255,255,255,0.03); border:1px solid var(--border-color); border-radius:12px; padding:12px 14px;">
+      <div style="font-size:0.7rem; color:var(--text-dim); text-transform:uppercase;">${label}</div>
+      <div style="font-size:1.3rem; font-weight:700; color:var(--text-main);">${value}</div>
+    </div>`;
+  const typeLabel = { REELS: 'Reel', IMAGE: 'Foto', VIDEO: 'Vídeo', CAROUSEL_ALBUM: 'Carrossel' };
+
+  const rows = posts.map(p => {
+    const link = p.permalink && p.permalink.startsWith('https://')
+      ? `<a href="${escapeHtml(p.permalink)}" target="_blank" rel="noopener" style="color:var(--accent);" title="Abrir no Instagram"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>`
+      : '';
+    const thumb = p.thumbnail && p.thumbnail.startsWith('https://')
+      ? `<img src="${escapeHtml(p.thumbnail)}" referrerpolicy="no-referrer" onerror="this.remove()" style="width:100%;height:100%;object-fit:cover;">`
+      : '<i class="fa-solid fa-image"></i>';
+    const caption = escapeHtml((p.caption || '(sem legenda)').split('\n')[0].slice(0, 70));
+    const date = p.timestamp ? new Date(p.timestamp).toLocaleDateString('pt-BR') : '—';
+    return `<tr style="border-top:1px solid var(--border-color);">
+      <td style="padding:8px 10px 8px 0; width:48px;"><div style="width:40px; height:40px; border-radius:8px; overflow:hidden; background:var(--primary-bg); color:var(--primary); display:flex; align-items:center; justify-content:center;">${thumb}</div></td>
+      <td style="padding:8px 10px 8px 0; max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${caption} <span style="font-size:0.65rem; color:var(--text-dim);">· ${typeLabel[p.mediaType] || escapeHtml(p.mediaType)}</span></td>
+      <td style="color:var(--text-dim); white-space:nowrap; padding-right:12px;">${date}</td>
+      <td style="text-align:right;">${fmt(p.likes)}</td>
+      <td style="text-align:right;">${fmt(p.comments)}</td>
+      <td style="text-align:right; padding-left:12px;">${link}</td>
+    </tr>`;
+  }).join('');
+
+  body.innerHTML = `
+    <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:1rem;">
+      ${chip('Publicações', fmt(totals.posts))}
+      ${chip('Curtidas', fmt(totals.likes))}
+      ${chip('Comentários', fmt(totals.comments))}
+      ${chip('Média de curtidas', withLikes ? fmt(Math.round(totals.likes / withLikes)) : '—')}
+    </div>
+    <div style="overflow-x:auto;">
+      <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+        <thead><tr style="text-align:left; color:var(--text-dim); font-size:0.7rem; text-transform:uppercase;">
+          <th></th><th style="padding-bottom:8px;">Publicação</th><th>Data</th>
+          <th style="text-align:right;">Curtidas</th><th style="text-align:right;">Comentários</th><th></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
 }
 
 /**
@@ -3822,7 +3923,7 @@ function renderYoutubeSection() {
   switchYoutubeView(STATE.youtubeView || 'publish');
 }
 
-function ytEscape(text) {
+function escapeHtml(text) {
   return String(text ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
@@ -3869,7 +3970,7 @@ async function renderYoutubeMetricsView(force = false) {
   const channels = getYoutubeAccounts();
   const prev = select.value;
   select.innerHTML = channels.map(a =>
-    `<option value="${ytEscape(a.accountId)}" ${a.accountId === prev ? 'selected' : ''}>${ytEscape(a.username)}</option>`
+    `<option value="${escapeHtml(a.accountId)}" ${a.accountId === prev ? 'selected' : ''}>${escapeHtml(a.username)}</option>`
   ).join('');
 
   const notice = (icon, text) => `
@@ -3896,7 +3997,7 @@ async function renderYoutubeMetricsView(force = false) {
   // Quem está olhando pode ter trocado de canal ou de aba enquanto carregava.
   if (STATE.youtubeView !== 'metrics' || select.value !== accountId) return;
   if (entry.error) {
-    body.innerHTML = notice('fa-circle-exclamation', `Métricas indisponíveis: ${ytEscape(entry.error)}`);
+    body.innerHTML = notice('fa-circle-exclamation', `Métricas indisponíveis: ${escapeHtml(entry.error)}`);
     return;
   }
 
@@ -3914,7 +4015,7 @@ async function renderYoutubeMetricsView(force = false) {
 
   const rows = videos.map(v => {
     const date = v.publishedAt ? new Date(v.publishedAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—';
-    const link = `<a href="https://www.youtube.com/watch?v=${encodeURIComponent(v.id)}" target="_blank" rel="noopener" style="color:inherit; text-decoration:underline dotted;">${ytEscape(v.title)}</a>`;
+    const link = `<a href="https://www.youtube.com/watch?v=${encodeURIComponent(v.id)}" target="_blank" rel="noopener" style="color:inherit; text-decoration:underline dotted;">${escapeHtml(v.title)}</a>`;
     const badge = v.isShort ? ' <span style="font-size:0.65rem; color:var(--text-dim);">· Short</span>' : '';
     const cells = v.unavailable
       ? '<td colspan="3" style="text-align:right; color:var(--text-dim); font-size:0.78rem;">indisponível no YouTube (apagado ou privado)</td>'
@@ -3927,7 +4028,7 @@ async function renderYoutubeMetricsView(force = false) {
   }).join('');
 
   body.innerHTML = `
-    <div class="section-heading"><h2>Canal</h2><span>Números gerais de ${ytEscape(acc.username)} no YouTube</span></div>
+    <div class="section-heading"><h2>Canal</h2><span>Números gerais de ${escapeHtml(acc.username)} no YouTube</span></div>
     <div class="dashboard-grid dashboard-stats">
       ${stat('fa-users', 'Inscritos', fmt(channel.subscribers), channel.subscribers === null ? 'Contagem oculta pelo canal' : 'Pessoas que seguem o canal')}
       ${stat('fa-eye', 'Visualizações', fmt(channel.views), 'Total de views do canal')}
@@ -3975,7 +4076,7 @@ function renderYoutubeChannelsList() {
           ${acc.profilePictureUrl ? `<img src="${acc.profilePictureUrl}" onerror="this.parentElement.innerHTML='<i class=&quot;fa-brands fa-youtube&quot;></i>'" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fa-brands fa-youtube"></i>'}
         </div>
         <div>
-          <div style="font-weight:700; font-size:0.95rem;">${ytEscape(acc.username)}</div>
+          <div style="font-weight:700; font-size:0.95rem;">${escapeHtml(acc.username)}</div>
           <div style="font-size:0.72rem; margin-top:2px;">
             ${acc.hasToken
               ? '<span style="color:var(--success);"><i class="fa-solid fa-circle-check"></i> Conectado</span>'
@@ -4003,7 +4104,7 @@ function populateYoutubeAccountSelectors() {
     }
     const prev = sel.value;
     sel.innerHTML = channels.map(a =>
-      `<option value="${a.accountId}" ${a.accountId === prev ? 'selected' : ''}>${ytEscape(a.username)}</option>`
+      `<option value="${a.accountId}" ${a.accountId === prev ? 'selected' : ''}>${escapeHtml(a.username)}</option>`
     ).join('');
   });
 }
@@ -4363,7 +4464,7 @@ function renderYoutubeQueueList() {
 
   list.innerHTML = posts.map(p => {
     const channel = getYoutubeAccounts().find(a => a.accountId === p.accountId);
-    const title = ytEscape((p.caption || '').split('\n')[0] || '(sem título)');
+    const title = escapeHtml((p.caption || '').split('\n')[0] || '(sem título)');
     const when = new Date(p.scheduledAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
     const isLive = p.status === 'success' && p.mediaId;
     const titleHtml = isLive
@@ -4376,7 +4477,7 @@ function renderYoutubeQueueList() {
           ${titleHtml}${p.mediaType === 'YOUTUBE_SHORT' ? ' <span style="font-size:0.65rem; color:var(--text-dim);">· Short</span>' : ''}
         </div>
         <div style="font-size:0.72rem; color:var(--text-dim); display:flex; gap:8px; align-items:center; margin-top:2px; flex-wrap:wrap;">
-          <span>${ytEscape(channel ? channel.username : p.accountId)}</span>
+          <span>${escapeHtml(channel ? channel.username : p.accountId)}</span>
           <span><i class="fa-solid fa-clock"></i> ${when}</span>
           <span style="color:${statusColor[p.status] || 'var(--text-dim)'};">${statusLabel[p.status] || p.status}</span>        </div>
       </div>

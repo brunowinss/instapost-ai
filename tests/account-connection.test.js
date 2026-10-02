@@ -314,3 +314,47 @@ test('data endpoint keeps Instagram and YouTube history in separate windows', as
   assert.equal(historyQueries.filter(sql => sql.includes(`"platform" = 'youtube'`)).length, 1);
   assert.equal(historyQueries.filter(sql => sql.includes(`<> 'youtube'`)).length, 1);
 });
+
+test('Instagram media stats map likes/comments, total them, cache and never leak the token', async () => {
+  const requests = [];
+  const server = serverHarness(async url => {
+    requests.push(new URL(url));
+    return response({ data: [
+      { id: '1', caption: 'Primeira\nlinha 2', media_type: 'VIDEO', media_product_type: 'REELS', permalink: 'https://www.instagram.com/reel/a/', timestamp: '2026-10-01T12:00:00+0000', like_count: 10, comments_count: 2, thumbnail_url: 'https://cdn.example/t.jpg' },
+      { id: '2', media_type: 'IMAGE', media_product_type: 'FEED', permalink: 'https://www.instagram.com/p/b/', timestamp: '2026-09-30T12:00:00+0000', like_count: 5, comments_count: 0, media_url: 'https://cdn.example/m.jpg' },
+      { id: '3', media_type: 'VIDEO', media_product_type: 'FEED', timestamp: '2026-09-29T12:00:00+0000', media_url: 'https://cdn.example/video.mp4' }
+    ] });
+  }, [{ accountId: 'IG1', username: 'insta', platform: 'instagram', accessToken: 'IGAA-secret-token' }]);
+
+  const first = await server.invoke('get', '/api/instagram/media-stats', { query: { accountId: 'IG1' } });
+  assert.equal(first.statusCode, 200);
+  assert.equal(requests[0].hostname, 'graph.instagram.com');
+  assert.match(requests[0].pathname, /\/me\/media$/);
+  assert.deepEqual({ ...first.body.totals }, { posts: 3, likes: 15, comments: 2 });
+  assert.equal(first.body.posts[0].mediaType, 'REELS');
+  assert.equal(first.body.posts[0].thumbnail, 'https://cdn.example/t.jpg');
+  assert.equal(first.body.posts[1].thumbnail, 'https://cdn.example/m.jpg');
+  assert.equal(first.body.posts[2].thumbnail, null, 'a video must not use its .mp4 as a thumbnail');
+  assert.equal(first.body.posts[2].likes, null, 'hidden like counts stay null instead of 0');
+  assert.ok(!JSON.stringify(first.body).includes('IGAA-secret-token'));
+
+  await server.invoke('get', '/api/instagram/media-stats', { query: { accountId: 'IG1' } });
+  assert.equal(requests.length, 1, 'second call must come from cache');
+  await server.invoke('get', '/api/instagram/media-stats', { query: { accountId: 'IG1', refresh: '1' } });
+  assert.equal(requests.length, 2, 'refresh=1 bypasses the cache');
+});
+
+test('Instagram media stats reject YouTube/unknown accounts and report Meta errors as 502', async () => {
+  const server = serverHarness(async () => response({ error: { message: 'Token expirado', code: 190 } }, 400), [
+    { accountId: 'IG1', username: 'insta', platform: 'instagram', accessToken: 'IGAA-x' },
+    { accountId: 'UC1', username: 'Canal', platform: 'youtube', accessToken: '', refreshToken: 'r' }
+  ]);
+
+  assert.equal((await server.invoke('get', '/api/instagram/media-stats')).statusCode, 400);
+  assert.equal((await server.invoke('get', '/api/instagram/media-stats', { query: { accountId: 'UC1' } })).statusCode, 404);
+  assert.equal((await server.invoke('get', '/api/instagram/media-stats', { query: { accountId: 'nope' } })).statusCode, 404);
+
+  const failed = await server.invoke('get', '/api/instagram/media-stats', { query: { accountId: 'IG1' } });
+  assert.equal(failed.statusCode, 502);
+  assert.match(failed.body.error, /Token expirado/);
+});
