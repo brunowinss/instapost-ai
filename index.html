@@ -1018,6 +1018,12 @@
 
     <!-- ═══════════════ YOUTUBE ═══════════════ -->
     <section id="section-youtube" class="section">
+      <div style="display:flex; gap:10px; margin-bottom:1.5rem;">
+        <button type="button" class="btn btn-primary" id="yt-tab-publish" onclick="switchYoutubeView('publish')"><i class="fa-solid fa-paper-plane"></i> Publicar</button>
+        <button type="button" class="btn btn-ghost" id="yt-tab-metrics" onclick="switchYoutubeView('metrics')"><i class="fa-solid fa-chart-simple"></i> Métricas</button>
+      </div>
+
+      <div id="yt-view-publish">
       <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr; gap: 1.5rem;">
 
         <!-- Canais conectados -->
@@ -1155,6 +1161,19 @@
             <p style="color:var(--text-dim); font-size:0.85rem;">Nenhum post agendado.</p>
           </div>
         </div>
+      </div>
+      </div><!-- /yt-view-publish -->
+
+      <!-- Métricas -->
+      <div id="yt-view-metrics" style="display:none;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:1.5rem;">
+          <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+            <select id="yt-metrics-account-select" class="input" style="min-width:220px;" onchange="renderYoutubeMetricsView()"></select>
+            <span id="yt-metrics-updated" style="font-size:0.75rem; color:var(--text-dim);"></span>
+          </div>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="renderYoutubeMetricsView(true)"><i class="fa-solid fa-rotate"></i> Atualizar</button>
+        </div>
+        <div id="yt-metrics-body"></div>
       </div>
     </section>
     <!-- MULTIPLICADOR removido — app standalone em Downloads/multiplicador-videos -->

@@ -1291,7 +1291,7 @@ app.get('/api/youtube/stats', requireAuth, async (req, res) => {
   if (!accountId) return res.status(400).json({ error: 'accountId é obrigatório.' });
 
   const cached = ytStatsCache.get(accountId);
-  if (cached && Date.now() - cached.ts < YT_STATS_TTL_MS) return res.json(cached.data);
+  if (req.query.refresh !== '1' && cached && Date.now() - cached.ts < YT_STATS_TTL_MS) return res.json(cached.data);
 
   try {
     const db = await getDB();
@@ -1300,13 +1300,26 @@ app.get('/api/youtube/stats', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Canal do YouTube não encontrado.' });
     }
 
-    const published = await db.all(
-      'SELECT "mediaId" FROM posts WHERE "accountId" = ? AND "platform" = \'youtube\' AND "status" = \'success\' AND "mediaId" != \'\' ORDER BY "publishedAt" DESC LIMIT 50',
+    const published = (await db.all(
+      'SELECT "mediaId", "caption", "publishedAt", "mediaType" FROM posts WHERE "accountId" = ? AND "platform" = \'youtube\' AND "status" = \'success\' AND "mediaId" != \'\' ORDER BY "publishedAt" DESC LIMIT 50',
       [accountId]
-    );
-    const videoIds = published.map(p => p.mediaId).filter(Boolean);
+    )).filter(p => p.mediaId);
 
-    const data = await youtubeService.getYouTubeStats(account, videoIds);
+    const stats = await youtubeService.getYouTubeStats(account, published.map(p => p.mediaId));
+
+    // Vídeo apagado ou privado no YouTube não volta na API: marca como indisponível em vez de sumir.
+    const data = {
+      channel: stats.channel,
+      updatedAt: new Date().toISOString(),
+      videos: published.map(p => ({
+        id: p.mediaId,
+        title: (p.caption || '').split('\n')[0] || '(sem título)',
+        publishedAt: p.publishedAt || null,
+        isShort: p.mediaType === 'YOUTUBE_SHORT',
+        unavailable: !stats.videos[p.mediaId],
+        ...(stats.videos[p.mediaId] || {})
+      }))
+    };
     ytStatsCache.set(accountId, { data, ts: Date.now() });
     res.json(data);
   } catch (err) {

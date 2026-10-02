@@ -3817,7 +3817,7 @@ function renderYoutubeSection() {
   setupYoutubeBulkDropzone();
   renderYoutubeBulkPreviewList();
   renderYoutubeQueueList();
-  loadYoutubeStats();
+  switchYoutubeView(STATE.youtubeView || 'publish');
 }
 
 function ytEscape(text) {
@@ -3826,51 +3826,134 @@ function ytEscape(text) {
 
 const YT_STATS_TTL_MS = 5 * 60 * 1000;
 
-/** Busca as métricas de cada canal (cache de 5 min aqui e no servidor) e pinta na tela. */
-async function loadYoutubeStats() {
-  STATE.youtubeStats = STATE.youtubeStats || {};
-  const channels = getYoutubeAccounts().filter(a => a.hasToken);
-
-  await Promise.all(channels.map(async (acc) => {
-    const cached = STATE.youtubeStats[acc.accountId];
-    if (cached && Date.now() - cached.ts < YT_STATS_TTL_MS) return;
-    try {
-      const res = await fetch(`${API_BASE}/youtube/stats?accountId=${encodeURIComponent(acc.accountId)}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-      STATE.youtubeStats[acc.accountId] = { ts: Date.now(), data };
-    } catch (err) {
-      STATE.youtubeStats[acc.accountId] = { ts: Date.now(), error: err.message };
-    }
-  }));
-
-  renderYoutubeMetrics();
+function switchYoutubeView(view) {
+  STATE.youtubeView = view;
+  const publish = document.getElementById('yt-view-publish');
+  const metrics = document.getElementById('yt-view-metrics');
+  if (publish) publish.style.display = view === 'publish' ? 'block' : 'none';
+  if (metrics) metrics.style.display = view === 'metrics' ? 'block' : 'none';
+  [['yt-tab-publish', 'publish'], ['yt-tab-metrics', 'metrics']].forEach(([id, value]) => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.classList.toggle('btn-primary', value === view);
+    btn.classList.toggle('btn-ghost', value !== view);
+  });
+  if (view === 'metrics') renderYoutubeMetricsView();
 }
 
-function renderYoutubeMetrics() {
+/** Métricas de um canal, com cache de 5 min no navegador (o servidor tem o seu). Erros não ficam em cache. */
+async function fetchYoutubeStats(accountId, force = false) {
+  STATE.youtubeStats = STATE.youtubeStats || {};
+  const cached = STATE.youtubeStats[accountId];
+  if (!force && cached && Date.now() - cached.ts < YT_STATS_TTL_MS) return cached;
+  try {
+    const res = await fetch(`${API_BASE}/youtube/stats?accountId=${encodeURIComponent(accountId)}${force ? '&refresh=1' : ''}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    STATE.youtubeStats[accountId] = { ts: Date.now(), data };
+    return STATE.youtubeStats[accountId];
+  } catch (err) {
+    delete STATE.youtubeStats[accountId];
+    return { error: err.message };
+  }
+}
+
+async function renderYoutubeMetricsView(force = false) {
+  const select = document.getElementById('yt-metrics-account-select');
+  const body = document.getElementById('yt-metrics-body');
+  const updated = document.getElementById('yt-metrics-updated');
+  if (!select || !body || !updated) return;
+
+  const channels = getYoutubeAccounts();
+  const prev = select.value;
+  select.innerHTML = channels.map(a =>
+    `<option value="${ytEscape(a.accountId)}" ${a.accountId === prev ? 'selected' : ''}>${ytEscape(a.username)}</option>`
+  ).join('');
+
+  const notice = (icon, text) => `
+    <div class="card" style="text-align:center; padding:3rem 1rem; color:var(--text-dim);">
+      <i class="fa-solid ${icon}" style="font-size:2.2rem; opacity:0.4; margin-bottom:1rem;"></i>
+      <p>${text}</p>
+    </div>`;
+
+  updated.textContent = '';
+  if (channels.length === 0) {
+    body.innerHTML = notice('fa-plug', 'Conecte um canal na aba Publicar para ver as métricas.');
+    return;
+  }
+  const acc = channels.find(a => a.accountId === select.value) || channels[0];
+  if (!acc.hasToken) {
+    body.innerHTML = notice('fa-triangle-exclamation', 'Esse canal precisa ser reconectado na aba Publicar.');
+    return;
+  }
+
+  const accountId = acc.accountId;
+  body.innerHTML = notice('fa-spinner fa-spin', 'Carregando métricas…');
+  const entry = await fetchYoutubeStats(accountId, force === true);
+
+  // Quem está olhando pode ter trocado de canal ou de aba enquanto carregava.
+  if (STATE.youtubeView !== 'metrics' || select.value !== accountId) return;
+  if (entry.error) {
+    body.innerHTML = notice('fa-circle-exclamation', `Métricas indisponíveis: ${ytEscape(entry.error)}`);
+    return;
+  }
+
   const fmt = (n) => (n === null || n === undefined) ? '—' : Number(n).toLocaleString('pt-BR');
-  const stats = STATE.youtubeStats || {};
+  const { channel, videos } = entry.data;
+  const sum = (key) => videos.filter(v => !v.unavailable).reduce((total, v) => total + (v[key] || 0), 0);
+  updated.textContent = `Atualizado às ${new Date(entry.data.updatedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
 
-  getYoutubeAccounts().forEach(acc => {
-    const el = document.getElementById(`yt-metrics-${acc.accountId}`);
-    if (!el) return;
-    const entry = stats[acc.accountId];
-    if (!acc.hasToken) { el.textContent = ''; return; }
-    if (!entry) { el.textContent = 'Carregando métricas…'; return; }
-    if (entry.error) {
-      el.innerHTML = `<span style="color:var(--text-dim);" title="${ytEscape(entry.error)}"><i class="fa-solid fa-chart-simple"></i> Métricas indisponíveis</span>`;
-      return;
-    }
-    const c = entry.data.channel;
-    el.innerHTML = `<i class="fa-solid fa-chart-simple" style="color:var(--accent);"></i> ${fmt(c.subscribers)} inscritos · ${fmt(c.views)} views · ${fmt(c.videos)} vídeos`;
-  });
+  const stat = (icon, label, value, desc) => `
+    <div class="card">
+      <div class="card-title"><i class="fa-solid ${icon}"></i> ${label}</div>
+      <div class="stat-value">${value}</div>
+      <p class="stat-desc">${desc}</p>
+    </div>`;
 
-  document.querySelectorAll('[data-yt-video]').forEach(el => {
-    const entry = stats[el.dataset.ytAccount];
-    const v = entry && entry.data && entry.data.videos[el.dataset.ytVideo];
-    if (!v) { el.textContent = ''; return; }
-    el.innerHTML = `<i class="fa-solid fa-eye"></i> ${fmt(v.views)} · <i class="fa-solid fa-thumbs-up"></i> ${fmt(v.likes)} · <i class="fa-solid fa-comment"></i> ${fmt(v.comments)}`;
-  });
+  const rows = videos.map(v => {
+    const date = v.publishedAt ? new Date(v.publishedAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+    const link = `<a href="https://www.youtube.com/watch?v=${encodeURIComponent(v.id)}" target="_blank" rel="noopener" style="color:inherit; text-decoration:underline dotted;">${ytEscape(v.title)}</a>`;
+    const badge = v.isShort ? ' <span style="font-size:0.65rem; color:var(--text-dim);">· Short</span>' : '';
+    const cells = v.unavailable
+      ? '<td colspan="3" style="text-align:right; color:var(--text-dim); font-size:0.78rem;">indisponível no YouTube (apagado ou privado)</td>'
+      : `<td style="text-align:right;">${fmt(v.views)}</td><td style="text-align:right;">${fmt(v.likes)}</td><td style="text-align:right;">${fmt(v.comments)}</td>`;
+    return `<tr style="border-top:1px solid var(--border-color);">
+      <td style="padding:10px 8px 10px 0; max-width:320px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600;">${link}${badge}</td>
+      <td style="color:var(--text-dim); white-space:nowrap; padding-right:12px;">${date}</td>
+      ${cells}
+    </tr>`;
+  }).join('');
+
+  body.innerHTML = `
+    <div class="section-heading"><h2>Canal</h2><span>Números gerais de ${ytEscape(acc.username)} no YouTube</span></div>
+    <div class="dashboard-grid dashboard-stats">
+      ${stat('fa-users', 'Inscritos', fmt(channel.subscribers), channel.subscribers === null ? 'Contagem oculta pelo canal' : 'Pessoas que seguem o canal')}
+      ${stat('fa-eye', 'Visualizações', fmt(channel.views), 'Total de views do canal')}
+      ${stat('fa-film', 'Vídeos', fmt(channel.videos), 'Vídeos publicados no canal')}
+    </div>
+
+    <div class="section-heading" style="margin-top:2rem;"><h2>Publicados por aqui</h2><span>Só os vídeos enviados por este painel</span></div>
+    <div class="dashboard-grid dashboard-stats">
+      ${stat('fa-paper-plane', 'Vídeos', fmt(videos.length), 'Publicados pelo painel')}
+      ${stat('fa-eye', 'Visualizações', fmt(sum('views')), 'Soma dos vídeos abaixo')}
+      ${stat('fa-thumbs-up', 'Curtidas', fmt(sum('likes')), 'Soma dos vídeos abaixo')}
+      ${stat('fa-comment', 'Comentários', fmt(sum('comments')), 'Soma dos vídeos abaixo')}
+    </div>
+
+    <div class="card" style="margin-top:2rem;">
+      <div class="card-title"><i class="fa-solid fa-ranking-star"></i> Desempenho por vídeo</div>
+      ${videos.length === 0
+        ? '<p style="color:var(--text-dim); font-size:0.85rem; margin-top:1rem;">Nenhum vídeo publicado por este painel ainda.</p>'
+        : `<div style="overflow-x:auto; margin-top:1rem;">
+            <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+              <thead><tr style="text-align:left; color:var(--text-dim); font-size:0.7rem; text-transform:uppercase;">
+                <th style="padding-bottom:8px;">Vídeo</th><th>Publicado</th>
+                <th style="text-align:right;">Views</th><th style="text-align:right;">Curtidas</th><th style="text-align:right;">Comentários</th>
+              </tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>`}
+    </div>`;
 }
 
 function renderYoutubeChannelsList() {
@@ -3895,9 +3978,7 @@ function renderYoutubeChannelsList() {
             ${acc.hasToken
               ? '<span style="color:var(--success);"><i class="fa-solid fa-circle-check"></i> Conectado</span>'
               : '<span style="color:var(--error);"><i class="fa-solid fa-triangle-exclamation"></i> Reconecte o canal</span>'}
-          </div>
-          <div id="yt-metrics-${acc.accountId}" style="font-size:0.72rem; color:var(--text-secondary); margin-top:3px;">Carregando métricas…</div>
-        </div>
+          </div>        </div>
       </div>
       <button class="btn btn-sm btn-ghost btn-delete" onclick="deleteAccount('${acc.accountId}')" title="Desconectar canal" style="padding:0.4rem; width:32px; height:32px; color:var(--error); border-color:rgba(239,68,68,0.2);">
         <i class="fa-solid fa-trash-can"></i>
@@ -4296,14 +4377,10 @@ function renderYoutubeQueueList() {
         <div style="font-size:0.72rem; color:var(--text-dim); display:flex; gap:8px; align-items:center; margin-top:2px; flex-wrap:wrap;">
           <span>${ytEscape(channel ? channel.username : p.accountId)}</span>
           <span><i class="fa-solid fa-clock"></i> ${when}</span>
-          <span style="color:${statusColor[p.status] || 'var(--text-dim)'};">${statusLabel[p.status] || p.status}</span>
-          ${isLive ? `<span data-yt-video="${ytEscape(p.mediaId)}" data-yt-account="${ytEscape(p.accountId)}"></span>` : ''}
-        </div>
+          <span style="color:${statusColor[p.status] || 'var(--text-dim)'};">${statusLabel[p.status] || p.status}</span>        </div>
       </div>
       ${p.status === 'pending' ? `<button class="btn btn-ghost btn-sm" onclick="deletePost('${p.id}')" style="padding:4px 8px; color:var(--error);"><i class="fa-solid fa-trash"></i></button>` : ''}
     </div>
   `;
   }).join('');
-
-  renderYoutubeMetrics();
 }

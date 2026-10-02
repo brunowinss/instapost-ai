@@ -23,7 +23,7 @@ function serverHarness(fetch, accounts = [], postgres = false, config = {}, publ
   }
   const express = Object.assign(() => app, { json() {}, static() {} });
   const db = {
-    all: async sql => sql === 'SELECT * FROM accounts' ? accounts.map(a => ({ ...a })) : sql === 'SELECT * FROM global_config' ? Object.entries(config).map(([key, value]) => ({ key, value: JSON.stringify(value) })) : sql.includes('"mediaId" FROM posts') ? publishedPosts : [],
+    all: async sql => sql === 'SELECT * FROM accounts' ? accounts.map(a => ({ ...a })) : sql === 'SELECT * FROM global_config' ? Object.entries(config).map(([key, value]) => ({ key, value: JSON.stringify(value) })) : sql.includes('FROM posts') ? publishedPosts : [],
     get: async (sql, params) => sql.includes('global_config') ? (config[params?.[0]] ? { value: JSON.stringify(config[params[0]]) } : undefined) : accounts.find(a => a.accountId === params?.[0]),
     run: async (sql, params) => { writes.push({ sql, params }); if (sql.includes('INTO global_config')) config[params[0]] = JSON.parse(params[1]); }
   };
@@ -42,7 +42,7 @@ function serverHarness(fetch, accounts = [], postgres = false, config = {}, publ
       getYouTubeStats: async (account, ids) => {
         youtubeCalls.push({ account, ids });
         if (account.username === 'broken') throw new Error('[YouTube] invalid_grant');
-        return { channel: { subscribers: 10, views: 200, videos: 3 }, videos: Object.fromEntries(ids.map(id => [id, { views: 5, likes: 1, comments: 0 }])) };
+        return { channel: { subscribers: 10, views: 200, videos: 3 }, videos: Object.fromEntries(ids.filter(id => !id.startsWith('gone')).map(id => [id, { views: 5, likes: 1, comments: 0 }])) };
       },
       publishToYouTube: async () => { throw new Error('not mocked'); },
       resolveTimes: () => ['18:00'],
@@ -235,20 +235,32 @@ test('manual token connection saves the profile returned by Instagram', async ()
   assert.equal(res.body.account.profilePictureUrl, 'https://cdn.example/photo.jpg');
 });
 
-test('YouTube stats pass published video ids, return channel+video metrics and cache the result', async () => {
+test('YouTube stats merge titles, flag unavailable videos, cache the result and allow forced refresh', async () => {
   const server = serverHarness(async () => response({}), [
     { accountId: 'UC1', username: 'Meu Canal', platform: 'youtube', refreshToken: 'secret-refresh' }
-  ], false, {}, [{ mediaId: 'vid1' }, { mediaId: 'vid2' }]);
+  ], false, {}, [
+    { mediaId: 'vid1', caption: 'Primeiro título\n\ndescrição', publishedAt: '2026-10-01T12:00:00.000Z', mediaType: 'YOUTUBE_SHORT' },
+    { mediaId: 'gone1', caption: 'Apagado', publishedAt: '2026-09-30T12:00:00.000Z', mediaType: 'YOUTUBE_VIDEO' }
+  ]);
 
   const first = await server.invoke('get', '/api/youtube/stats', { query: { accountId: 'UC1' } });
   assert.equal(first.statusCode, 200);
   assert.deepEqual(first.body.channel, { subscribers: 10, views: 200, videos: 3 });
-  assert.deepEqual(Object.keys(first.body.videos), ['vid1', 'vid2']);
-  assert.deepEqual(server.youtubeCalls[0].ids, ['vid1', 'vid2']);
+  assert.deepEqual(server.youtubeCalls[0].ids, ['vid1', 'gone1']);
+  assert.equal(first.body.videos[0].id, 'vid1');
+  assert.equal(first.body.videos[0].title, 'Primeiro título');
+  assert.equal(first.body.videos[0].isShort, true);
+  assert.equal(first.body.videos[0].views, 5);
+  assert.equal(first.body.videos[0].unavailable, false);
+  assert.equal(first.body.videos[1].unavailable, true);
+  assert.equal(first.body.videos[1].isShort, false);
   assert.ok(!JSON.stringify(first.body).includes('secret-refresh'));
 
   await server.invoke('get', '/api/youtube/stats', { query: { accountId: 'UC1' } });
   assert.equal(server.youtubeCalls.length, 1, 'second call within 5 min must come from cache');
+
+  await server.invoke('get', '/api/youtube/stats', { query: { accountId: 'UC1', refresh: '1' } });
+  assert.equal(server.youtubeCalls.length, 2, 'refresh=1 must bypass the cache');
 });
 
 test('YouTube stats reject missing/non-YouTube accounts and surface API failures as 502', async () => {
