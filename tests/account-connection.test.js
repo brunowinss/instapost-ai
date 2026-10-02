@@ -27,6 +27,11 @@ function serverHarness(fetch, accounts = [], postgres = false, config = {}, publ
     get: async (sql, params) => sql.includes('global_config') ? (config[params?.[0]] ? { value: JSON.stringify(config[params[0]]) } : undefined) : accounts.find(a => a.accountId === params?.[0]),
     run: async (sql, params) => { writes.push({ sql, params }); if (sql.includes('INTO global_config')) config[params[0]] = JSON.parse(params[1]); }
   };
+  const reads = [];
+  for (const method of ['all', 'get']) {
+    const original = db[method];
+    db[method] = async (...args) => { reads.push(args[0]); return original(...args); };
+  }
   const mocks = {
     express,
     cors: () => () => {},
@@ -66,7 +71,7 @@ function serverHarness(fetch, accounts = [], postgres = false, config = {}, publ
     setInterval() {}, URLSearchParams, Buffer
   });
   return {
-    writes, logs, youtubeCalls,
+    writes, logs, youtubeCalls, reads,
     async invoke(method, route, req = {}) {
       const res = {
         statusCode: 200,
@@ -276,4 +281,36 @@ test('YouTube stats reject missing/non-YouTube accounts and surface API failures
   const failed = await server.invoke('get', '/api/youtube/stats', { query: { accountId: 'UC2' } });
   assert.equal(failed.statusCode, 502);
   assert.match(failed.body.error, /invalid_grant/);
+});
+
+test('Instagram diagnostics and results ignore YouTube channels', async () => {
+  const accounts = [
+    { accountId: 'IG1', username: 'insta', platform: 'instagram', accessToken: 'IGAA-token' },
+    { accountId: 'UC1', username: 'Canal', platform: 'youtube', accessToken: '', refreshToken: 'r' }
+  ];
+  const server = serverHarness(async () => response({ id: 'IG1', username: 'insta' }), accounts);
+
+  const health = await server.invoke('get', '/api/accounts/health-check');
+  assert.deepEqual(Array.from(health.body.accounts, a => a.accountId), ['IG1']);
+  assert.equal(health.body.accounts[0].valid, true);
+
+  server.reads.length = 0;
+  const analytics = await server.invoke('get', '/api/analytics/summary');
+  assert.equal(analytics.body.summary.totalAccounts, 1);
+  // As contagens por mediaType (REELS/IMAGE/...) já são só de Instagram por natureza.
+  const postQueries = server.reads.filter(sql => sql.includes('FROM posts') && !sql.includes('"mediaType" ='));
+  assert.equal(postQueries.length, 6);
+  for (const sql of postQueries) assert.match(sql, /<> 'youtube'/, `analytics query must exclude YouTube: ${sql}`);
+});
+
+test('data endpoint keeps Instagram and YouTube history in separate windows', async () => {
+  const server = serverHarness(async () => response({}), []);
+  const res = await server.invoke('get', '/api/data');
+  assert.equal(res.statusCode, 200);
+  assert.ok(Array.isArray(res.body.history) && Array.isArray(res.body.youtubeHistory));
+
+  const historyQueries = server.reads.filter(sql => sql.includes('"status" != \'pending\''));
+  assert.equal(historyQueries.length, 2);
+  assert.equal(historyQueries.filter(sql => sql.includes(`"platform" = 'youtube'`)).length, 1);
+  assert.equal(historyQueries.filter(sql => sql.includes(`<> 'youtube'`)).length, 1);
 });

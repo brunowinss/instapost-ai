@@ -880,7 +880,10 @@ app.get('/api/data', requireAuth, async (req, res) => {
     }
 
     const scheduledPosts = await db.all('SELECT * FROM posts WHERE "status" IN (\'pending\', \'processing\') ORDER BY "scheduledAt" ASC');
-    const history = await db.all('SELECT * FROM posts WHERE "status" != \'pending\' ORDER BY "publishedAt" DESC LIMIT 50');
+    // Histórico separado por plataforma: senão um lote grande do YouTube
+    // empurraria os posts do Instagram para fora da janela de 50.
+    const history = await db.all(`SELECT * FROM posts WHERE "status" != 'pending' AND ${NOT_YOUTUBE_SQL} ORDER BY "publishedAt" DESC LIMIT 50`);
+    const youtubeHistory = await db.all('SELECT * FROM posts WHERE "status" != \'pending\' AND "platform" = \'youtube\' ORDER BY "publishedAt" DESC LIMIT 50');
     
     // Fetch global config
     const configRows = await db.all('SELECT * FROM global_config');
@@ -909,6 +912,7 @@ app.get('/api/data', requireAuth, async (req, res) => {
       accounts: safeAccounts,
       scheduledPosts,
       history,
+      youtubeHistory,
       globalConfig,
       scheduler: {
         lastRun: scheduler.lastRun,
@@ -1283,6 +1287,9 @@ app.post('/api/youtube/bulk-schedule', requireAuth, async (req, res) => {
 
 // Métricas do YouTube: cada consulta gasta cota da API, e os números do
 // YouTube já atrasam alguns minutos, então 5 min de cache não perde precisão.
+// Posts antigos podem ter platform NULL; contam como Instagram.
+const NOT_YOUTUBE_SQL = '("platform" IS NULL OR "platform" <> \'youtube\')';
+
 const ytStatsCache = new Map(); // accountId -> { data, ts }
 const YT_STATS_TTL_MS = 5 * 60 * 1000;
 
@@ -1599,7 +1606,8 @@ app.delete('/api/drive/:id', requireAuth, async (req, res) => {
 app.get('/api/accounts/health-check', requireAuth, async (req, res) => {
   const db = await getDB();
   try {
-    const accounts = await db.all('SELECT * FROM accounts');
+    // Este diagnóstico testa tokens da Meta; canais do YouTube usam outro login.
+    const accounts = (await db.all('SELECT * FROM accounts')).filter(a => a.platform !== 'youtube');
     const results = [];
 
     for (const acc of accounts) {
@@ -1662,11 +1670,12 @@ app.get('/api/accounts/health-check', requireAuth, async (req, res) => {
 app.get('/api/analytics/summary', requireAuth, async (req, res) => {
   const db = await getDB();
   try {
-    const accounts = await db.all('SELECT * FROM accounts');
-    const totalPosts = await db.get('SELECT COUNT(*) as count FROM posts');
-    const successPosts = await db.get('SELECT COUNT(*) as count FROM posts WHERE "status" = \'success\'');
-    const pendingPosts = await db.get('SELECT COUNT(*) as count FROM posts WHERE "status" = \'pending\'');
-    const errorPosts = await db.get('SELECT COUNT(*) as count FROM posts WHERE "status" = \'error\'');
+    // Resultados do Instagram: canais e vídeos do YouTube têm métricas próprias na aba YouTube.
+    const accounts = (await db.all('SELECT * FROM accounts')).filter(a => a.platform !== 'youtube');
+    const totalPosts = await db.get(`SELECT COUNT(*) as count FROM posts WHERE ${NOT_YOUTUBE_SQL}`);
+    const successPosts = await db.get(`SELECT COUNT(*) as count FROM posts WHERE "status" = 'success' AND ${NOT_YOUTUBE_SQL}`);
+    const pendingPosts = await db.get(`SELECT COUNT(*) as count FROM posts WHERE "status" = 'pending' AND ${NOT_YOUTUBE_SQL}`);
+    const errorPosts = await db.get(`SELECT COUNT(*) as count FROM posts WHERE "status" = 'error' AND ${NOT_YOUTUBE_SQL}`);
 
     // Mídias por tipo
     const reelsCount = await db.get('SELECT COUNT(*) as count FROM posts WHERE "mediaType" = \'REELS\'');
@@ -1675,10 +1684,10 @@ app.get('/api/analytics/summary', requireAuth, async (req, res) => {
     const storiesCount = await db.get('SELECT COUNT(*) as count FROM posts WHERE "mediaType" = \'STORIES\'');
 
     // Posts por conta
-    const postsPerAccount = await db.all('SELECT "accountId", COUNT(*) as total, SUM(CASE WHEN "status" = \'success\' THEN 1 ELSE 0 END) as published FROM posts GROUP BY "accountId"');
+    const postsPerAccount = await db.all(`SELECT "accountId", COUNT(*) as total, SUM(CASE WHEN "status" = 'success' THEN 1 ELSE 0 END) as published FROM posts WHERE ${NOT_YOUTUBE_SQL} GROUP BY "accountId"`);
 
     // Histórico de publicações últimos 7 dias
-    const historyRows = await db.all('SELECT "publishedAt", "status", "mediaType" FROM posts WHERE "publishedAt" IS NOT NULL ORDER BY "publishedAt" DESC LIMIT 100');
+    const historyRows = await db.all(`SELECT "publishedAt", "status", "mediaType" FROM posts WHERE "publishedAt" IS NOT NULL AND ${NOT_YOUTUBE_SQL} ORDER BY "publishedAt" DESC LIMIT 100`);
 
     res.json({
       summary: {
@@ -2175,6 +2184,12 @@ async function publishToInstagram(post) {
  * ⏰ Scheduler Runner
  */
 
+/** "@usuario" para Instagram, "Canal (YouTube)" para YouTube. */
+function accountLabel(acc, post) {
+  if (!acc) return post.accountId;
+  return acc.platform === 'youtube' ? `${acc.username} (YouTube)` : `@${acc.username}`;
+}
+
 async function sendTelegramNotification(post, status, errorMsg) {
   try {
     const db = await getDB();
@@ -2186,8 +2201,8 @@ async function sendTelegramNotification(post, status, errorMsg) {
     const chatId = JSON.parse(chatRow.value);
     if (!token || !chatId) return;
 
-    const acc = await db.get('SELECT username FROM accounts WHERE "accountId" = ?', [post.accountId]);
-    const accName = acc ? `@${acc.username}` : post.accountId;
+    const acc = await db.get('SELECT username, platform FROM accounts WHERE "accountId" = ?', [post.accountId]);
+    const accName = accountLabel(acc, post);
     const time = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
     
     let text;
@@ -2211,9 +2226,9 @@ async function notifyAll(post, status, errorMsg) {
   await sendTelegramNotification(post, status, errorMsg);
   
   const db = await getDB();
-  const acc = await db.get('SELECT username FROM accounts WHERE "accountId" = ?', [post.accountId]);
-  const accName = acc ? `@${acc.username}` : post.accountId;
-  
+  const acc = await db.get('SELECT username, platform FROM accounts WHERE "accountId" = ?', [post.accountId]);
+  const accName = accountLabel(acc, post);
+
   let title = status === 'success' ? 'Post Publicado!' : 'Erro na Publicação';
   let body = status === 'success' 
     ? `O post na conta ${accName} foi publicado com sucesso!` 

@@ -65,7 +65,8 @@ async function runAutoImporter() {
     const folderPath = path.join(VIDEOS_DIR, folderName);
     
     // Find account by username matching folder name
-    const account = await db.get('SELECT "accountId", "username" FROM accounts WHERE "username" = ?', [folderName]);
+    // Só Instagram: o importador cria Reels, que não servem para canal do YouTube.
+    const account = await db.get('SELECT "accountId", "username" FROM accounts WHERE "username" = ? AND ("platform" IS NULL OR "platform" <> \'youtube\')', [folderName]);
     if (!account) {
       console.warn(`⚠️ Folder "${folderName}" ignored. No connected account with this username.`);
       continue;

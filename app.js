@@ -411,9 +411,17 @@ async function loadData() {
     const res = await fetch(`${API_BASE}/data`);
     const data = await res.json();
     
-    STATE.accounts = data.accounts || [];
-    STATE.scheduledPosts = data.scheduledPosts || [];
+    // Instagram e YouTube ficam em listas separadas: todas as telas antigas
+    // (painel, calendário, resultados, diagnóstico) continuam só com Instagram.
+    const isYoutube = (item) => item.platform === 'youtube';
+    const allAccounts = data.accounts || [];
+    const allScheduled = data.scheduledPosts || [];
+    STATE.accounts = allAccounts.filter(a => !isYoutube(a));
+    STATE.youtubeAccounts = allAccounts.filter(isYoutube);
+    STATE.scheduledPosts = allScheduled.filter(p => !isYoutube(p));
+    STATE.youtubeScheduled = allScheduled.filter(isYoutube);
     STATE.history = data.history || [];
+    STATE.youtubeHistory = data.youtubeHistory || [];
     STATE.globalConfig = data.globalConfig || STATE.globalConfig;
     
     if (STATE.accounts.length > 0 && !STATE.activeAccountId) {
@@ -610,15 +618,12 @@ function renderSettingsAccounts() {
   const list = document.getElementById('accounts-list-settings');
   if (!list) return;
 
-  // Canais do YouTube têm sua própria lista na aba YouTube — aqui só Instagram.
-  const igAccounts = STATE.accounts.filter(a => a.platform !== 'youtube');
-
-  if (igAccounts.length === 0) {
+  if (STATE.accounts.length === 0) {
     list.innerHTML = '<p style="color:var(--text-dim); font-size:0.85rem;">Nenhuma conta conectada.</p>';
     return;
   }
 
-  list.innerHTML = igAccounts.map(acc => {
+  list.innerHTML = STATE.accounts.map(acc => {
     const avatarSrc = acc.profilePictureUrl || (!acc.username.startsWith('instagram_') ? `https://unavatar.io/instagram/${acc.username}` : '');
     return `
     <div style="display:flex; align-items:center; justify-content:space-between; padding:1rem; background:rgba(255,255,255,0.03); border-radius:14px; border:1px solid var(--glass-border); margin-bottom:0.8rem; flex-wrap:wrap; gap:10px;">
@@ -650,7 +655,7 @@ function renderSettingsAccounts() {
   }).join('');
 
   // Busca estatísticas e atualiza username / foto se Meta retornar dados reais
-  igAccounts.forEach(async (acc) => {
+  STATE.accounts.forEach(async (acc) => {
     const el = document.getElementById(`followers-${acc.accountId}`);
     if (!el) return;
     try {
@@ -721,13 +726,10 @@ function populateAccountSelector() {
     document.getElementById('stories-account-select')
   ];
 
-  // Seletores do Instagram não devem listar canais do YouTube (aba própria).
-  const igAccounts = STATE.accounts.filter(a => a.platform !== 'youtube');
-
   selectors.forEach(sel => {
     if (!sel) return;
     const prev = sel.value;
-    sel.innerHTML = igAccounts.map(a =>
+    sel.innerHTML = STATE.accounts.map(a =>
       `<option value="${a.accountId}" ${a.accountId === prev ? 'selected' : ''}>@${a.username}</option>`
     ).join('');
 
@@ -739,8 +741,8 @@ function populateAccountSelector() {
     };
   });
 
-  if (igAccounts.length > 0 && !STATE.activeAccountId) {
-    STATE.activeAccountId = igAccounts[0].accountId;
+  if (STATE.accounts.length > 0 && !STATE.activeAccountId) {
+    STATE.activeAccountId = STATE.accounts[0].accountId;
     updateHeaderUI();
   }
 }
@@ -3807,7 +3809,7 @@ async function syncAccountFromMeta() {
 // ============================================================
 
 function getYoutubeAccounts() {
-  return STATE.accounts.filter(a => a.platform === 'youtube');
+  return STATE.youtubeAccounts || [];
 }
 
 function renderYoutubeSection() {
@@ -4348,8 +4350,7 @@ function renderYoutubeQueueList() {
   const list = document.getElementById('youtube-queue-list');
   if (!list) return;
 
-  const posts = [...STATE.scheduledPosts, ...STATE.history]
-    .filter(p => p.platform === 'youtube')
+  const posts = [...(STATE.youtubeScheduled || []), ...(STATE.youtubeHistory || [])]
     .sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt));
 
   if (posts.length === 0) {
@@ -4361,7 +4362,7 @@ function renderYoutubeQueueList() {
   const statusColor = { pending: 'var(--accent)', processing: 'var(--warning)', success: 'var(--success)', error: 'var(--error)' };
 
   list.innerHTML = posts.map(p => {
-    const channel = STATE.accounts.find(a => a.accountId === p.accountId);
+    const channel = getYoutubeAccounts().find(a => a.accountId === p.accountId);
     const title = ytEscape((p.caption || '').split('\n')[0] || '(sem título)');
     const when = new Date(p.scheduledAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
     const isLive = p.status === 'success' && p.mediaId;
