@@ -403,6 +403,12 @@ function switchSection(name) {
   if (targetSection) targetSection.classList.add('active');
   
   renderActiveSection();
+
+  // Sugestão de horário inteligente ao abrir a tela (não a cada recarga, para não apagar o que o usuário digitou).
+  if (name === 'new-post') autoFillNextSlot();
+  if (name === 'bulk-carousel') {
+    fillSmartSlotInputs('carousel-date', 'carousel-time', document.getElementById('carousel-account-select')?.value || STATE.activeAccountId);
+  }
   window.scrollTo({ top: 0, behavior: 'instant' });
 }
 
@@ -738,6 +744,8 @@ function populateAccountSelector() {
       updateHeaderUI();
       loadAccountStats();
       if (sel.id === 'stories-account-select') loadStoryLoopForAccount();
+      if (sel.id === 'post-account-select') autoFillNextSlot();
+      if (sel.id === 'carousel-account-select') fillSmartSlotInputs('carousel-date', 'carousel-time', sel.value);
     };
   });
 
@@ -1226,6 +1234,48 @@ function autoFillNextSlot() {
 
   dateInput.value = `${yyyy}-${mm}-${dd}`;
   timeInput.value = `${hh}:${min}`;
+
+  // A sugestão acima é a fixa (reserva); troca pela inteligente assim que o servidor responder.
+  fillSmartSlotInputs('post-date', 'post-time', document.getElementById('post-account-select')?.value || STATE.activeAccountId);
+}
+
+/**
+ * Horários inteligentes do servidor: favorecem os picos de engajamento (típicos
+ * + o que funcionou na conta), variam hora e minuto e respeitam posts/dia.
+ * Devolve Date[] ou null se o servidor não responder — aí cada tela cai no horário fixo antigo.
+ */
+async function fetchSmartTimes(accountId, count, startDate, options = {}) {
+  if (!accountId) return null;
+  try {
+    const res = await fetch(`${API_BASE}/schedule/smart-times`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        accountId,
+        count,
+        kind: options.kind,
+        perDay: options.perDay || STATE.globalConfig.postsPerDay || undefined,
+        startDate: startDate || undefined,
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      })
+    });
+    const data = await res.json();
+    if (!res.ok || !Array.isArray(data.times) || data.times.length < count) return null;
+    return data.times.map(t => new Date(t));
+  } catch {
+    return null;
+  }
+}
+
+/** Preenche um par data/hora com o próximo horário inteligente da conta (se o servidor responder). */
+async function fillSmartSlotInputs(dateId, timeId, accountId) {
+  const [slot] = (await fetchSmartTimes(accountId, 1)) || [];
+  const dateEl = document.getElementById(dateId);
+  const timeEl = document.getElementById(timeId);
+  if (!slot || !dateEl || !timeEl) return;
+  const pad = (n) => String(n).padStart(2, '0');
+  dateEl.value = `${slot.getFullYear()}-${pad(slot.getMonth() + 1)}-${pad(slot.getDate())}`;
+  timeEl.value = `${pad(slot.getHours())}:${pad(slot.getMinutes())}`;
 }
 
 /**
@@ -1355,7 +1405,8 @@ function setupForms() {
     let successCount = 0;
     let lastScheduledDate = null;
     let manualDateTime = null;
-    
+    let smartTimes = null;
+
     if (STATE.scheduleMode === 'manual') {
       // Manual mode: use specific date + time
       const dateVal = document.getElementById('post-date-manual').value;
@@ -1375,6 +1426,9 @@ function setupForms() {
         lastScheduledDate = startDate;
       }
       
+      // Horários inteligentes para todos os arquivos de uma vez (o servidor já considera a fila da conta).
+      smartTimes = await fetchSmartTimes(accountId, files.length, startDateInput);
+
       // Continue from latest existing post for this account
       const accountPosts = STATE.scheduledPosts.filter(p => p.accountId === accountId);
       if (accountPosts.length > 0) {
@@ -1406,8 +1460,10 @@ function setupForms() {
         if (STATE.scheduleMode === 'manual') {
           // Manual: all files at the same date+time (or offset by 1 min each)
           scheduledAt = new Date(manualDateTime.getTime() + (i * 60000));
+        } else if (smartTimes) {
+          scheduledAt = smartTimes[i];
         } else {
-          // Auto: distribute across slots
+          // Reserva (servidor sem resposta): horários fixos por posts/dia
           const nextSlot = calculateNextSlot(lastScheduledDate);
           lastScheduledDate = nextSlot;
           scheduledAt = nextSlot;
@@ -2284,7 +2340,7 @@ async function insertRandomCaptionBulk() {
   }
 }
 
-function generateBulkQueue() {
+async function generateBulkQueue() {
   if (!STATE.bulkFiles || STATE.bulkFiles.length === 0) {
     showToast('Selecione os vídeos primeiro!', 'warning');
     return;
@@ -2293,7 +2349,17 @@ function generateBulkQueue() {
   const accountId = document.getElementById('bulk-account-select')?.value || STATE.activeAccountId;
   const startDateStr = document.getElementById('bulk-start-date')?.value || new Date().toISOString().split('T')[0];
   const startTimeStr = document.getElementById('bulk-start-time')?.value || '10:00';
-  const intervalMode = document.getElementById('bulk-interval-mode')?.value || 'slots';
+  let intervalMode = document.getElementById('bulk-interval-mode')?.value || 'smart';
+
+  // Modo inteligente: o servidor sorteia os horários nos picos de engajamento da conta.
+  let smartTimes = null;
+  if (intervalMode === 'smart') {
+    smartTimes = await fetchSmartTimes(accountId, STATE.bulkFiles.length, startDateStr);
+    if (!smartTimes) {
+      showToast('Não consegui calcular os horários inteligentes agora; usando os horários fixos das Configurações.', 'warning');
+      intervalMode = 'slots';
+    }
+  }
   const varianceMinutes = parseInt(document.getElementById('bulk-variance')?.value || 5, 10);
   const captionBase = document.getElementById('bulk-caption-input')?.value || '';
   const useRotating = document.getElementById('bulk-use-rotating-captions')?.checked;
@@ -2310,7 +2376,9 @@ function generateBulkQueue() {
   STATE.bulkFiles.forEach((file, index) => {
     let itemDate = new Date(currentDate);
 
-    if (intervalMode === 'slots') {
+    if (smartTimes) {
+      itemDate = new Date(smartTimes[index]);
+    } else if (intervalMode === 'slots') {
       const slot = defaultSlots[slotIndex % defaultSlots.length];
       const dayOffset = Math.floor(slotIndex / defaultSlots.length);
       itemDate = new Date(`${startDateStr}T00:00:00`);
@@ -2323,9 +2391,9 @@ function generateBulkQueue() {
       itemDate = new Date(currentDate.getTime() + index * 24 * 60 * 60 * 1000);
     }
 
-    // Jitter / Variância Anti-Ban
+    // Jitter / Variância Anti-Ban (os horários inteligentes já são variados, então não somam jitter)
     let jitterMinutes = 0;
-    if (varianceMinutes > 0) {
+    if (!smartTimes && varianceMinutes > 0) {
       jitterMinutes = Math.floor(Math.random() * (varianceMinutes * 2 + 1)) - varianceMinutes;
       itemDate = new Date(itemDate.getTime() + jitterMinutes * 60 * 1000);
     }
@@ -2355,7 +2423,7 @@ function generateBulkQueue() {
       scheduledAt: itemDate.toISOString(),
       displayDate: itemDate.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }),
       caption: itemCaption,
-      varianceMinutes,
+      varianceMinutes: smartTimes ? 0 : varianceMinutes,
       jitterMinutes,
       mediaType: 'REELS'
     });
@@ -2682,37 +2750,46 @@ async function submitCarousel() {
 /**
  * 3. STORIES 24/7 LOOP
  */
+function isVideoUrl(url) {
+  return /\.(mp4|mov|webm)(\?|$)/i.test(url) || url.includes('/video/upload/');
+}
+
+function selectedStoryAccount() {
+  return document.getElementById('stories-account-select')?.value || STATE.activeAccountId;
+}
+
 function renderStoriesLoopSection() {
   populateAccountSelector();
-  loadStoryLoopForAccount();
+  setupStoryDropzones();
+  // Recarrega a configuração só ao trocar de conta: reler a cada atualização apagaria o que ainda não foi salvo.
+  if (STATE.storyLoopAccount !== selectedStoryAccount()) loadStoryLoopForAccount();
+  renderStoryQueue();
 }
 
 async function loadStoryLoopForAccount() {
-  const accountId = document.getElementById('stories-account-select')?.value || STATE.activeAccountId;
+  const accountId = selectedStoryAccount();
   if (!accountId) return;
+  STATE.storyLoopAccount = accountId;
 
+  const defaults = ['09:00', '13:00', '18:00', '21:00'];
   try {
     const res = await fetch(`${API_BASE}/stories/loop?accountId=${encodeURIComponent(accountId)}`);
     const data = await res.json();
-    if (data.loops && data.loops.length > 0) {
-      const loop = data.loops[0];
-      const enabledCheckbox = document.getElementById('story-loop-enabled');
-      if (enabledCheckbox) enabledCheckbox.checked = loop.enabled === 1 || loop.enabled === true;
+    const loop = data.loops && data.loops[0];
+    const parse = (value, fallback) => { try { return JSON.parse(value || ''); } catch { return fallback; } };
 
-      try {
-        STATE.storySlots = JSON.parse(loop.times || '["09:00", "13:00", "18:00", "21:00"]');
-      } catch (e) {
-        STATE.storySlots = ['09:00', '13:00', '18:00', '21:00'];
-      }
+    // Sem loop salvo, volta aos padrões em vez de herdar os horários/mídias da conta anterior.
+    STATE.storySlots = loop ? parse(loop.times, defaults) : [...defaults];
+    STATE.storyMediaPool = loop ? parse(loop.activeMedia, []) : [];
 
-      try {
-        STATE.storyMediaPool = JSON.parse(loop.activeMedia || '[]');
-      } catch (e) {
-        STATE.storyMediaPool = [];
-      }
-    }
+    const enabledCheckbox = document.getElementById('story-loop-enabled');
+    if (enabledCheckbox) enabledCheckbox.checked = loop ? (loop.enabled === 1 || loop.enabled === true) : true;
+    const varianceSelect = document.getElementById('story-loop-variance');
+    if (varianceSelect) varianceSelect.value = String(loop ? loop.varianceMinutes : 5);
+
     renderStorySlots();
     renderStoryMediaPool();
+    renderStoryQueue();
   } catch (err) {
     console.error('Error loading story loop:', err);
   }
@@ -2722,7 +2799,7 @@ function renderStorySlots() {
   const container = document.getElementById('story-slots-container');
   if (!container) return;
   container.innerHTML = STATE.storySlots.map(time => `
-    <span class="slot-chip">${time} <i class="fa-solid fa-times" onclick="removeStorySlot('${time}')"></i></span>
+    <span class="slot-chip">${escapeHtml(time)} <i class="fa-solid fa-times" onclick="removeStorySlot('${escapeHtml(time)}')"></i></span>
   `).join('');
 }
 
@@ -2741,22 +2818,38 @@ function removeStorySlot(time) {
   renderStorySlots();
 }
 
+/** Preenche os horários do loop com os melhores picos de hoje da conta. */
+async function suggestStorySlots() {
+  const accountId = selectedStoryAccount();
+  if (!accountId) return showToast('Selecione uma conta.', 'warning');
+  try {
+    const res = await fetch(`${API_BASE}/accounts/best-times?accountId=${encodeURIComponent(accountId)}`);
+    const data = await res.json();
+    if (!res.ok || !Array.isArray(data.recommendedSlots) || data.recommendedSlots.length === 0) throw new Error(data.error || 'Sem sugestão agora.');
+    STATE.storySlots = [...data.recommendedSlots].sort();
+    renderStorySlots();
+    showToast(`Horários sugeridos: ${STATE.storySlots.join(', ')}. Clique em Salvar para ativar.`, 'info');
+  } catch (err) {
+    showToast(`Não foi possível sugerir horários: ${err.message}`, 'error');
+  }
+}
+
 function renderStoryMediaPool() {
   const container = document.getElementById('story-media-pool');
   if (!container) return;
 
   if (STATE.storyMediaPool.length === 0) {
-    container.innerHTML = '<p style="color:var(--text-dim); font-size:0.8rem; grid-column:1/-1;">Nenhuma mídia ativa no loop. Adicione do Acervo.</p>';
+    container.innerHTML = '<p style="color:var(--text-dim); font-size:0.8rem; grid-column:1/-1;">Nenhuma mídia no loop. Envie arquivos ou escolha do Acervo.</p>';
     return;
   }
 
   container.innerHTML = STATE.storyMediaPool.map((media, idx) => `
     <div style="position:relative; border-radius:8px; overflow:hidden; aspect-ratio:9/16; background:#000; border:1px solid var(--border-color);">
-      <span style="position:absolute; top:4px; right:4px; background:rgba(239,68,68,0.85); color:#fff; width:18px; height:18px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.6rem; cursor:pointer;" onclick="removeStoryMedia(${idx})">
+      <span style="position:absolute; top:4px; right:4px; z-index:1; background:rgba(239,68,68,0.85); color:#fff; width:18px; height:18px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.6rem; cursor:pointer;" onclick="removeStoryMedia(${idx})">
         <i class="fa-solid fa-times"></i>
       </span>
-      <span style="position:absolute; bottom:4px; left:4px; background:rgba(0,0,0,0.7); color:var(--accent); font-size:0.65rem; padding:2px 6px; border-radius:4px; font-weight:700;">#${idx + 1}</span>
-      ${media.toLowerCase().includes('.mp4') ? `<video src="${media}" style="width:100%;height:100%;object-fit:cover;"></video>` : `<img src="${media}" style="width:100%;height:100%;object-fit:cover;">`}
+      <span style="position:absolute; bottom:4px; left:4px; z-index:1; background:rgba(0,0,0,0.7); color:var(--accent); font-size:0.65rem; padding:2px 6px; border-radius:4px; font-weight:700;">#${idx + 1}</span>
+      ${isVideoUrl(media) ? `<video src="${escapeHtml(media)}" muted preload="metadata" style="width:100%;height:100%;object-fit:cover;"></video>` : `<img src="${escapeHtml(media)}" style="width:100%;height:100%;object-fit:cover;">`}
     </div>
   `).join('');
 }
@@ -2767,9 +2860,10 @@ function removeStoryMedia(index) {
 }
 
 async function saveStoryLoopConfig() {
-  const accountId = document.getElementById('stories-account-select')?.value || STATE.activeAccountId;
+  const accountId = selectedStoryAccount();
+  if (!accountId) return showToast('Selecione uma conta.', 'warning');
   const enabled = document.getElementById('story-loop-enabled')?.checked ? 1 : 0;
-  const varianceMinutes = parseInt(document.getElementById('story-loop-variance')?.value || 5, 10);
+  const varianceMinutes = parseInt(document.getElementById('story-loop-variance')?.value ?? '5', 10);
 
   try {
     const res = await fetch(`${API_BASE}/stories/loop`, {
@@ -2784,11 +2878,12 @@ async function saveStoryLoopConfig() {
       })
     });
     const data = await res.json();
-    if (data.success) {
-      showToast('Configurações do Loop 24/7 salvas com sucesso!', 'success');
-    } else {
-      throw new Error(data.error);
-    }
+    if (!data.success) throw new Error(data.error || 'Falha ao salvar.');
+
+    if (data.warning) showToast(data.warning, 'warning');
+    else if (enabled) showToast(`Loop salvo! ${data.queued} Story(s) na fila para as próximas horas.`, 'success');
+    else showToast('Loop salvo e desligado.', 'success');
+    await loadData();
   } catch (err) {
     showToast('Erro ao salvar loop: ' + err.message, 'error');
   }
@@ -2797,6 +2892,227 @@ async function saveStoryLoopConfig() {
 function openDriveSelectForStories() {
   switchSection('drive');
   showToast('Clique em uma mídia do Acervo para usar no seu Loop de Stories!', 'info');
+}
+
+/** Imagens vão para o Cloudinary (ou imgbb, se for o único configurado); vídeos sempre para o Cloudinary. */
+async function uploadStoryMedia(file) {
+  const cloudinaryReady = STATE.globalConfig.cloudinaryName && STATE.globalConfig.cloudinaryPreset;
+  if (file.type.startsWith('video/') || cloudinaryReady) return uploadToCloudinary(file);
+  return uploadToImgbb(file);
+}
+
+function setupStoryDropzones() {
+  const dropzone = document.getElementById('story-publish-dropzone');
+  const fileInput = document.getElementById('story-publish-file-input');
+  if (dropzone && fileInput) {
+    dropzone.onclick = () => fileInput.click();
+    fileInput.onchange = (e) => handleStoryFiles(Array.from(e.target.files));
+    dropzone.ondragover = (e) => { e.preventDefault(); dropzone.style.borderColor = 'var(--primary)'; };
+    dropzone.ondragleave = () => { dropzone.style.borderColor = 'var(--border-color)'; };
+    dropzone.ondrop = (e) => {
+      e.preventDefault();
+      dropzone.style.borderColor = 'var(--border-color)';
+      if (e.dataTransfer.files?.length) handleStoryFiles(Array.from(e.dataTransfer.files));
+    };
+  }
+
+  const poolInput = document.getElementById('story-pool-file-input');
+  if (poolInput) poolInput.onchange = (e) => { handleStoryPoolUpload(Array.from(e.target.files)); e.target.value = ''; };
+}
+
+function handleStoryFiles(files) {
+  const valid = files.filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'));
+  if (valid.length === 0) return showToast('Escolha imagens ou vídeos.', 'warning');
+  STATE.storyFiles = valid.map(file => ({ file, thumb: file.type.startsWith('image/') ? URL.createObjectURL(file) : null }));
+  renderStoryPreview();
+  STATE.storyFiles.forEach((item) => {
+    if (item.thumb) return;
+    generateVideoThumbnail(item.file).then(thumb => {
+      if (!STATE.storyFiles.includes(item)) return;
+      item.thumb = thumb;
+      renderStoryPreview();
+    });
+  });
+}
+
+function renderStoryPreview() {
+  const box = document.getElementById('story-publish-preview');
+  if (!box) return;
+  const items = STATE.storyFiles || [];
+  if (items.length === 0) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = 'grid';
+  box.innerHTML = items.map((item, idx) => `
+    <div style="position:relative; aspect-ratio:9/16; border-radius:8px; overflow:hidden; background:var(--primary-bg); border:1px solid var(--border-color); display:flex; align-items:center; justify-content:center; color:var(--primary);">
+      ${item.thumb ? `<img src="${escapeHtml(item.thumb)}" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fa-solid fa-video"></i>'}
+      ${item.file.type.startsWith('video/') ? '<span style="position:absolute; bottom:4px; left:4px; background:rgba(0,0,0,0.7); color:#fff; font-size:0.6rem; padding:1px 5px; border-radius:4px;"><i class="fa-solid fa-play"></i></span>' : ''}
+      <span style="position:absolute; top:4px; right:4px; background:rgba(239,68,68,0.85); color:#fff; width:18px; height:18px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.6rem; cursor:pointer;" onclick="removeStoryFile(${idx})"><i class="fa-solid fa-times"></i></span>
+    </div>
+  `).join('');
+}
+
+function removeStoryFile(index) {
+  STATE.storyFiles.splice(index, 1);
+  renderStoryPreview();
+}
+
+function onStoryWhenChange() {
+  const manual = document.getElementById('story-publish-when')?.value === 'manual';
+  const input = document.getElementById('story-publish-datetime');
+  if (input) input.style.display = manual ? 'block' : 'none';
+}
+
+/** Envia os arquivos escolhidos e publica agora, no melhor horário ou numa data marcada. */
+async function submitStoryPublish() {
+  const accountId = selectedStoryAccount();
+  const files = STATE.storyFiles || [];
+  const when = document.getElementById('story-publish-when')?.value || 'smart';
+  const addToLoop = document.getElementById('story-publish-add-loop')?.checked;
+
+  if (!accountId) return showToast('Selecione uma conta.', 'warning');
+  if (files.length === 0) return showToast('Escolha pelo menos uma imagem ou vídeo.', 'warning');
+
+  let manualDate = null;
+  if (when === 'manual') {
+    const value = document.getElementById('story-publish-datetime')?.value;
+    if (!value) return showToast('Escolha a data e a hora.', 'warning');
+    manualDate = new Date(value);
+  }
+
+  const btn = document.getElementById('btn-story-publish');
+  if (btn) btn.disabled = true;
+  const results = { ok: 0, failed: [] };
+
+  try {
+    showLoading(true, `ENVIANDO 0/${files.length}...`);
+
+    let smartTimes = null;
+    if (when === 'smart') {
+      smartTimes = await fetchSmartTimes(accountId, files.length, undefined, { kind: 'stories', perDay: 6 });
+      if (!smartTimes) throw new Error('Não consegui calcular os horários agora. Tente "Agora" ou escolha uma data.');
+    }
+
+    const uploaded = [];
+    for (let i = 0; i < files.length; i++) {
+      showLoading(true, `ENVIANDO ${i + 1}/${files.length}...`);
+      try {
+        uploaded.push({ file: files[i].file, url: await uploadStoryMedia(files[i].file) });
+      } catch (err) {
+        results.failed.push(`${files[i].file.name}: ${err.message}`);
+      }
+    }
+
+    for (let i = 0; i < uploaded.length; i++) {
+      const { file, url } = uploaded[i];
+      const publishNow = when === 'now';
+      const scheduledAt = publishNow ? new Date()
+        : smartTimes ? smartTimes[i]
+        : new Date(manualDate.getTime() + i * 60000);
+      const post = {
+        id: `story_${Date.now()}_${i}`,
+        accountId,
+        mediaType: 'STORIES',
+        imageUrl: url,
+        caption: '',
+        scheduledAt: scheduledAt.toISOString(),
+        // Já nasce "processing" quando vai sair agora, para o agendador não publicar em duplicidade.
+        status: publishNow ? 'processing' : 'pending'
+      };
+
+      try {
+        const saved = await fetch(`${API_BASE}/save-post`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(post) });
+        if (!saved.ok) throw new Error('Não foi possível salvar o Story.');
+        if (publishNow) {
+          showLoading(true, `PUBLICANDO STORY ${i + 1}/${uploaded.length}...`);
+          const res = await fetch(`${API_BASE}/publish-now`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ post }) });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || `Instagram recusou (HTTP ${res.status}).`);
+        }
+        results.ok++;
+      } catch (err) {
+        results.failed.push(`${file.name}: ${err.message}`);
+      }
+    }
+
+    if (addToLoop && uploaded.length > 0) {
+      uploaded.forEach(({ url }) => { if (!STATE.storyMediaPool.includes(url)) STATE.storyMediaPool.push(url); });
+      renderStoryMediaPool();
+    }
+  } catch (err) {
+    results.failed.push(err.message);
+  } finally {
+    showLoading(false);
+    if (btn) btn.disabled = false;
+  }
+
+  if (results.ok > 0) {
+    showToast(when === 'now' ? `${results.ok} Story(s) publicado(s)!` : `${results.ok} Story(s) agendado(s)!`, 'success');
+    STATE.storyFiles = [];
+    const input = document.getElementById('story-publish-file-input');
+    if (input) input.value = '';
+    renderStoryPreview();
+  }
+  results.failed.forEach(message => showToast(message, 'error'));
+
+  if (addToLoop && results.ok > 0) await saveStoryLoopConfig();
+  else await loadData();
+}
+
+/** Envia arquivos direto para as mídias do loop e já salva. */
+async function handleStoryPoolUpload(files) {
+  const valid = files.filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'));
+  if (valid.length === 0) return;
+  try {
+    for (let i = 0; i < valid.length; i++) {
+      showLoading(true, `ENVIANDO ${i + 1}/${valid.length}...`);
+      const url = await uploadStoryMedia(valid[i]);
+      if (!STATE.storyMediaPool.includes(url)) STATE.storyMediaPool.push(url);
+    }
+    renderStoryMediaPool();
+  } catch (err) {
+    showToast(`Erro no envio: ${err.message}`, 'error');
+  } finally {
+    showLoading(false);
+  }
+  await saveStoryLoopConfig();
+}
+
+function renderStoryQueue() {
+  const list = document.getElementById('story-queue-list');
+  if (!list) return;
+  const accountId = selectedStoryAccount();
+  const isStory = (p) => p.mediaType === 'STORIES' && p.accountId === accountId;
+
+  const upcoming = STATE.scheduledPosts.filter(isStory).sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt));
+  const recent = STATE.history.filter(isStory).slice(0, 8);
+  const items = [...upcoming, ...recent];
+
+  if (items.length === 0) {
+    list.innerHTML = '<p style="color:var(--text-dim); font-size:0.85rem;">Nenhum Story na fila. Publique um ao lado ou ligue o loop.</p>';
+    return;
+  }
+
+  const statusLabel = { pending: 'Agendado', processing: 'Publicando...', success: 'Publicado', error: 'Erro' };
+  const statusColor = { pending: 'var(--accent)', processing: 'var(--warning)', success: 'var(--success)', error: 'var(--error)' };
+
+  list.innerHTML = items.map(p => {
+    const when = new Date(p.status === 'success' || p.status === 'error' ? (p.publishedAt || p.scheduledAt) : p.scheduledAt)
+      .toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+    const thumb = isVideoUrl(p.imageUrl || '')
+      ? `<video src="${escapeHtml(p.imageUrl)}" muted preload="metadata" style="width:100%;height:100%;object-fit:cover;"></video>`
+      : `<img src="${escapeHtml(p.imageUrl)}" style="width:100%;height:100%;object-fit:cover;">`;
+    const fromLoop = (p.sourceFile || '').startsWith('loop:');
+    return `
+    <div style="display:flex; align-items:center; gap:12px; background:rgba(255,255,255,0.03); border:1px solid var(--border-color); border-radius:10px; padding:8px 12px;">
+      <div style="width:36px; height:64px; border-radius:6px; overflow:hidden; background:#000; flex-shrink:0;">${thumb}</div>
+      <div style="flex:1; min-width:0;">
+        <div style="font-size:0.82rem; font-weight:600; color:var(--text-main);"><i class="fa-solid fa-clock" style="color:var(--accent);"></i> ${when}${fromLoop ? ' <span style="font-size:0.65rem; color:#A78BFA;">· Loop</span>' : ''}</div>
+        <div style="font-size:0.72rem; color:${statusColor[p.status] || 'var(--text-dim)'}; margin-top:2px;">${statusLabel[p.status] || escapeHtml(p.status)}</div>
+      </div>
+      ${p.status === 'pending' ? `
+        <button class="btn btn-ghost btn-sm" onclick="publishNow('${escapeHtml(p.id)}')" title="Publicar agora" style="padding:4px 8px;"><i class="fa-solid fa-paper-plane"></i></button>
+        <button class="btn btn-ghost btn-sm" onclick="deletePost('${escapeHtml(p.id)}')" title="Remover da fila" style="padding:4px 8px; color:var(--error);"><i class="fa-solid fa-trash"></i></button>` : ''}
+    </div>`;
+  }).join('');
 }
 
 /**

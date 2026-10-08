@@ -9,6 +9,9 @@ const webpush = require('web-push');
 const { getDB, initDB } = require('./database');
 const { runAutoImporter } = require('./auto_importer');
 const youtubeService = require('./youtube');
+const { DEFAULT_TIMEZONE, isValidTimeZone, localParts } = require('./time-utils');
+const { generateSmartTimes, learnHourlyEngagement, makeWeightFn } = require('./smart-schedule');
+const { planStoryLoopPosts } = require('./story-loop');
 require('dotenv').config();
 
 /**
@@ -645,12 +648,52 @@ app.get('/api/account-stats', requireAuth, async (req, res) => {
  */
 const igMediaStatsCache = new Map(); // accountId -> { data, ts }
 
+/** Últimas publicações da conta com curtidas/comentários (cache de 10 min). Lança erro se a Meta recusar. */
+async function fetchInstagramMedia(account, { refresh = false } = {}) {
+  const cached = igMediaStatsCache.get(account.accountId);
+  if (!refresh && cached && Date.now() - cached.ts < STATS_TTL_MS) return cached.data;
+
+  const token = account.accessToken;
+  const facebookToken = token.startsWith('EAA');
+  const host = facebookToken ? 'graph.facebook.com' : 'graph.instagram.com';
+  const node = encodeURIComponent(facebookToken ? account.accountId : 'me');
+  const query = new URLSearchParams({
+    fields: 'id,caption,media_type,media_product_type,permalink,timestamp,like_count,comments_count,thumbnail_url,media_url',
+    limit: '25',
+    access_token: token
+  });
+
+  const r = await fetch(`https://${host}/${IG_API_VERSION}/${node}/media?${query}`, { timeout: 10000 });
+  const body = await r.json();
+  if (!r.ok || body.error) {
+    const e = body.error || {};
+    throw new Error(e.error_user_msg || e.message || `Instagram retornou ${r.status}`);
+  }
+
+  const posts = (body.data || []).map(m => ({
+    id: m.id,
+    caption: m.caption || '',
+    mediaType: m.media_product_type === 'REELS' ? 'REELS' : m.media_type,
+    permalink: m.permalink || null,
+    timestamp: m.timestamp || null,
+    likes: m.like_count ?? null,
+    comments: m.comments_count ?? null,
+    thumbnail: m.thumbnail_url || (m.media_type === 'VIDEO' ? null : m.media_url) || null
+  }));
+
+  const sum = (key) => posts.reduce((total, p) => total + (p[key] || 0), 0);
+  const data = {
+    posts,
+    totals: { posts: posts.length, likes: sum('likes'), comments: sum('comments') },
+    updatedAt: new Date().toISOString()
+  };
+  igMediaStatsCache.set(account.accountId, { data, ts: Date.now() });
+  return data;
+}
+
 app.get('/api/instagram/media-stats', requireAuth, async (req, res) => {
   const { accountId } = req.query;
   if (!accountId) return res.status(400).json({ error: 'accountId é obrigatório.' });
-
-  const cached = igMediaStatsCache.get(accountId);
-  if (req.query.refresh !== '1' && cached && Date.now() - cached.ts < STATS_TTL_MS) return res.json(cached.data);
 
   try {
     const db = await getDB();
@@ -658,43 +701,7 @@ app.get('/api/instagram/media-stats', requireAuth, async (req, res) => {
     if (!account || account.platform === 'youtube' || !account.accessToken) {
       return res.status(404).json({ error: 'Conta do Instagram não encontrada.' });
     }
-
-    const token = account.accessToken;
-    const facebookToken = token.startsWith('EAA');
-    const host = facebookToken ? 'graph.facebook.com' : 'graph.instagram.com';
-    const node = encodeURIComponent(facebookToken ? accountId : 'me');
-    const query = new URLSearchParams({
-      fields: 'id,caption,media_type,media_product_type,permalink,timestamp,like_count,comments_count,thumbnail_url,media_url',
-      limit: '25',
-      access_token: token
-    });
-
-    const r = await fetch(`https://${host}/${IG_API_VERSION}/${node}/media?${query}`, { timeout: 10000 });
-    const body = await r.json();
-    if (!r.ok || body.error) {
-      const e = body.error || {};
-      throw new Error(e.error_user_msg || e.message || `Instagram retornou ${r.status}`);
-    }
-
-    const posts = (body.data || []).map(m => ({
-      id: m.id,
-      caption: m.caption || '',
-      mediaType: m.media_product_type === 'REELS' ? 'REELS' : m.media_type,
-      permalink: m.permalink || null,
-      timestamp: m.timestamp || null,
-      likes: m.like_count ?? null,
-      comments: m.comments_count ?? null,
-      thumbnail: m.thumbnail_url || (m.media_type === 'VIDEO' ? null : m.media_url) || null
-    }));
-
-    const sum = (key) => posts.reduce((total, p) => total + (p[key] || 0), 0);
-    const data = {
-      posts,
-      totals: { posts: posts.length, likes: sum('likes'), comments: sum('comments') },
-      updatedAt: new Date().toISOString()
-    };
-    igMediaStatsCache.set(accountId, { data, ts: Date.now() });
-    res.json(data);
+    res.json(await fetchInstagramMedia(account, { refresh: req.query.refresh === '1' }));
   } catch (err) {
     console.error('[IG-MEDIA-STATS]', err.message);
     res.status(502).json({ error: err.message });
@@ -1607,11 +1614,68 @@ app.post('/api/stories/loop', requireAuth, async (req, res) => {
         params
       );
     }
-    res.json({ success: true, loopId });
+    // Salvar vale na hora: tira da fila os Stories antigos deste loop que ainda
+    // não saíram e cria de novo com os horários/mídias atuais.
+    await db.run('DELETE FROM posts WHERE "accountId" = ? AND "status" = \'pending\' AND "mediaType" = \'STORIES\' AND "sourceFile" LIKE ?', [accountId, `loop:${loopId}:%`]);
+    const queued = isEnabled ? await runStoryLoops(loopId) : 0;
+
+    let warning = null;
+    if (isEnabled) {
+      const hasMedia = JSON.parse(mediaStr).length > 0;
+      const hasTimes = JSON.parse(timesStr).length > 0;
+      if (!hasMedia) warning = 'Loop ligado, mas sem mídias: adicione imagens ou vídeos para ele publicar.';
+      else if (!hasTimes) warning = 'Loop ligado, mas sem horários: adicione ao menos um horário.';
+    }
+    res.json({ success: true, loopId, queued, warning });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
+/**
+ * Cria os Stories das próximas ~26h de cada loop ligado.
+ *
+ * Cada slot vira um post STORIES normal (o cron publica). A chave do slot fica
+ * no sourceFile ("loop:<id>:<data>:<hora>#<índice da mídia>") para nunca criar
+ * o mesmo Story duas vezes e para a rotação das mídias continuar de onde parou.
+ */
+async function runStoryLoops(onlyLoopId = null) {
+  const db = await getDB();
+  const isPostgres = !!process.env.DATABASE_URL;
+  const timeZone = await getTimeZone();
+  let created = 0;
+
+  const loops = await db.all('SELECT * FROM story_loops WHERE "enabled" = 1');
+  for (const loop of loops) {
+    if (onlyLoopId && loop.id !== onlyLoopId) continue;
+    try {
+      const account = await db.get('SELECT "accountId", "platform", "accessToken" FROM accounts WHERE "accountId" = ?', [loop.accountId]);
+      if (!account || account.platform === 'youtube' || !account.accessToken) continue;
+
+      const prefix = `loop:${loop.id}:`;
+      const mine = (await db.all(
+        'SELECT "sourceFile" FROM posts WHERE "accountId" = ? AND "mediaType" = \'STORIES\' AND "sourceFile" LIKE ? ORDER BY "scheduledAt" DESC',
+        [loop.accountId, `${prefix}%`]
+      )).filter(r => r.sourceFile && r.sourceFile.startsWith(prefix));
+
+      const existingKeys = new Set(mine.map(r => r.sourceFile.split('#')[0]));
+      const parsedIndex = mine.length ? parseInt(mine[0].sourceFile.split('#')[1], 10) : -1;
+
+      const planned = planStoryLoopPosts({ loop, existingKeys, lastIndex: Number.isNaN(parsedIndex) ? -1 : parsedIndex, timeZone });
+      for (const item of planned) {
+        const id = 'story_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now();
+        const params = [id, loop.accountId, 'STORIES', item.mediaUrl, '', item.scheduledAt.toISOString(), 'pending', '', '', new Date().toISOString(), `${item.key}#${item.mediaIndex}`, null, 0, 'instagram'];
+        const columns = '("id", "accountId", "mediaType", "imageUrl", "caption", "scheduledAt", "status", "mediaId", "publishedAt", "createdAt", "sourceFile", "mediaItems", "varianceMinutes", "platform")';
+        await db.run(`${isPostgres ? 'INSERT' : 'INSERT OR IGNORE'} INTO posts ${columns} VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)${isPostgres ? ' ON CONFLICT ("id") DO NOTHING' : ''}`, params);
+      }
+      created += planned.length;
+      if (planned.length) console.log(`[STORY-LOOP] ${planned.length} Story(s) agendado(s) para a conta ${loop.accountId}.`);
+    } catch (err) {
+      console.error('[STORY-LOOP]', loop.id, err.message);
+    }
+  }
+  return created;
+}
 
 /**
  * 🗄️ Acervo / Shared Drive
@@ -1778,67 +1842,129 @@ app.get('/api/analytics/summary', requireAuth, async (req, res) => {
 });
 
 /**
- * 📈 Detector de Melhores Horários por IA (Best Time to Post Heatmap)
+ * 🧠 Horários inteligentes
+ *
+ * Antes os agendamentos usavam slots fixos (1 post/dia = sempre 15:00).
+ * Agora o horário é sorteado favorecendo os picos de engajamento — os típicos
+ * por dia da semana misturados com o que funcionou nas publicações recentes
+ * da própria conta — com minutos variados e respeitando a cota por dia.
+ */
+
+/** Fuso em que "09:00" faz sentido para o usuário (global_config.timeZone; padrão: Brasília). */
+async function getTimeZone(preferred) {
+  if (isValidTimeZone(preferred)) return preferred;
+  try {
+    const db = await getDB();
+    const row = await db.get('SELECT value FROM global_config WHERE key = ?', ['timeZone']);
+    const saved = row ? JSON.parse(row.value) : null;
+    if (isValidTimeZone(saved)) return saved;
+  } catch {}
+  return DEFAULT_TIMEZONE;
+}
+
+async function getPostsPerDay() {
+  try {
+    const db = await getDB();
+    const row = await db.get('SELECT value FROM global_config WHERE key = ?', ['postsPerDay']);
+    const saved = row ? parseInt(JSON.parse(row.value), 10) : NaN;
+    if (saved >= 1 && saved <= 24) return saved;
+  } catch {}
+  return 3;
+}
+
+/** Notas por hora da conta: padrão típico + o que funcionou nas publicações recentes. */
+async function getWeightFnForAccount(account, timeZone) {
+  let learned = null;
+  if (account && account.accessToken && account.platform !== 'youtube') {
+    try {
+      const media = await fetchInstagramMedia(account);
+      learned = learnHourlyEngagement(media.posts, timeZone);
+    } catch (err) {
+      console.warn('[SMART] Sem dados da conta, usando o padrão típico:', err.message);
+    }
+  }
+  return { weightFn: makeWeightFn(learned), basedOn: learned ? 'account' : 'typical' };
+}
+
+app.post('/api/schedule/smart-times', requireAuth, async (req, res) => {
+  const { accountId, startDate } = req.body;
+  const count = Math.max(1, Math.min(200, parseInt(req.body.count, 10) || 1));
+
+  try {
+    const db = await getDB();
+    const account = accountId ? await db.get('SELECT * FROM accounts WHERE "accountId" = ?', [accountId]) : null;
+    if (accountId && (!account || account.platform === 'youtube')) {
+      return res.status(404).json({ error: 'Conta do Instagram não encontrada.' });
+    }
+
+    const timeZone = await getTimeZone(req.body.timeZone);
+    const perDay = parseInt(req.body.perDay, 10) || await getPostsPerDay();
+    // Stories têm cota própria: não disputam horário com os posts do feed (e vice-versa).
+    const storiesOnly = req.body.kind === 'stories';
+    const pending = accountId
+      ? await db.all(`SELECT "scheduledAt" FROM posts WHERE "accountId" = ? AND "status" IN ('pending', 'processing') AND "mediaType" ${storiesOnly ? '=' : '!='} 'STORIES'`, [accountId])
+      : [];
+    const { weightFn, basedOn } = await getWeightFnForAccount(account, timeZone);
+
+    const times = generateSmartTimes({
+      count, perDay, startDate, timeZone, weightFn,
+      existing: pending.map(p => p.scheduledAt)
+    });
+    res.json({ times: times.map(d => d.toISOString()), basedOn, timeZone, perDay });
+  } catch (err) {
+    console.error('[SMART-TIMES]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * 📈 Melhores horários: nota de cada hora por dia da semana (heatmap) e os 3
+ * melhores horários de hoje. As notas vêm do mesmo cálculo do agendador.
  */
 app.get('/api/accounts/best-times', requireAuth, async (req, res) => {
   const { accountId } = req.query;
   const db = await getDB();
-  
+
   try {
     const acc = accountId ? await db.get('SELECT * FROM accounts WHERE "accountId" = ?', [accountId]) : null;
-    
-    // Algoritmo de IA para pico de engajamento do Instagram por dia da semana (0: Dom, 1: Seg, ..., 6: Sab)
-    // Heatmap 7x24 gerado com distribuição de probabilidade de viralização
+    const timeZone = await getTimeZone();
+    const { weightFn, basedOn } = await getWeightFnForAccount(acc, timeZone);
+
     const days = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-    const heatmap = [];
+    const heatmap = days.map((day, dow) => ({
+      day,
+      scores: Array.from({ length: 24 }, (_, hour) => Math.round(weightFn(dow, hour)))
+    }));
 
-    for (let d = 0; d < 7; d++) {
-      const dayHours = [];
-      const isWeekend = (d === 0 || d === 6);
-      
-      for (let h = 0; h < 24; h++) {
-        let score = 10;
-        if (isWeekend) {
-          if (h >= 9 && h <= 12) score = 75 + Math.floor(Math.sin(h) * 15);
-          else if (h >= 14 && h <= 17) score = 82 + Math.floor(Math.cos(h) * 12);
-          else if (h >= 19 && h <= 22) score = 95 + Math.floor(Math.sin(h) * 5);
-          else if (h >= 1 && h <= 7) score = 8;
-          else score = 40 + (h * 2);
-        } else {
-          if (h >= 11 && h <= 13) score = 88 + Math.floor(Math.sin(h) * 8);
-          else if (h >= 15 && h <= 17) score = 80 + Math.floor(Math.cos(h) * 10);
-          else if (h >= 18 && h <= 21) score = 96 + Math.floor(Math.sin(h) * 4);
-          else if (h >= 7 && h <= 9) score = 65;
-          else if (h >= 0 && h <= 6) score = 5;
-          else score = 45;
-        }
-        score = Math.min(100, Math.max(5, score));
-        dayHours.push(score);
-      }
-      heatmap.push({ day: days[d], scores: dayHours });
+    // Os 3 melhores horários de hoje, com pelo menos 2 horas entre si.
+    const todayIndex = localParts(new Date(), timeZone).dow;
+    const ranked = heatmap[todayIndex].scores
+      .map((score, hour) => ({ score, hour }))
+      .filter(h => h.hour >= 7 && h.hour <= 22)
+      .sort((a, b) => b.score - a.score);
+    const peaks = [];
+    for (const candidate of ranked) {
+      if (peaks.every(p => Math.abs(p.hour - candidate.hour) >= 2)) peaks.push(candidate);
+      if (peaks.length === 3) break;
     }
+    peaks.sort((a, b) => a.hour - b.hour);
 
-    const todayIndex = new Date().getDay();
-    const todayDayName = days[todayIndex];
-    const topSlotsToday = todayIndex === 0 || todayIndex === 6 
-      ? ['10:30', '15:15', '20:45'] 
-      : ['11:45', '16:20', '19:30'];
-
-    const goldenHours = [
-      { time: topSlotsToday[0], label: 'Pico 1 (Engajamento Inicial)', probability: '94%' },
-      { time: topSlotsToday[1], label: 'Pico 2 (Retenção Tarde)', probability: '91%' },
-      { time: topSlotsToday[2], label: 'Pico 3 (Viral Noite)', probability: '98%' }
-    ];
+    // Minuto fixo por hora/dia só para não sugerir sempre ":00".
+    const topSlotsToday = peaks.map(p => `${String(p.hour).padStart(2, '0')}:${String((p.hour * 17 + todayIndex * 13) % 50 + 5).padStart(2, '0')}`);
+    const labels = ['Pico da manhã/almoço', 'Pico da tarde', 'Pico da noite'];
+    const goldenHours = peaks.map((p, i) => ({ time: topSlotsToday[i], label: labels[i] || `Pico ${i + 1}`, probability: `${p.score}%` }));
 
     res.json({
       success: true,
       accountId: accountId || 'global',
       username: acc?.username || 'Todas as Contas',
-      today: todayDayName,
+      today: days[todayIndex],
       recommendedSlots: topSlotsToday,
       todayPeakSlots: topSlotsToday,
       goldenHours,
-      heatmap
+      heatmap,
+      basedOn,
+      timeZone
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -2408,6 +2534,7 @@ initDB()
       if (scheduler.running) return;
       scheduler.running = true;
       try {
+        await runStoryLoops();
         await cron();
         if (tick % 2 === 0) await runAutoImporter();
         scheduler.lastError = null;

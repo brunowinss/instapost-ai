@@ -12,7 +12,7 @@ function response(data, status = 200) {
 
 // Run the actual route handlers with isolated HTTP/database dependencies.
 // No listening socket, scheduler, real credentials or production writes.
-function serverHarness(fetch, accounts = [], postgres = false, config = {}, publishedPosts = []) {
+function serverHarness(fetch, accounts = [], postgres = false, config = {}, publishedPosts = [], storyLoops = []) {
   const routes = new Map();
   const writes = [];
   const logs = [];
@@ -23,7 +23,7 @@ function serverHarness(fetch, accounts = [], postgres = false, config = {}, publ
   }
   const express = Object.assign(() => app, { json() {}, static() {} });
   const db = {
-    all: async sql => sql === 'SELECT * FROM accounts' ? accounts.map(a => ({ ...a })) : sql === 'SELECT * FROM global_config' ? Object.entries(config).map(([key, value]) => ({ key, value: JSON.stringify(value) })) : sql.includes('FROM posts') ? publishedPosts : [],
+    all: async sql => sql === 'SELECT * FROM accounts' ? accounts.map(a => ({ ...a })) : sql === 'SELECT * FROM global_config' ? Object.entries(config).map(([key, value]) => ({ key, value: JSON.stringify(value) })) : sql.includes('FROM story_loops') ? storyLoops : sql.includes('FROM posts') ? publishedPosts : [],
     get: async (sql, params) => sql.includes('global_config') ? (config[params?.[0]] ? { value: JSON.stringify(config[params[0]]) } : undefined) : accounts.find(a => a.accountId === params?.[0]),
     run: async (sql, params) => { writes.push({ sql, params }); if (sql.includes('INTO global_config')) config[params[0]] = JSON.parse(params[1]); }
   };
@@ -39,6 +39,9 @@ function serverHarness(fetch, accounts = [], postgres = false, config = {}, publ
     dotenv: { config() {} },
     './database': { getDB: async () => db, initDB: () => new Promise(() => {}) },
     './auto_importer': {},
+    './time-utils': require('../time-utils'),
+    './smart-schedule': require('../smart-schedule'),
+    './story-loop': require('../story-loop'),
     './youtube': {
       isConfigured: () => false,
       getAuthUrl: () => null,
@@ -357,4 +360,89 @@ test('Instagram media stats reject YouTube/unknown accounts and report Meta erro
   const failed = await server.invoke('get', '/api/instagram/media-stats', { query: { accountId: 'IG1' } });
   assert.equal(failed.statusCode, 502);
   assert.match(failed.body.error, /Token expirado/);
+});
+
+const igAccount = { accountId: 'IG1', username: 'insta', platform: 'instagram', accessToken: 'IGAA-token' };
+const noInstagramData = async () => response({ error: { message: 'sem dados', code: 190 } }, 400);
+
+test('smart-times returns sorted, varied, future times and rejects YouTube channels', async () => {
+  const server = serverHarness(noInstagramData, [igAccount, { accountId: 'UC1', username: 'Canal', platform: 'youtube', refreshToken: 'r' }]);
+
+  const res = await server.invoke('post', '/api/schedule/smart-times', { body: { accountId: 'IG1', count: 6, perDay: 2, timeZone: 'America/Sao_Paulo' } });
+  assert.equal(res.statusCode, 200);
+  const times = Array.from(res.body.times, iso => new Date(iso));
+  assert.equal(times.length, 6);
+  assert.ok(times.every(d => d.getTime() > Date.now()));
+  assert.deepEqual(times, [...times].sort((a, b) => a - b));
+  assert.equal(res.body.basedOn, 'typical', 'sem dados da conta, vale o padrão típico');
+  assert.equal(res.body.perDay, 2);
+  assert.ok(new Set(times.map(d => d.getUTCMinutes())).size > 1, 'minutos variados, não todos :00');
+
+  const youtube = await server.invoke('post', '/api/schedule/smart-times', { body: { accountId: 'UC1', count: 1 } });
+  assert.equal(youtube.statusCode, 404);
+});
+
+test('smart-times for stories only counts other stories, not the feed queue', async () => {
+  const server = serverHarness(noInstagramData, [igAccount]);
+  server.reads.length = 0;
+  await server.invoke('post', '/api/schedule/smart-times', { body: { accountId: 'IG1', count: 1, kind: 'stories' } });
+  await server.invoke('post', '/api/schedule/smart-times', { body: { accountId: 'IG1', count: 1 } });
+  const queries = server.reads.filter(sql => sql.includes('"scheduledAt" FROM posts'));
+  assert.match(queries[0], /"mediaType" = 'STORIES'/);
+  assert.match(queries[1], /"mediaType" != 'STORIES'/);
+});
+
+test('best-times is computed (not a fixed table) and returns three distinct peaks for today', async () => {
+  const server = serverHarness(noInstagramData, [igAccount]);
+  const res = await server.invoke('get', '/api/accounts/best-times', { query: { accountId: 'IG1' } });
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.heatmap.length, 7);
+  assert.ok(res.body.heatmap.every(day => day.scores.length === 24));
+  assert.equal(res.body.recommendedSlots.length, 3);
+  assert.equal(new Set(res.body.recommendedSlots).size, 3);
+  assert.ok(res.body.recommendedSlots.every(slot => /^\d{2}:\d{2}$/.test(slot)));
+  assert.equal(res.body.basedOn, 'typical');
+});
+
+test('saving a Stories loop queues real STORIES posts that rotate through the media', async () => {
+  const loop = {
+    id: 'loop_IG1', accountId: 'IG1', enabled: 1, varianceMinutes: 0,
+    times: JSON.stringify(['09:00', '13:00', '18:00', '21:00']),
+    activeMedia: JSON.stringify(['https://cdn.example/a.jpg', 'https://cdn.example/b.jpg'])
+  };
+  const server = serverHarness(async () => response({}), [igAccount], false, {}, [], [loop]);
+
+  const res = await server.invoke('post', '/api/stories/loop', {
+    body: { accountId: 'IG1', enabled: 1, times: JSON.parse(loop.times), varianceMinutes: 0, activeMedia: JSON.parse(loop.activeMedia) }
+  });
+  assert.equal(res.body.success, true);
+  assert.ok(res.body.queued >= 3, `4 horários nas próximas ~26h devem gerar pelo menos 3 Stories (veio ${res.body.queued})`);
+  assert.equal(res.body.warning, null);
+
+  const inserted = server.writes.filter(w => /INTO posts/.test(w.sql));
+  assert.equal(inserted.length, res.body.queued);
+  for (const { params } of inserted) {
+    assert.equal(params[2], 'STORIES');
+    assert.equal(params[6], 'pending');
+    assert.match(params[10], /^loop:loop_IG1:\d{4}-\d{2}-\d{2}:\d{2}:\d{2}#\d$/);
+    assert.equal(params[13], 'instagram');
+  }
+  assert.deepEqual(inserted.map(w => w.params[3]).slice(0, 3), ['https://cdn.example/a.jpg', 'https://cdn.example/b.jpg', 'https://cdn.example/a.jpg']);
+
+  // Antes de recriar, tira da fila os Stories antigos do loop que ainda não saíram.
+  const deletion = server.writes.find(w => /DELETE FROM posts/.test(w.sql));
+  assert.ok(deletion && deletion.params[1] === 'loop:loop_IG1:%');
+});
+
+test('Stories loop warns when it is on but has no media, and queues nothing when turned off', async () => {
+  const empty = { id: 'loop_IG1', accountId: 'IG1', enabled: 1, varianceMinutes: 5, times: '["09:00"]', activeMedia: '[]' };
+  const server = serverHarness(async () => response({}), [igAccount], false, {}, [], [empty]);
+
+  const noMedia = await server.invoke('post', '/api/stories/loop', { body: { accountId: 'IG1', enabled: 1, times: ['09:00'], activeMedia: [] } });
+  assert.equal(noMedia.body.queued, 0);
+  assert.match(noMedia.body.warning, /sem mídias/);
+
+  const off = await server.invoke('post', '/api/stories/loop', { body: { accountId: 'IG1', enabled: 0, times: ['09:00'], activeMedia: ['https://cdn.example/a.jpg'] } });
+  assert.equal(off.body.queued, 0);
+  assert.equal(server.writes.filter(w => /INTO posts/.test(w.sql)).length, 0);
 });

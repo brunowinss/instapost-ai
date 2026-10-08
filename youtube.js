@@ -9,13 +9,13 @@
 const { google } = require('googleapis');
 const fetch = require('node-fetch');
 const { getDB } = require('./database');
+const { DEFAULT_TIMEZONE, zonedTimeToUtc, localParts } = require('./time-utils');
 
 const SCOPES = [
   'https://www.googleapis.com/auth/youtube.upload',
   'https://www.googleapis.com/auth/youtube.readonly'
 ];
 
-const DEFAULT_TIMEZONE = 'America/Sao_Paulo';
 
 // Horários sugeridos por quantidade de posts no dia, mirando os picos de
 // audiência: deslocamento da manhã, intervalo do almoço e a noite.
@@ -217,25 +217,6 @@ function parseTimeList(times) {
   return uniqKeys.map(k => k.split(':').map(Number)).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
 }
 
-/** Deslocamento (minutos) de um fuso IANA em relação ao UTC, no instante `date`. */
-function getTimezoneOffsetMinutes(date, timeZone) {
-  const dtf = new Intl.DateTimeFormat('en-US', {
-    timeZone, hour12: false,
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit'
-  });
-  const parts = dtf.formatToParts(date).reduce((acc, p) => { acc[p.type] = p.value; return acc; }, {});
-  const asUTC = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day), Number(parts.hour === '24' ? '0' : parts.hour), Number(parts.minute), Number(parts.second));
-  return (asUTC - date.getTime()) / 60000;
-}
-
-/** Converte ano/mês/dia/hora/minuto *local* (no fuso informado) para um Date em UTC. */
-function zonedTimeToUtc(year, month, day, hour, minute, timeZone) {
-  const utcGuess = Date.UTC(year, month - 1, day, hour, minute, 0);
-  const offsetMinutes = getTimezoneOffsetMinutes(new Date(utcGuess), timeZone);
-  return new Date(utcGuess - offsetMinutes * 60000);
-}
-
 /**
  * Gera `quantidade` horários de publicação (Date em UTC), distribuídos nos
  * dias a partir de `comecarEm` (ou hoje), preenchendo todos os horários de
@@ -254,9 +235,8 @@ function buildSchedule({ quantidade, horarios, comecarEm, timezone = DEFAULT_TIM
     const [y, m, d] = comecarEm.split('-').map(Number);
     day = { y, m, d };
   } else {
-    const dtf = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' });
-    const parts = dtf.formatToParts(minimum).reduce((acc, p) => { acc[p.type] = p.value; return acc; }, {});
-    day = { y: Number(parts.year), m: Number(parts.month), d: Number(parts.day) };
+    const p = localParts(minimum, timezone);
+    day = { y: p.year, m: p.month, d: p.day };
   }
 
   const result = [];

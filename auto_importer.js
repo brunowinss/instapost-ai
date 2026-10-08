@@ -2,6 +2,8 @@ const fs = require('fs');
 const path = require('path');
 const cloudinary = require('cloudinary').v2;
 const { getDB } = require('./database');
+const { generateSmartTimes } = require('./smart-schedule');
+const { DEFAULT_TIMEZONE, isValidTimeZone } = require('./time-utils');
 require('dotenv').config();
 
 const VIDEOS_DIR = path.join(__dirname, 'vídeos_para_postar');
@@ -73,8 +75,10 @@ async function runAutoImporter() {
     }
 
     console.log(`📂 Processing niche for @${account.username}...`);
-    const lastScheduledDate = await db.get('SELECT "scheduledAt" FROM posts WHERE "status" = ? AND "accountId" = ? ORDER BY "scheduledAt" DESC LIMIT 1', ['pending', account.accountId]);
-    let currentBasis = lastScheduledDate ? new Date(lastScheduledDate.scheduledAt) : new Date();
+    // Horários já ocupados da conta: o importador continua de onde a fila parou, respeitando posts/dia.
+    const pendingRows = await db.all('SELECT "scheduledAt" FROM posts WHERE "accountId" = ? AND "status" IN (\'pending\', \'processing\') AND "mediaType" != \'STORIES\'', [account.accountId]);
+    const takenTimes = pendingRows.map(r => r.scheduledAt);
+    const timeZone = isValidTimeZone(config.timeZone) ? config.timeZone : DEFAULT_TIMEZONE;
     
     const files = fs.readdirSync(folderPath).filter(f => f.endsWith('.mp4') || f.endsWith('.mov'));
     
@@ -96,9 +100,10 @@ async function runAutoImporter() {
         
         const videoUrl = result.secure_url;
         
-        // b) Calculate Next Slot (Sequential)
-        const scheduledAt = await calculateNextSlotFromDate(currentBasis, slotsForCount(config.postsPerDay));
-        currentBasis = new Date(scheduledAt); // Update basis for next file
+        // b) Próximo horário inteligente (picos de engajamento, minutos variados, respeita posts/dia)
+        const [smartSlot] = generateSmartTimes({ count: 1, perDay: config.postsPerDay || 3, existing: takenTimes, timeZone });
+        const scheduledAt = smartSlot || await calculateNextSlotFromDate(new Date(), slotsForCount(config.postsPerDay));
+        takenTimes.push(scheduledAt.toISOString());
 
         // c) Save to DB
         const postId = `auto_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
