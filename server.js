@@ -2077,8 +2077,8 @@ app.post('/api/schedule/smart-times', requireAuth, async (req, res) => {
   try {
     const db = await getDB();
     const account = accountId ? await db.get('SELECT * FROM accounts WHERE "accountId" = ?', [accountId]) : null;
-    if (accountId && (!account || account.platform === 'youtube')) {
-      return res.status(404).json({ error: 'Conta do Instagram não encontrada.' });
+    if (accountId && !account) {
+      return res.status(404).json({ error: 'Conta não encontrada.' });
     }
 
     const timeZone = await getTimeZone(req.body.timeZone);
@@ -2721,6 +2721,14 @@ async function notifyAll(post, status, errorMsg) {
   await sendWebPushNotification(title, body);
 }
 
+
+// Publica já o que está na fila (sem esperar o próximo ciclo de 5 min). Responde na hora: o envio roda
+// em segundo plano, porque Reels e vídeos levam minutos e a conexão do navegador não aguenta tanto.
+// O cron reserva cada post antes de publicar, então rodar junto com o ciclo normal não duplica nada.
+app.post('/api/scheduler/run-now', requireAuth, (req, res) => {
+  cron().catch(err => console.error('[RUN-NOW]', err.message));
+  res.json({ started: true });
+});
 
 async function cron() {
   try {

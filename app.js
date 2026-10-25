@@ -71,6 +71,9 @@ const STATE = {
   storySlots: ['09:00', '13:00', '18:00', '21:00'],
   storyMediaPool: [],
   libraryActiveTab: 'captions',
+  // Publicar em várias redes
+  crosspostFiles: [],
+  crosspostSelected: null,
   // Facebook
   facebookPostType: 'FB_PHOTO',
   facebookFiles: [],
@@ -393,7 +396,8 @@ function switchSection(name) {
     'schedule': { t: 'Calendário', s: 'Organize seu calendário de conteúdo.' },
     'settings': { t: 'Configurações', s: 'Suas contas, integrações e preferências em um só lugar.' },
     'youtube': { t: 'YouTube', s: 'Conecte canais e publique vídeos e Shorts no YouTube.' },
-    'facebook': { t: 'Facebook', s: 'Conecte suas Páginas e publique texto, fotos e vídeos.' }
+    'facebook': { t: 'Facebook', s: 'Conecte suas Páginas e publique texto, fotos e vídeos.' },
+    'crosspost': { t: 'Publicar em várias redes', s: 'Um conteúdo, cada rede no melhor horário.' }
   };
   
   if (titles[name]) {
@@ -588,6 +592,7 @@ function renderActiveSection() {
   }
   if (n === 'youtube') renderYoutubeSection();
   if (n === 'facebook') renderFacebookSection();
+  if (n === 'crosspost') renderCrosspostSection();
 }
 
 /** Ícone de marca por plataforma da conta — tudo aqui era hardcoded pro Instagram. */
@@ -5312,4 +5317,291 @@ async function renderFacebookMetricsView(force = false) {
             </table>
           </div>`}
     </div>`;
+}
+
+
+// ============================================================
+// 🔀 PUBLICAR EM VÁRIAS REDES
+// ============================================================
+
+const CROSSPOST_NETWORKS = [
+  { key: 'instagram', label: 'Instagram', icon: 'fa-brands fa-instagram', color: '#e1306c', accounts: () => STATE.accounts, name: a => `@${a.username}` },
+  { key: 'facebook', label: 'Facebook', icon: 'fa-brands fa-facebook', color: '#1877f2', accounts: () => getFacebookAccounts(), name: a => a.username },
+  { key: 'youtube', label: 'YouTube', icon: 'fa-brands fa-youtube', color: '#ff0000', accounts: () => getYoutubeAccounts(), name: a => a.username }
+];
+
+function renderCrosspostSection() {
+  setupCrosspostDropzone();
+  renderCrosspostPreview();
+  renderCrosspostDestinations();
+}
+
+function setupCrosspostDropzone() {
+  const dropzone = document.getElementById('crosspost-dropzone');
+  const input = document.getElementById('crosspost-file-input');
+  if (!dropzone || !input) return;
+  dropzone.onclick = () => input.click();
+  input.onchange = (e) => handleCrosspostFiles(Array.from(e.target.files));
+  dropzone.ondragover = (e) => { e.preventDefault(); dropzone.style.borderColor = 'var(--primary)'; };
+  dropzone.ondragleave = () => { dropzone.style.borderColor = 'var(--border-color)'; };
+  dropzone.ondrop = (e) => {
+    e.preventDefault();
+    dropzone.style.borderColor = 'var(--border-color)';
+    if (e.dataTransfer.files?.length) handleCrosspostFiles(Array.from(e.dataTransfer.files));
+  };
+}
+
+function handleCrosspostFiles(files) {
+  const valid = files.filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'));
+  if (valid.length === 0) return showToast('Escolha fotos ou vídeos.', 'warning');
+  STATE.crosspostFiles = valid.map(file => ({ file, thumb: file.type.startsWith('image/') ? URL.createObjectURL(file) : null }));
+  renderCrosspostPreview();
+  renderCrosspostDestinations();
+  STATE.crosspostFiles.forEach((item) => {
+    if (item.thumb) return;
+    generateVideoThumbnail(item.file).then(thumb => {
+      if (!STATE.crosspostFiles.includes(item)) return;
+      item.thumb = thumb;
+      renderCrosspostPreview();
+    });
+  });
+}
+
+function removeCrosspostFile(index) {
+  STATE.crosspostFiles.splice(index, 1);
+  renderCrosspostPreview();
+  renderCrosspostDestinations();
+}
+
+function renderCrosspostPreview() {
+  const box = document.getElementById('crosspost-preview');
+  if (!box) return;
+  const items = STATE.crosspostFiles || [];
+  if (items.length === 0) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = 'grid';
+  box.innerHTML = items.map((item, idx) => `
+    <div style="position:relative; aspect-ratio:1; border-radius:8px; overflow:hidden; background:var(--primary-bg); border:1px solid var(--border-color); display:flex; align-items:center; justify-content:center; color:var(--primary);">
+      ${item.thumb ? `<img src="${escapeHtml(item.thumb)}" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fa-solid fa-video"></i>'}
+      ${item.file.type.startsWith('video/') ? '<span style="position:absolute; bottom:4px; left:4px; background:rgba(0,0,0,0.7); color:#fff; font-size:0.6rem; padding:1px 5px; border-radius:4px;"><i class="fa-solid fa-play"></i></span>' : ''}
+      <span style="position:absolute; top:4px; right:4px; background:rgba(239,68,68,0.85); color:#fff; width:18px; height:18px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.6rem; cursor:pointer;" onclick="removeCrosspostFile(${idx})"><i class="fa-solid fa-times"></i></span>
+    </div>`).join('');
+}
+
+function onCrosspostWhenChange() {
+  const manual = document.getElementById('crosspost-when')?.value === 'manual';
+  const input = document.getElementById('crosspost-datetime');
+  if (input) input.style.display = manual ? 'block' : 'none';
+}
+
+/** Contas marcadas. Na primeira vez, todas as conectadas com acesso já vêm marcadas. */
+function crosspostSelection() {
+  if (!STATE.crosspostSelected) {
+    STATE.crosspostSelected = new Set();
+    CROSSPOST_NETWORKS.forEach(n => n.accounts().filter(a => a.hasToken).forEach(a => STATE.crosspostSelected.add(a.accountId)));
+  }
+  return STATE.crosspostSelected;
+}
+
+function toggleCrosspostAccount(accountId, checked) {
+  const selected = crosspostSelection();
+  if (checked) selected.add(accountId); else selected.delete(accountId);
+  updateCrosspostYoutubeFields();
+}
+
+/** O campo de título do YouTube só aparece quando há conta do YouTube marcada e algum vídeo escolhido. */
+function updateCrosspostYoutubeFields() {
+  const group = document.getElementById('crosspost-yt-group');
+  if (!group) return;
+  const selected = crosspostSelection();
+  const hasYoutube = getYoutubeAccounts().some(a => selected.has(a.accountId));
+  const hasVideo = (STATE.crosspostFiles || []).some(f => f.file.type.startsWith('video/'));
+  group.style.display = hasYoutube && hasVideo ? 'block' : 'none';
+}
+
+function renderCrosspostDestinations() {
+  const box = document.getElementById('crosspost-destinations');
+  if (!box) return;
+  const selected = crosspostSelection();
+  const files = STATE.crosspostFiles || [];
+  const onlyPhotos = files.length > 0 && files.every(f => f.file.type.startsWith('image/'));
+
+  const groups = CROSSPOST_NETWORKS.map(network => {
+    const accounts = network.accounts();
+    const rows = accounts.length === 0
+      ? `<p style="color:var(--text-dim); font-size:0.8rem; margin:4px 0 0;">Nenhuma conta conectada.</p>`
+      : accounts.map(a => {
+        const blocked = !a.hasToken;
+        const skipped = network.key === 'youtube' && onlyPhotos;
+        return `
+        <label style="display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:8px; background:rgba(255,255,255,0.03); margin-top:6px; ${blocked || skipped ? 'opacity:0.55;' : 'cursor:pointer;'}">
+          <input type="checkbox" ${selected.has(a.accountId) && !blocked ? 'checked' : ''} ${blocked ? 'disabled' : ''} onchange="toggleCrosspostAccount('${escapeHtml(a.accountId)}', this.checked)" style="width:16px; height:16px; accent-color:var(--primary);">
+          <span style="font-size:0.88rem; font-weight:600;">${escapeHtml(network.name(a))}</span>
+          ${blocked ? '<span style="font-size:0.7rem; color:var(--error); margin-left:auto;">reconecte</span>' : skipped ? '<span style="font-size:0.7rem; color:var(--text-dim); margin-left:auto;">só vídeos</span>' : ''}
+        </label>`;
+      }).join('');
+    return `
+      <div style="margin-bottom:1rem;">
+        <div style="font-weight:700; font-size:0.85rem; color:${network.color};"><i class="${network.icon}"></i> ${network.label}</div>
+        ${rows}
+      </div>`;
+  });
+  box.innerHTML = groups.join('');
+  updateCrosspostYoutubeFields();
+}
+
+function findPostById(id) {
+  const lists = [STATE.scheduledPosts, STATE.history, STATE.youtubeScheduled, STATE.youtubeHistory, STATE.facebookScheduled, STATE.facebookHistory];
+  for (const list of lists) {
+    const found = (list || []).find(p => p.id === id);
+    if (found) return found;
+  }
+  return null;
+}
+
+/** Como cada rede chama o mesmo arquivo: foto/vídeo no Instagram e no Facebook; só vídeo no YouTube. */
+function crosspostPostFor(networkKey, file, { caption, title, short }) {
+  const isVideo = file.type.startsWith('video/');
+  if (networkKey === 'instagram') return { mediaType: isVideo ? 'REELS' : 'IMAGE', caption };
+  if (networkKey === 'facebook') return { mediaType: isVideo ? 'FB_VIDEO' : 'FB_PHOTO', caption, platform: 'facebook' };
+  if (networkKey === 'youtube' && isVideo) {
+    const finalTitle = title || guessTitleFromFilename(file.name);
+    return { mediaType: short ? 'YOUTUBE_SHORT' : 'YOUTUBE_VIDEO', caption: caption ? `${finalTitle}\n\n${caption}` : finalTitle, platform: 'youtube' };
+  }
+  return null;
+}
+
+async function submitCrosspost() {
+  const files = STATE.crosspostFiles || [];
+  const selected = crosspostSelection();
+  const when = document.getElementById('crosspost-when')?.value || 'smart';
+  const caption = document.getElementById('crosspost-caption')?.value.trim() || '';
+  const title = document.getElementById('crosspost-yt-title')?.value.trim() || '';
+  const short = document.getElementById('crosspost-yt-short')?.checked !== false;
+
+  if (files.length === 0) return showToast('Escolha pelo menos um arquivo.', 'warning');
+
+  const destinations = [];
+  CROSSPOST_NETWORKS.forEach(network => network.accounts().forEach(account => {
+    if (account.hasToken && selected.has(account.accountId)) destinations.push({ network, account });
+  }));
+  if (destinations.length === 0) return showToast('Marque pelo menos uma conta.', 'warning');
+
+  let manualDate = null;
+  if (when === 'manual') {
+    const value = document.getElementById('crosspost-datetime')?.value;
+    if (!value) return showToast('Escolha a data e a hora.', 'warning');
+    manualDate = new Date(value);
+  }
+
+  const btn = document.getElementById('btn-crosspost');
+  if (btn) btn.disabled = true;
+  const failures = [];
+  const created = [];
+
+  try {
+    // 1) Cada arquivo sobe uma vez só e a mesma URL serve para todas as redes.
+    const uploaded = [];
+    for (let i = 0; i < files.length; i++) {
+      showLoading(true, `ENVIANDO ${i + 1}/${files.length}...`);
+      try {
+        uploaded.push({ file: files[i].file, url: await uploadStoryMedia(files[i].file) });
+      } catch (err) {
+        failures.push(`${files[i].file.name}: ${err.message}`);
+      }
+    }
+
+    // 2) Um post por conta e por arquivo (YouTube pula foto), cada conta no seu próprio horário.
+    showLoading(true, 'AGENDANDO...');
+    for (const { network, account } of destinations) {
+      const applicable = uploaded.filter(u => crosspostPostFor(network.key, u.file, { caption, title, short }));
+      if (applicable.length === 0) continue;
+
+      let times = null;
+      if (when === 'smart') {
+        times = await fetchSmartTimes(account.accountId, applicable.length);
+        if (!times) { failures.push(`${network.name(account)}: não consegui calcular o horário inteligente.`); continue; }
+      }
+
+      for (let i = 0; i < applicable.length; i++) {
+        const { file, url } = applicable[i];
+        const scheduledAt = when === 'now' ? new Date() : times ? times[i] : new Date(manualDate.getTime() + i * 60000);
+        const post = {
+          id: `x_${Date.now()}_${created.length}_${Math.random().toString(36).slice(2, 6)}`,
+          accountId: account.accountId,
+          imageUrl: url,
+          scheduledAt: scheduledAt.toISOString(),
+          status: 'pending',
+          ...crosspostPostFor(network.key, file, { caption, title, short })
+        };
+        try {
+          const res = await fetch(`${API_BASE}/save-post`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(post) });
+          if (!res.ok) throw new Error('não foi possível salvar');
+          created.push({ id: post.id, network, account, fileName: file.name, scheduledAt });
+        } catch (err) {
+          failures.push(`${network.name(account)} · ${file.name}: ${err.message}`);
+        }
+      }
+    }
+
+    // 3) "Agora": manda o servidor publicar já, em segundo plano (vídeo leva minutos).
+    if (when === 'now' && created.length > 0) {
+      await fetch(`${API_BASE}/scheduler/run-now`, { method: 'POST' }).catch(() => {});
+    }
+  } catch (err) {
+    failures.push(err.message);
+  } finally {
+    showLoading(false);
+    if (btn) btn.disabled = false;
+  }
+
+  failures.forEach(message => showToast(message, 'error'));
+  if (created.length === 0) return;
+
+  showToast(when === 'now' ? `${created.length} publicação(ões) enviada(s) — acompanhando...` : `${created.length} publicação(ões) agendada(s)!`, 'success');
+  STATE.crosspostFiles = [];
+  const input = document.getElementById('crosspost-file-input');
+  if (input) input.value = '';
+  const captionInput = document.getElementById('crosspost-caption');
+  if (captionInput) captionInput.value = '';
+  renderCrosspostPreview();
+  renderCrosspostDestinations();
+  await loadData();
+  trackCrosspost(created, when === 'now');
+}
+
+function crosspostStatusHtml(post, entry, publishingNow) {
+  const when = entry.scheduledAt.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+  const status = post ? post.status : 'pending';
+  if (status === 'success') return '<span style="color:var(--success);"><i class="fa-solid fa-circle-check"></i> Publicado</span>';
+  if (status === 'error') return '<span style="color:var(--error);"><i class="fa-solid fa-circle-xmark"></i> Erro — veja o motivo no Telegram ou na fila da rede</span>';
+  if (status === 'processing' || publishingNow) return '<span style="color:var(--warning);"><i class="fa-solid fa-spinner fa-spin"></i> Publicando…</span>';
+  return `<span style="color:var(--accent);"><i class="fa-solid fa-clock"></i> Agendado para ${when}</span>`;
+}
+
+/** Mostra o resultado de cada publicação; no modo "agora" atualiza a cada poucos segundos até terminar. */
+async function trackCrosspost(entries, publishNow) {
+  const box = document.getElementById('crosspost-result');
+  if (!box) return;
+  const token = (STATE.crosspostTrackToken = Date.now());
+
+  const paint = () => {
+    box.innerHTML = entries.map(entry => `
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 12px; background:rgba(255,255,255,0.03); border:1px solid var(--border-color); border-radius:10px; font-size:0.8rem;">
+        <div style="min-width:0;">
+          <div style="font-weight:600; color:${entry.network.color};"><i class="${entry.network.icon}"></i> ${escapeHtml(entry.network.name(entry.account))}</div>
+          <div style="color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(entry.fileName)}</div>
+        </div>
+        <div style="text-align:right; flex-shrink:0;">${crosspostStatusHtml(findPostById(entry.id), entry, publishNow)}</div>
+      </div>`).join('');
+  };
+  paint();
+  if (!publishNow) return;
+
+  for (let attempt = 0; attempt < 45; attempt++) {
+    await new Promise(resolve => setTimeout(resolve, 8000));
+    if (STATE.crosspostTrackToken !== token) return; // outra publicação assumiu a área
+    await loadData();
+    paint();
+    if (entries.every(entry => { const p = findPostById(entry.id); return p && (p.status === 'success' || p.status === 'error'); })) return;
+  }
 }

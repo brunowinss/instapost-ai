@@ -385,8 +385,8 @@ test('Instagram media stats reject YouTube/unknown accounts and report Meta erro
 const igAccount = { accountId: 'IG1', username: 'insta', platform: 'instagram', accessToken: 'IGAA-token' };
 const noInstagramData = async () => response({ error: { message: 'sem dados', code: 190 } }, 400);
 
-test('smart-times returns sorted, varied, future times and rejects YouTube channels', async () => {
-  const server = serverHarness(noInstagramData, [igAccount, { accountId: 'UC1', username: 'Canal', platform: 'youtube', refreshToken: 'r' }]);
+test('smart-times works for Instagram, Facebook and YouTube accounts and rejects unknown ones', async () => {
+  const server = serverHarness(noInstagramData, [igAccount, { accountId: 'UC1', username: 'Canal', platform: 'youtube', refreshToken: 'r' }, { accountId: 'PG1', username: 'Pagina', platform: 'facebook', accessToken: 'EAA' }]);
 
   const res = await server.invoke('post', '/api/schedule/smart-times', { body: { accountId: 'IG1', count: 6, perDay: 2, timeZone: 'America/Sao_Paulo' } });
   assert.equal(res.statusCode, 200);
@@ -398,8 +398,13 @@ test('smart-times returns sorted, varied, future times and rejects YouTube chann
   assert.equal(res.body.perDay, 2);
   assert.ok(new Set(times.map(d => d.getUTCMinutes())).size > 1, 'minutos variados, não todos :00');
 
-  const youtube = await server.invoke('post', '/api/schedule/smart-times', { body: { accountId: 'UC1', count: 1 } });
-  assert.equal(youtube.statusCode, 404);
+  for (const accountId of ['UC1', 'PG1']) {
+    const other = await server.invoke('post', '/api/schedule/smart-times', { body: { accountId, count: 2 } });
+    assert.equal(other.statusCode, 200);
+    assert.equal(other.body.times.length, 2);
+    assert.equal(other.body.basedOn, 'typical', 'só o Instagram aprende com as publicações da conta');
+  }
+  assert.equal((await server.invoke('post', '/api/schedule/smart-times', { body: { accountId: 'nope', count: 1 } })).statusCode, 404);
 });
 
 test('smart-times for stories only counts other stories, not the feed queue', async () => {
@@ -668,4 +673,12 @@ test('Facebook stats route merges post data, totals views/reactions, flags delet
   assert.equal(res.body.posts[1].views, 99);
   assert.equal(res.body.posts[2].unavailable, true);
   assert.ok(!/EAA-/.test(JSON.stringify(res.body)), 'token nunca vai pro navegador');
+});
+
+test('run-now answers immediately and publishes the queue in the background', async () => {
+  const server = serverHarness(async () => response({}), []);
+  const res = await server.invoke('post', '/api/scheduler/run-now');
+  assert.deepEqual({ ...res.body }, { started: true });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.ok(server.reads.some(sql => /FROM posts WHERE "status" = 'pending'/.test(sql)), 'o cron consultou a fila');
 });

@@ -92,23 +92,24 @@
     </a>
     <div class="workspace-label"><span class="workspace-avatar">IP</span><div>Meu espaço<small>Estúdio de conteúdo</small></div></div>
     <nav class="nav-links" aria-label="Navegação principal">
-      <div class="nav-group"><p class="nav-group-label">Acompanhar</p>
+      <div class="nav-group"><p class="nav-group-label">Instagram</p>
       <a href="#dashboard" class="nav-item active" data-section="dashboard" title="Visão geral" aria-current="page"><i class="fa-solid fa-table-cells-large" aria-hidden="true"></i><span>Visão geral</span></a>
       <a href="#schedule" class="nav-item" data-section="schedule" title="Calendário"><i class="fa-solid fa-calendar-days" aria-hidden="true"></i><span>Calendário</span></a>
-      <a href="#analytics" class="nav-item" data-section="analytics" title="Resultados"><i class="fa-solid fa-chart-line" aria-hidden="true"></i><span>Resultados</span></a></div>
-      <div class="nav-group"><p class="nav-group-label">Criar e publicar</p>
+      <a href="#analytics" class="nav-item" data-section="analytics" title="Resultados"><i class="fa-solid fa-chart-line" aria-hidden="true"></i><span>Resultados</span></a>
       <a href="#new-post" class="nav-item" data-section="new-post" title="Nova publicação"><i class="fa-solid fa-circle-plus" aria-hidden="true"></i><span>Nova publicação</span></a>
       <a href="#bulk-reels" class="nav-item" data-section="bulk-reels" title="Reels em massa"><i class="fa-solid fa-clapperboard" aria-hidden="true"></i><span>Reels em massa</span></a>
       <a href="#bulk-carousel" class="nav-item" data-section="bulk-carousel" title="Carrossel e fotos"><i class="fa-solid fa-layer-group" aria-hidden="true"></i><span>Carrossel e fotos</span></a>
       <a href="#stories-loop" class="nav-item" data-section="stories-loop" title="Stories 24/7"><i class="fa-solid fa-arrows-spin" aria-hidden="true"></i><span>Stories 24/7</span></a></div>
-      <div class="nav-group"><p class="nav-group-label">Organizar</p>
-      <a href="#captions" class="nav-item" data-section="captions" title="Legendas e tags"><i class="fa-solid fa-bookmark" aria-hidden="true"></i><span>Legendas e tags</span></a>
-      <a href="#drive" class="nav-item" data-section="drive" title="Acervo de mídias"><i class="fa-solid fa-folder-open" aria-hidden="true"></i><span>Acervo de mídias</span></a>
-      <a href="#settings" class="nav-item" data-section="settings" title="Configurações"><i class="fa-solid fa-sliders" aria-hidden="true"></i><span>Configurações</span></a></div>
       <div class="nav-group"><p class="nav-group-label">YouTube</p>
       <a href="#youtube" class="nav-item" data-section="youtube" title="YouTube"><i class="fa-brands fa-youtube" aria-hidden="true"></i><span>YouTube</span></a></div>
       <div class="nav-group"><p class="nav-group-label">Facebook</p>
       <a href="#facebook" class="nav-item" data-section="facebook" title="Facebook"><i class="fa-brands fa-facebook" aria-hidden="true"></i><span>Facebook</span></a></div>
+      <div class="nav-group"><p class="nav-group-label">Todas as redes</p>
+      <a href="#crosspost" class="nav-item" data-section="crosspost" title="Publicar em várias redes"><i class="fa-solid fa-share-nodes" aria-hidden="true"></i><span>Publicar em várias redes</span></a></div>
+      <div class="nav-group"><p class="nav-group-label">Organizar</p>
+      <a href="#captions" class="nav-item" data-section="captions" title="Legendas e tags"><i class="fa-solid fa-bookmark" aria-hidden="true"></i><span>Legendas e tags</span></a>
+      <a href="#drive" class="nav-item" data-section="drive" title="Acervo de mídias"><i class="fa-solid fa-folder-open" aria-hidden="true"></i><span>Acervo de mídias</span></a>
+      <a href="#settings" class="nav-item" data-section="settings" title="Configurações"><i class="fa-solid fa-sliders" aria-hidden="true"></i><span>Configurações</span></a></div>
     </nav>
     <div class="sidebar-footer">
       <div class="status-badge" id="scheduler-badge">
@@ -379,18 +380,6 @@
             </button>
           </div>
         </div>
-      </div>
-      <!-- Calendar View -->
-      <div class="card" style="margin-bottom:2rem;">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-calendar-days"></i> Calendário</div>
-          <div style="display:flex; align-items:center; gap:8px;">
-            <button class="btn btn-ghost btn-sm" style="padding:0.5rem;" id="cal-prev" aria-label="Mês anterior"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i></button>
-            <span id="cal-month-label" style="font-weight:600; font-size:1rem; min-width:140px; text-align:center;"></span>
-            <button class="btn btn-ghost btn-sm" style="padding:0.5rem;" id="cal-next" aria-label="Próximo mês"><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button>
-          </div>
-        </div>
-        <div id="calendar-grid" style="margin-top:1.5rem;"></div>
       </div>
       <!-- Posts List -->
       <div class="card">
@@ -1078,6 +1067,66 @@
           </div>
         </div>
         <div id="ig-media-body"></div>
+      </div>
+    </section>
+
+    <!-- ═══════════════ PUBLICAR EM VÁRIAS REDES ═══════════════ -->
+    <section id="section-crosspost" class="section">
+      <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+
+        <!-- Conteúdo -->
+        <div class="card">
+          <div class="card-title"><i class="fa-solid fa-share-nodes"></i> Conteúdo</div>
+          <form id="crosspost-form" style="margin-top:1rem;" onsubmit="return false;">
+            <div class="form-group">
+              <label class="label"><i class="fa-solid fa-photo-film"></i> Fotos ou vídeos (um post por arquivo)</label>
+              <div class="dropzone" id="crosspost-dropzone" style="padding:1.4rem 1rem; border-style:dashed;">
+                <i class="fa-solid fa-cloud-arrow-up" style="font-size:2rem; color:var(--primary); margin-bottom:0.6rem;"></i>
+                <p style="font-weight:600; color:var(--text-main);">Arraste ou clique para escolher</p>
+                <p style="font-size:0.78rem; color:var(--text-dim); margin-top:4px;">Cada arquivo é enviado uma vez e usado em todas as redes marcadas</p>
+                <input type="file" id="crosspost-file-input" multiple accept="image/*,video/*" hidden>
+              </div>
+              <div id="crosspost-preview" style="display:none; grid-template-columns:repeat(auto-fill, minmax(84px, 1fr)); gap:10px; margin-top:0.8rem;"></div>
+            </div>
+
+            <div class="form-group">
+              <label class="label"><i class="fa-solid fa-pen-nib"></i> Texto / legenda</label>
+              <textarea class="textarea" id="crosspost-caption" rows="4" placeholder="Vale para Instagram e Facebook (no YouTube vira a descrição)"></textarea>
+            </div>
+
+            <div class="form-group" id="crosspost-yt-group" style="display:none;">
+              <label class="label"><i class="fa-brands fa-youtube" style="color:#ff0000;"></i> Título no YouTube</label>
+              <input type="text" class="input" id="crosspost-yt-title" maxlength="100" placeholder="Em branco = nome do arquivo">
+              <div style="display:flex; align-items:center; gap:10px; margin-top:8px;">
+                <input type="checkbox" id="crosspost-yt-short" checked style="width:16px; height:16px; accent-color:var(--primary);">
+                <label for="crosspost-yt-short" style="font-size:0.82rem; color:var(--text-secondary); cursor:pointer;">É um Short (vídeo vertical)</label>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="label"><i class="fa-solid fa-clock"></i> Quando publicar</label>
+              <select id="crosspost-when" class="input" onchange="onCrosspostWhenChange()">
+                <option value="smart" selected>Horário inteligente (cada conta no seu melhor pico)</option>
+                <option value="now">Agora em todas</option>
+                <option value="manual">Escolher data e hora</option>
+              </select>
+              <input type="datetime-local" id="crosspost-datetime" class="input" style="display:none; margin-top:8px;">
+            </div>
+          </form>
+        </div>
+
+        <!-- Destinos -->
+        <div class="card">
+          <div class="card-title"><i class="fa-solid fa-bullseye"></i> Onde publicar</div>
+          <p style="font-size:0.8rem; color:var(--text-dim); margin:0.4rem 0 1rem;">Marque as contas. Foto não vai para o YouTube; Reels e vídeos vão para as três redes.</p>
+          <div id="crosspost-destinations"></div>
+
+          <button type="button" class="btn btn-primary" id="btn-crosspost" style="width:100%; padding:1rem; margin-top:1rem;" onclick="submitCrosspost()">
+            <i class="fa-solid fa-paper-plane"></i> Publicar nas redes marcadas
+          </button>
+
+          <div id="crosspost-result" style="margin-top:1rem; display:flex; flex-direction:column; gap:8px;"></div>
+        </div>
       </div>
     </section>
 
