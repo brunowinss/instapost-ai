@@ -538,3 +538,25 @@ test('Facebook token check asks Meta about the saved Page token without leaking 
   assert.equal(dead.body.reason, 'Session has expired');
   assert.ok(!JSON.stringify([live.body, dead.body]).includes('EAA-'));
 });
+
+test('Facebook login warns when a previously connected Page lost access because it was not ticked this time', async () => {
+  const server = serverHarness(async () => response({}), [
+    { accountId: 'PG1', username: 'Minha <b>Página</b>', platform: 'facebook', accessToken: 'EAA-new' },
+    { accountId: 'PGOLD', username: 'Loja <i>Antiga</i>', platform: 'facebook', accessToken: 'EAA-old' },
+    { accountId: 'IG1', username: 'insta', platform: 'instagram', accessToken: 'IGAA' }
+  ]);
+  const state = stateFrom((await server.invoke('get', '/auth/facebook')).redirectUrl);
+  const done = await server.invoke('get', '/auth/facebook/callback', { query: { code: 'good', state } });
+
+  assert.match(done.body, /Loja &lt;i&gt;Antiga&lt;\/i&gt;<\/b> ficou sem acesso/);
+  assert.match(done.body, /Selecionar tudo/);
+  assert.ok(!/insta<\/b> ficou/.test(done.body), 'contas do Instagram nunca entram no aviso');
+  assert.match(done.body, /window\.opener && !1\)/, 'com aviso, a aba não se fecha sozinha');
+});
+
+test('Facebook login shows no warning when every connected Page is in the new grant', async () => {
+  const server = serverHarness(async () => response({}), [{ accountId: 'PG1', username: 'Minha Página', platform: 'facebook', accessToken: 'EAA' }]);
+  const state = stateFrom((await server.invoke('get', '/auth/facebook')).redirectUrl);
+  const done = await server.invoke('get', '/auth/facebook/callback', { query: { code: 'good', state } });
+  assert.ok(!/ficou sem acesso/.test(done.body));
+});

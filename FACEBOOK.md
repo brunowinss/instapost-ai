@@ -22,6 +22,10 @@ A aba **Facebook** publica **texto, fotos e vídeos** em Páginas que você admi
 
 Aba **Facebook → Conectar Página** → entre com a conta que administra a Página e **marque as Páginas** que quer conectar. O painel guarda o token de cada Página (não vence) e nunca o envia para o navegador.
 
+## Várias Páginas: marque todas de uma vez
+
+Cada login do Facebook **substitui** a lista de Páginas liberadas para o app. Conectar só a Página A derruba o acesso à B. Na tela da Meta, clique em **Editar configurações** e use **Selecionar tudo** (ou "Aceitar todas as Páginas atuais e no futuro", que também cobre Páginas novas). O painel avisa quando alguma Página ficar sem acesso e mostra o estado real de cada uma na aba Facebook.
+
 ## Limites importantes
 
 - **Modo de desenvolvimento:** com o app em desenvolvimento, só quem tem função no app (administrador, desenvolvedor, testador) consegue conectar e publicar. Para Páginas de outras pessoas é preciso passar o app para o modo ao vivo, com revisão de permissões e verificação da empresa pela Meta.

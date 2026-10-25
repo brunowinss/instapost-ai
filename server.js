@@ -395,6 +395,14 @@ app.get('/auth/facebook/callback', async (req, res) => {
     }
     console.log(`[FACEBOOK-OAUTH] ✅ ${pages.length} Página(s) conectada(s): ${pages.map(p => p.name).join(', ')}`);
 
+    // Cada login da Meta substitui a lista liberada: Páginas conectadas antes e não marcadas agora perdem o acesso.
+    const droppedPages = (await db.all('SELECT * FROM accounts'))
+      .filter(a => a.platform === 'facebook' && !pages.some(p => p.id === a.accountId));
+    if (droppedPages.length) console.warn(`[FACEBOOK-OAUTH] ⚠️ Sem acesso após esta conexão: ${droppedPages.map(a => a.username).join(', ')}`);
+    const droppedHtml = droppedPages.length
+      ? `<p style="color:#fbbf24;"><b>Atenção:</b> <b>${droppedPages.map(a => escapeHtml(a.username)).join(', ')}</b> ficou sem acesso porque não foi marcada nesta conexão. Clique em Conectar Página de novo, depois em <b>Editar configurações</b> e use <b>Selecionar tudo</b>.</p>`
+      : '';
+
     const names = pages.map(p => escapeHtml(p.name)).join(', ');
     res.send(`
       <!DOCTYPE html>
@@ -416,9 +424,10 @@ app.get('/auth/facebook/callback', async (req, res) => {
         <div class="card">
           <h1>${pages.length > 1 ? 'Páginas conectadas!' : 'Página conectada!'}</h1>
           <p><b>${names}</b><br>já pode(m) receber publicações pelo painel <b>Insta Post</b>. Se você abriu em outro navegador, pode fechar esta aba e voltar ao painel.</p>
+          ${droppedHtml}
           <a href="/?connected=facebook" class="btn">Abrir Painel</a>
         </div>
-        <script>if (window.opener) { setTimeout(() => window.close(), 2500); }</script>
+        <script>if (window.opener && !${droppedPages.length}) { setTimeout(() => window.close(), 2500); }</script>
       </body>
       </html>
     `);
