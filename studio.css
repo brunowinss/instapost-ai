@@ -442,3 +442,8 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .nav-links { gap: 4px !important; }
 .nav-group { margin-bottom: 0 !important; }
 .nav-group-items { padding: 2px 0 8px 6px; }
+
+.rp-overlay .rp-user { min-width: 0; }
+.rp-overlay .rp-user > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rp-overlay .rp-user > span:last-child { flex-shrink: 0; }
+.rp-overlay .rp-user .rp-avatar { width: 28px; height: 28px; }

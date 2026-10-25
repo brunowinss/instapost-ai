@@ -299,7 +299,7 @@
             <!-- Account Selector -->
             <div class="form-group">
               <label class="label"><i class="fa-solid fa-user-circle"></i> Postar na Conta</label>
-              <select id="post-account-select" class="input">
+              <select id="post-account-select" class="input" onchange="updateInstagramLivePreview()">
                 <option>Carregando contas...</option>
               </select>
             </div>
@@ -377,15 +377,8 @@
           <div style="padding:1.2rem 1.5rem; border-bottom:1px solid var(--border-color); font-weight:600; font-size:0.8rem; text-transform:uppercase; color:var(--text-dim);">
             <i class="fa-brands fa-instagram" style="color:var(--primary); margin-right:8px;"></i> Pré-visualização
           </div>
-          <div id="instagram-preview" style="background:var(--bg-app); min-height:480px; padding:1.5rem;">
-            <div style="display:flex; align-items:center; gap:12px; margin-bottom:1rem;">
-              <div id="preview-user-avatar" style="width:36px; height:36px; border-radius:50%; background:var(--border-color); background-size:cover; background-position:center;"></div>
-              <div style="font-size:0.9rem; font-weight:600;" id="preview-username">@seu_perfil</div>
-            </div>
-            <div id="preview-image-box" style="width:100%; aspect-ratio:1/1; background:rgba(255,255,255,0.02); border-radius:var(--radius-sm); border:1px solid var(--border-color); display:flex; align-items:center; justify-content:center; color:var(--text-dim); font-size:0.9rem;">
-              Aguardando mídia...
-            </div>
-            <div id="preview-caption" style="margin-top:1rem; font-size:0.9rem; line-height:1.6; color:var(--text-secondary);">Sua legenda aparecerá aqui...</div>
+          <div id="instagram-preview" style="background:var(--bg-app); padding:1.5rem 1rem;">
+            <div id="ig-live-preview"></div>
           </div>
         </div>
       </div>

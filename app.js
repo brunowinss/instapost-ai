@@ -619,6 +619,7 @@ function renderActiveSection() {
   if (n === 'youtube' || n.startsWith('youtube-')) renderYoutubeSection();
   if (n === 'facebook' || n.startsWith('facebook-')) renderFacebookSection();
   if (n === 'crosspost') renderCrosspostSection();
+  if (n === 'new-post') updateInstagramLivePreview();
 }
 
 /** Ícone de marca por plataforma da conta — tudo aqui era hardcoded pro Instagram. */
@@ -1400,14 +1401,12 @@ function setupForms() {
     if (activeBtn) { activeBtn.classList.add('active'); activeBtn.classList.remove('btn-ghost'); }
 
     const localUrl = URL.createObjectURL(first);
-    const box = document.getElementById('preview-image-box');
+    STATE.igPreviewNote = files.length > 1 ? `Mostrando o 1º de ${files.length} arquivos — cada um vira um post.` : '';
     setInstagramPreviewMedia(localUrl, isVideo);
     
     const submitBtn = document.querySelector('#post-form button[type="submit"]');
     if (files.length > 1) {
       submitBtn.innerHTML = `<i class="fa-solid fa-bolt"></i> AGENDAR ${files.length} PUBLICAÇÕES`;
-      const preview = document.getElementById('preview-caption');
-      if (preview) preview.innerHTML = `<strong>${files.length} arquivos:</strong><br>${files.map(f => '• ' + f.name).join('<br>')}`;
     } else {
       submitBtn.innerHTML = `<i class="fa-solid fa-calendar-check"></i> AGENDAR PUBLICAÇÃO`;
     }
@@ -1420,6 +1419,7 @@ function setupForms() {
       document.querySelectorAll('.btn-media').forEach(b => b.classList.remove('active', 'btn-ghost'));
       btn.classList.add('active');
       document.querySelectorAll('.btn-media:not(.active)').forEach(b => b.classList.add('btn-ghost'));
+      updateInstagramLivePreview();
     };
   });
 
@@ -2022,8 +2022,7 @@ function setupUIEvents() {
   const captionInput = document.getElementById('post-caption');
   if (captionInput) {
     captionInput.oninput = (e) => {
-      const preview = document.getElementById('preview-caption');
-      if (preview) preview.innerText = e.target.value || 'Sua legenda aparecerá aqui.';
+      updateInstagramLivePreview();
     };
   }
 
@@ -6210,12 +6209,28 @@ function previewCrosspost(index = 0) {
   openRealPreview(panels, `Prévia · ${entry.file.name}`);
 }
 
-/** Prévia do Instagram em "Nova publicação": vídeo em tela cheia de Reels, foto no formato do feed. */
+/** Prévia do Instagram em "Nova publicação": o post como aparece no celular (Reels em tela cheia, foto no feed). */
 function setInstagramPreviewMedia(src, isVideo) {
-  const box = document.getElementById('preview-image-box');
+  STATE.igPreviewMedia = { src, isVideo };
+  updateInstagramLivePreview();
+}
+
+function updateInstagramLivePreview() {
+  const box = document.getElementById('ig-live-preview');
   if (!box) return;
-  box.style.cssText = `width:100%; ${isVideo ? 'aspect-ratio:9/16; max-width:320px; border-radius:22px; border:5px solid #202b38;' : 'aspect-ratio:4/5; max-width:380px; border-radius:12px; border:1px solid var(--border-color);'} margin:0 auto; overflow:hidden; background:#000; display:block;`;
-  box.innerHTML = isVideo
-    ? `<video src="${escapeHtml(src)}#t=0.1" controls autoplay muted loop playsinline style="width:100%;height:100%;object-fit:cover;display:block;"></video>`
-    : `<img src="${escapeHtml(src)}" style="width:100%;height:100%;object-fit:cover;display:block;" alt="">`;
+  const media = STATE.igPreviewMedia || {};
+  const accountId = document.getElementById('post-account-select')?.value || STATE.activeAccountId;
+  const account = STATE.accounts.find(a => a.accountId === accountId) || STATE.accounts.find(a => a.accountId === STATE.activeAccountId) || STATE.accounts[0];
+  const typeButton = document.querySelector('.btn-media.active')?.dataset.type;
+  const avatar = account ? (account.profilePictureUrl || (!account.username.startsWith('instagram_') ? `https://unavatar.io/instagram/${account.username}` : '')) : '';
+  box.innerHTML = realPreviewHtml({
+    network: 'instagram',
+    mediaType: media.isVideo || typeButton === 'REELS' ? 'REELS' : 'IMAGE',
+    src: media.src || '',
+    isVideo: !!media.isVideo,
+    username: account ? `@${account.username}` : '',
+    avatar,
+    caption: document.getElementById('post-caption')?.value || '',
+    note: STATE.igPreviewNote || ''
+  });
 }
