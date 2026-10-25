@@ -327,6 +327,20 @@ function isValidOAuthState(state) {
   return signature.length === expected.length && crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
 }
 
+// Pergunta à Meta se o token de uma Página ainda vale (a tela usa para avisar "reconecte" antes de falhar).
+app.get('/api/facebook/check', requireAuth, async (req, res) => {
+  const { accountId } = req.query;
+  if (!accountId) return res.status(400).json({ error: 'accountId é obrigatório.' });
+  try {
+    const db = await getDB();
+    const account = await db.get('SELECT * FROM accounts WHERE "accountId" = ?', [accountId]);
+    if (!account || account.platform !== 'facebook') return res.status(404).json({ error: 'Página do Facebook não encontrada.' });
+    res.json(await facebookService.checkPageToken(account));
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
 app.get('/auth/facebook', (req, res) => {
   const url = facebookService.isConfigured() ? facebookService.getAuthUrl(createOAuthState()) : null;
   if (!url) {

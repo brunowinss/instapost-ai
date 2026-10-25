@@ -54,7 +54,10 @@ function getAuthUrl(state) {
 
 function describeError(error) {
   if (!error) return 'Resposta inesperada do Facebook.';
-  if (error.code === 190) return 'O acesso à Página expirou ou foi revogado — reconecte a Página na aba Facebook.';
+  if (error.code === 190) {
+    const subcode = error.error_subcode ? `, subcódigo ${error.error_subcode}` : '';
+    return `O acesso à Página expirou ou foi revogado — reconecte a Página na aba Facebook. (Meta: ${error.message || 'token inválido'}${subcode})`;
+  }
   if (error.code === 10 || error.code === 200 || (error.code >= 200 && error.code <= 299)) {
     return `Sem permissão para publicar nessa Página (${error.message}). Reconecte e aceite todas as permissões.`;
   }
@@ -79,6 +82,31 @@ async function graph(path, { method = 'GET', params = {}, host = 'graph.facebook
   return data;
 }
 
+/**
+ * Pergunta à Meta se o token guardado de uma Página ainda vale (e quando vence).
+ * expiresAt null = não vence.
+ */
+async function checkPageToken(account) {
+  if (!account || !account.accessToken) return { valid: false, reason: 'Sem token salvo para essa Página.' };
+  const c = config();
+  try {
+    const result = await graph('/debug_token', { params: { input_token: account.accessToken, access_token: `${c.appId}|${c.appSecret}` } });
+    const info = result.data || {};
+    const expiresAt = info.expires_at ? new Date(info.expires_at * 1000).toISOString() : null;
+    const missing = info.is_valid ? PERMISSIONS.filter(p => Array.isArray(info.scopes) && !info.scopes.includes(p)) : [];
+    return {
+      valid: !!info.is_valid && missing.length === 0,
+      type: info.type || null,
+      expiresAt,
+      reason: info.is_valid
+        ? (missing.length ? `Faltam permissões: ${missing.join(', ')}.` : null)
+        : ((info.error && info.error.message) || 'A Meta recusou esse token.')
+    };
+  } catch (err) {
+    return { valid: false, reason: err.message };
+  }
+}
+
 /** Troca o código do login pelas Páginas que a pessoa administra, já com o token de cada uma. */
 async function exchangeCodeForPages(code) {
   const c = config();
@@ -92,8 +120,9 @@ async function exchangeCodeForPages(code) {
       params: { grant_type: 'fb_exchange_token', client_id: c.appId, client_secret: c.appSecret, fb_exchange_token: userToken }
     });
     if (longLived.access_token) userToken = longLived.access_token;
-  } catch {
-    // Sem token de longa duração ainda dá para listar as Páginas; o token da Página sai igual.
+  } catch (err) {
+    // Ainda dá para listar as Páginas, mas o token delas pode sair de curta duração: fica registrado.
+    console.warn('[FACEBOOK] Troca por token de longa duração falhou:', err.message);
   }
 
   const PAGE_FIELDS = 'id,name,access_token,picture.type(large){url}';
@@ -211,5 +240,6 @@ module.exports = {
   exchangeCodeForPages,
   publishToFacebook,
   describeError,
+  checkPageToken,
   _setFetch
 };

@@ -52,7 +52,8 @@ function serverHarness(fetch, accounts = [], postgres = false, config = {}, publ
         if (code === 'empty') return [];
         return [{ id: 'PG1', name: 'Minha <b>Página</b>', accessToken: 'EAA-page-token', picture: 'https://cdn.example/p.jpg' }];
       },
-      publishToFacebook: async () => 'fb_post_1'
+      publishToFacebook: async () => 'fb_post_1',
+      checkPageToken: async account => ({ valid: account.accessToken !== 'EAA-dead', type: 'PAGE', expiresAt: null, reason: account.accessToken === 'EAA-dead' ? 'Session has expired' : null })
     },
     './youtube': {
       isConfigured: () => false,
@@ -518,4 +519,22 @@ test('Facebook Pages stay out of Instagram diagnostics, results and settings dat
   assert.equal(page.hasToken, true);
   assert.ok(!('accessToken' in page), 'o token da Página nunca sai do servidor');
   assert.equal((await server.invoke('get', '/api/instagram/media-stats', { query: { accountId: 'PG1' } })).statusCode, 404);
+});
+
+test('Facebook token check asks Meta about the saved Page token without leaking it', async () => {
+  const server = serverHarness(async () => response({}), [
+    { accountId: 'PG1', username: 'Viva', platform: 'facebook', accessToken: 'EAA-live' },
+    { accountId: 'PG2', username: 'Morta', platform: 'facebook', accessToken: 'EAA-dead' },
+    { accountId: 'IG1', username: 'insta', platform: 'instagram', accessToken: 'IGAA' }
+  ]);
+  assert.equal((await server.invoke('get', '/api/facebook/check')).statusCode, 400);
+  assert.equal((await server.invoke('get', '/api/facebook/check', { query: { accountId: 'IG1' } })).statusCode, 404);
+  assert.equal((await server.invoke('get', '/api/facebook/check', { query: { accountId: 'nope' } })).statusCode, 404);
+
+  const live = await server.invoke('get', '/api/facebook/check', { query: { accountId: 'PG1' } });
+  assert.equal(live.body.valid, true);
+  const dead = await server.invoke('get', '/api/facebook/check', { query: { accountId: 'PG2' } });
+  assert.equal(dead.body.valid, false);
+  assert.equal(dead.body.reason, 'Session has expired');
+  assert.ok(!JSON.stringify([live.body, dead.body]).includes('EAA-'));
 });

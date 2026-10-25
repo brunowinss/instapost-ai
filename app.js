@@ -4830,6 +4830,7 @@ function getFacebookAccounts() {
 
 function renderFacebookSection() {
   renderFacebookPagesList();
+  checkFacebookPages();
   populateFacebookSelect();
   setupFacebookDropzone();
   applyFacebookTypeUI();
@@ -4856,11 +4857,7 @@ function renderFacebookPagesList() {
         <div style="width:38px; height:38px; border-radius:50%; background:#1877f2; display:flex; align-items:center; justify-content:center; color:white; overflow:hidden; flex-shrink:0;">${avatar}</div>
         <div>
           <div style="font-weight:700; font-size:0.95rem;">${escapeHtml(page.username)}</div>
-          <div style="font-size:0.72rem; margin-top:2px;">
-            ${page.hasToken
-              ? '<span style="color:var(--success);"><i class="fa-solid fa-circle-check"></i> Conectada</span>'
-              : '<span style="color:var(--error);"><i class="fa-solid fa-triangle-exclamation"></i> Reconecte a Página</span>'}
-          </div>
+          <div id="fb-status-${escapeHtml(page.accountId)}" style="font-size:0.72rem; margin-top:2px;">${facebookStatusHtml(page)}</div>
         </div>
       </div>
       <button class="btn btn-sm btn-ghost btn-delete" onclick="deleteAccount('${escapeHtml(page.accountId)}')" title="Desconectar Página" style="padding:0.4rem; width:32px; height:32px; color:var(--error); border-color:rgba(239,68,68,0.2);">
@@ -5112,4 +5109,44 @@ async function publishFacebookNow(postId) {
     showLoading(false);
     await loadData();
   }
+}
+
+
+/** Estado da Página: o que a Meta respondeu na última checagem (ou o que o servidor tem salvo, até ela chegar). */
+function facebookStatusHtml(page) {
+  const check = (STATE.facebookChecks || {})[page.accountId];
+  const reconnect = ' <a href="/auth/facebook" target="_blank" style="color:var(--accent);">Reconectar</a>';
+
+  if (!page.hasToken) return '<span style="color:var(--error);"><i class="fa-solid fa-triangle-exclamation"></i> Sem acesso salvo.' + reconnect + '</span>';
+  if (!check) return '<span style="color:var(--text-dim);"><i class="fa-solid fa-spinner fa-spin"></i> Verificando com a Meta…</span>';
+  if (check.data.valid === null) return `<span style="color:var(--text-dim);" title="${escapeHtml(check.data.reason || '')}"><i class="fa-solid fa-circle-question"></i> Não consegui verificar agora</span>`;
+  if (!check.data.valid) {
+    return `<span style="color:var(--error);"><i class="fa-solid fa-triangle-exclamation"></i> Acesso inválido: ${escapeHtml(check.data.reason || 'a Meta recusou o token')}.${reconnect}</span>`;
+  }
+
+  let validity = 'não vence';
+  if (check.data.expiresAt) {
+    const days = Math.max(0, Math.round((new Date(check.data.expiresAt) - Date.now()) / 86400000));
+    validity = days <= 1 ? 'vence em menos de 1 dia' : `vence em ${days} dias`;
+  }
+  return `<span style="color:var(--success);"><i class="fa-solid fa-circle-check"></i> Conectada</span> <span style="color:var(--text-dim);">· acesso ${validity}</span>`;
+}
+
+/** Pergunta à Meta se cada Página ainda tem acesso válido (cache de 2 min) e atualiza o status na tela. */
+async function checkFacebookPages() {
+  STATE.facebookChecks = STATE.facebookChecks || {};
+  await Promise.all(getFacebookAccounts().filter(p => p.hasToken).map(async (page) => {
+    const cached = STATE.facebookChecks[page.accountId];
+    if (!cached || Date.now() - cached.ts > 2 * 60 * 1000) {
+      try {
+        const res = await fetch(`${API_BASE}/facebook/check?accountId=${encodeURIComponent(page.accountId)}`);
+        const data = await res.json();
+        STATE.facebookChecks[page.accountId] = { ts: Date.now(), data: res.ok ? data : { valid: null, reason: data.error } };
+      } catch (err) {
+        STATE.facebookChecks[page.accountId] = { ts: Date.now(), data: { valid: null, reason: err.message } };
+      }
+    }
+    const el = document.getElementById(`fb-status-${page.accountId}`);
+    if (el) el.innerHTML = facebookStatusHtml(page);
+  }));
 }

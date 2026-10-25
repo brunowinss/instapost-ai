@@ -196,3 +196,31 @@ test('no usable Page: the error says whether a permission was declined, the Page
   oauthThen({ data: [] });
   await assert.rejects(() => facebook.exchangeCodeForPages('C'), /Nenhuma Página encontrada/);
 });
+
+test('token check: valid token reports type and expiry (0 = never), invalid token reports Meta\'s reason', async () => {
+  mockGraph(() => reply({ data: { is_valid: true, type: 'PAGE', expires_at: 0, scopes: facebook.PERMISSIONS } }));
+  const ok = await facebook.checkPageToken(pages[0]);
+  assert.deepEqual([ok.valid, ok.type, ok.expiresAt, ok.reason], [true, 'PAGE', null, null]);
+  assert.equal(calls[0].params.input_token, 'PAGE-TOKEN');
+  assert.equal(calls[0].params.access_token, 'APP123|SECRET456');
+
+  mockGraph(() => reply({ data: { is_valid: true, type: 'PAGE', expires_at: 1893456000, scopes: ['pages_show_list'] } }));
+  const partial = await facebook.checkPageToken(pages[0]);
+  assert.equal(partial.valid, false);
+  assert.equal(partial.expiresAt, '2030-01-01T00:00:00.000Z');
+  assert.match(partial.reason, /Faltam permissões: pages_read_engagement, pages_manage_posts, publish_video/);
+
+  mockGraph(() => reply({ data: { is_valid: false, error: { message: 'Error validating access token: Session has expired' } } }));
+  const dead = await facebook.checkPageToken(pages[0]);
+  assert.deepEqual([dead.valid, dead.reason], [false, 'Error validating access token: Session has expired']);
+
+  assert.equal((await facebook.checkPageToken({})).valid, false);
+});
+
+test('error 190 now shows Meta\'s own reason and subcode, so a dead token can be diagnosed', async () => {
+  mockGraph(() => reply({ error: { code: 190, error_subcode: 460, message: 'Error validating access token: The session has been invalidated because the user changed their password.' } }, 400));
+  await assert.rejects(
+    () => facebook.publishToFacebook({ accountId: 'PG1', mediaType: 'FB_TEXT', caption: 'oi' }),
+    /reconecte a Página.*Meta: Error validating access token.*changed their password.*subcódigo 460/s
+  );
+});
