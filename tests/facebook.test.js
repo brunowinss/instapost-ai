@@ -224,3 +224,28 @@ test('error 190 now shows Meta\'s own reason and subcode, so a dead token can be
     /reconecte a Página.*Meta: Error validating access token.*changed their password.*subcódigo 460/s
   );
 });
+
+test('page stats: followers/likes plus per-post reactions, comments, shares and video views; deleted posts are flagged', async () => {
+  mockGraph((url) => {
+    if (url.pathname.endsWith('/PG1')) return reply({ fan_count: 120, followers_count: 340 });
+    if (url.pathname.endsWith('/PG1_1')) return reply({ reactions: { summary: { total_count: 7 } }, comments: { summary: { total_count: 2 } }, shares: { count: 3 } });
+    if (url.pathname.endsWith('/777')) return reply({ views: 99, likes: { summary: { total_count: 5 } }, comments: { summary: { total_count: 1 } } });
+    return reply({ error: { code: 803, message: 'Some of the aliases you requested do not exist' } }, 400);
+  });
+
+  const result = await facebook.getFacebookStats(pages[0], [
+    { mediaId: 'PG1_1', mediaType: 'FB_PHOTO' },
+    { mediaId: '777', mediaType: 'FB_VIDEO' },
+    { mediaId: 'PG1_gone', mediaType: 'FB_TEXT' }
+  ]);
+
+  assert.deepEqual(result.page, { likes: 120, followers: 340 });
+  assert.deepEqual(result.posts.PG1_1, { id: 'PG1_1', views: null, reactions: 7, comments: 2, shares: 3 });
+  assert.deepEqual(result.posts['777'], { id: '777', views: 99, reactions: 5, comments: 1, shares: null });
+  assert.deepEqual(result.posts.PG1_gone, { id: 'PG1_gone', unavailable: true });
+
+  const photoCall = calls.find(c => c.path.endsWith('/PG1_1'));
+  assert.equal(photoCall.params.access_token, 'PAGE-TOKEN');
+  assert.match(photoCall.params.fields, /reactions\.summary\(true\)/);
+  assert.match(calls.find(c => c.path.endsWith('/777')).params.fields, /^views,/);
+});

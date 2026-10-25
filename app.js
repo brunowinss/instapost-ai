@@ -4865,6 +4865,7 @@ function renderFacebookSection() {
   setupFacebookDropzone();
   applyFacebookTypeUI();
   renderFacebookQueue();
+  switchFacebookView(STATE.facebookView || 'publish');
 }
 
 function renderFacebookPagesList() {
@@ -5179,4 +5180,136 @@ async function checkFacebookPages() {
     const el = document.getElementById(`fb-status-${page.accountId}`);
     if (el) el.innerHTML = facebookStatusHtml(page);
   }));
+}
+
+
+// ---- Facebook: desempenho ----
+
+function switchFacebookView(view) {
+  STATE.facebookView = view;
+  const publish = document.getElementById('fb-view-publish');
+  const metrics = document.getElementById('fb-view-metrics');
+  if (publish) publish.style.display = view === 'publish' ? 'block' : 'none';
+  if (metrics) metrics.style.display = view === 'metrics' ? 'block' : 'none';
+  [['fb-tab-publish', 'publish'], ['fb-tab-metrics', 'metrics']].forEach(([id, value]) => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.classList.toggle('btn-primary', value === view);
+    btn.classList.toggle('btn-ghost', value !== view);
+  });
+  if (view === 'metrics') renderFacebookMetricsView();
+}
+
+/** Desempenho de uma Página, com cache de 5 min no navegador (o servidor tem o seu). Erros não ficam em cache. */
+async function fetchFacebookStats(accountId, force = false) {
+  STATE.facebookStats = STATE.facebookStats || {};
+  const cached = STATE.facebookStats[accountId];
+  if (!force && cached && Date.now() - cached.ts < 5 * 60 * 1000) return cached;
+  try {
+    const res = await fetch(`${API_BASE}/facebook/stats?accountId=${encodeURIComponent(accountId)}${force ? '&refresh=1' : ''}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    STATE.facebookStats[accountId] = { ts: Date.now(), data };
+    return STATE.facebookStats[accountId];
+  } catch (err) {
+    delete STATE.facebookStats[accountId];
+    return { error: err.message };
+  }
+}
+
+async function renderFacebookMetricsView(force = false) {
+  const select = document.getElementById('fb-metrics-account-select');
+  const body = document.getElementById('fb-metrics-body');
+  const updated = document.getElementById('fb-metrics-updated');
+  if (!select || !body || !updated) return;
+
+  const pages = getFacebookAccounts();
+  const previous = select.value;
+  select.innerHTML = pages.map(p =>
+    `<option value="${escapeHtml(p.accountId)}" ${p.accountId === previous ? 'selected' : ''}>${escapeHtml(p.username)}</option>`
+  ).join('');
+
+  const notice = (icon, text) => `
+    <div class="card" style="text-align:center; padding:3rem 1rem; color:var(--text-dim);">
+      <i class="fa-solid ${icon}" style="font-size:2.2rem; opacity:0.4; margin-bottom:1rem;"></i>
+      <p>${text}</p>
+    </div>`;
+
+  updated.textContent = '';
+  if (pages.length === 0) {
+    body.innerHTML = notice('fa-plug', 'Conecte uma Página na aba Publicar para ver o desempenho.');
+    return;
+  }
+  const page = pages.find(p => p.accountId === select.value) || pages[0];
+  if (!page.hasToken) {
+    body.innerHTML = notice('fa-triangle-exclamation', 'Essa Página precisa ser reconectada na aba Publicar.');
+    return;
+  }
+
+  const accountId = page.accountId;
+  body.innerHTML = notice('fa-spinner fa-spin', 'Carregando desempenho…');
+  const entry = await fetchFacebookStats(accountId, force === true);
+
+  // Quem está olhando pode ter trocado de Página ou de aba enquanto carregava.
+  if (STATE.facebookView !== 'metrics' || select.value !== accountId) return;
+  if (entry.error) {
+    body.innerHTML = notice('fa-circle-exclamation', `Desempenho indisponível: ${escapeHtml(entry.error)}`);
+    return;
+  }
+
+  const fmt = (n) => (n === null || n === undefined) ? '—' : Number(n).toLocaleString('pt-BR');
+  const { page: info, totals, posts } = entry.data;
+  updated.textContent = `Atualizado às ${new Date(entry.data.updatedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+
+  const stat = (icon, label, value, desc) => `
+    <div class="card">
+      <div class="card-title"><i class="fa-solid ${icon}"></i> ${label}</div>
+      <div class="stat-value">${value}</div>
+      <p class="stat-desc">${desc}</p>
+    </div>`;
+  const typeLabel = { FB_TEXT: 'Texto', FB_PHOTO: 'Foto', FB_VIDEO: 'Vídeo' };
+
+  const rows = posts.map(p => {
+    const date = p.publishedAt ? new Date(p.publishedAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+    const link = `<a href="https://www.facebook.com/${encodeURIComponent(p.id)}" target="_blank" rel="noopener" style="color:inherit; text-decoration:underline dotted;">${escapeHtml(p.title)}</a>`;
+    const cells = p.unavailable
+      ? '<td colspan="4" style="text-align:right; color:var(--text-dim); font-size:0.78rem;">indisponível no Facebook (apagado ou sem acesso)</td>'
+      : `<td style="text-align:right;">${fmt(p.reactions)}</td><td style="text-align:right;">${fmt(p.comments)}</td><td style="text-align:right;">${fmt(p.shares)}</td><td style="text-align:right;">${fmt(p.views)}</td>`;
+    return `<tr style="border-top:1px solid var(--border-color);">
+      <td style="padding:10px 8px 10px 0; max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600;">${link} <span style="font-size:0.65rem; color:var(--text-dim);">· ${typeLabel[p.type] || 'Post'}</span></td>
+      <td style="color:var(--text-dim); white-space:nowrap; padding-right:12px;">${date}</td>
+      ${cells}
+    </tr>`;
+  }).join('');
+
+  body.innerHTML = `
+    <div class="section-heading"><h2>Página</h2><span>Números gerais de ${escapeHtml(page.username)}</span></div>
+    <div class="dashboard-grid dashboard-stats">
+      ${stat('fa-users', 'Seguidores', fmt(info.followers), 'Pessoas que seguem a Página')}
+      ${stat('fa-thumbs-up', 'Curtidas da Página', fmt(info.likes), 'Pessoas que curtiram a Página')}
+    </div>
+
+    <div class="section-heading" style="margin-top:2rem;"><h2>Publicados por aqui</h2><span>Só os últimos posts enviados por este painel</span></div>
+    <div class="dashboard-grid dashboard-stats">
+      ${stat('fa-paper-plane', 'Posts', fmt(totals.posts), 'Analisados')}
+      ${stat('fa-heart', 'Reações', fmt(totals.reactions), 'Curtidas e outras reações')}
+      ${stat('fa-comment', 'Comentários', fmt(totals.comments), 'Soma dos posts abaixo')}
+      ${stat('fa-share', 'Compartilhamentos', fmt(totals.shares), 'Soma dos posts abaixo')}
+      ${stat('fa-eye', 'Visualizações', fmt(totals.views), 'Dos vídeos')}
+    </div>
+
+    <div class="card" style="margin-top:2rem;">
+      <div class="card-title"><i class="fa-solid fa-ranking-star"></i> Desempenho por post</div>
+      ${posts.length === 0
+        ? '<p style="color:var(--text-dim); font-size:0.85rem; margin-top:1rem;">Nenhum post publicado por este painel nessa Página ainda.</p>'
+        : `<div style="overflow-x:auto; margin-top:1rem;">
+            <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+              <thead><tr style="text-align:left; color:var(--text-dim); font-size:0.7rem; text-transform:uppercase;">
+                <th style="padding-bottom:8px;">Post</th><th>Publicado</th>
+                <th style="text-align:right;">Reações</th><th style="text-align:right;">Comentários</th><th style="text-align:right;">Compart.</th><th style="text-align:right;">Views</th>
+              </tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>`}
+    </div>`;
 }

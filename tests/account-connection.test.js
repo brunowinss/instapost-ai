@@ -53,6 +53,10 @@ function serverHarness(fetch, accounts = [], postgres = false, config = {}, publ
         return [{ id: 'PG1', name: 'Minha <b>Página</b>', accessToken: 'EAA-page-token', picture: 'https://cdn.example/p.jpg' }];
       },
       publishToFacebook: async () => 'fb_post_1',
+      getFacebookStats: async (account, posts) => ({
+        page: { likes: 120, followers: 340 },
+        posts: Object.fromEntries(posts.map(p => [p.mediaId, p.mediaId.startsWith('gone') ? { id: p.mediaId, unavailable: true } : { id: p.mediaId, views: p.mediaType === 'FB_VIDEO' ? 99 : null, reactions: 7, comments: 2, shares: p.mediaType === 'FB_VIDEO' ? null : 1 }]))
+      }),
       checkPageToken: async account => ({ valid: account.accessToken !== 'EAA-dead', type: 'PAGE', expiresAt: null, reason: account.accessToken === 'EAA-dead' ? 'Session has expired' : null })
     },
     './youtube': {
@@ -640,4 +644,28 @@ test('access check reports an Instagram token that Meta refuses to renew (expire
   assert.equal(res.body.results[0].ok, false);
   assert.match(res.body.results[0].note, /Session has expired/);
   assert.equal(server.writes.filter(w => /UPDATE accounts/.test(w.sql)).length, 0, 'não troca o token quando a renovação falha');
+});
+
+test('Facebook stats route merges post data, totals views/reactions, flags deleted posts and caches', async () => {
+  let facebookRuns = 0;
+  const server = serverHarness(async () => response({}), [
+    { accountId: 'PG1', username: 'Viva', platform: 'facebook', accessToken: 'EAA-live' },
+    { accountId: 'IG1', username: 'insta', platform: 'instagram', accessToken: 'IGAA' }
+  ], false, {}, [
+    { mediaId: 'PG1_1', caption: 'Foto linda\nmais texto', publishedAt: '2026-10-25T12:00:00.000Z', mediaType: 'FB_PHOTO' },
+    { mediaId: '777', caption: 'Vídeo novo', publishedAt: '2026-10-24T12:00:00.000Z', mediaType: 'FB_VIDEO' },
+    { mediaId: 'gone1', caption: 'Apagado', publishedAt: '2026-10-23T12:00:00.000Z', mediaType: 'FB_TEXT' }
+  ]);
+
+  assert.equal((await server.invoke('get', '/api/facebook/stats')).statusCode, 400);
+  assert.equal((await server.invoke('get', '/api/facebook/stats', { query: { accountId: 'IG1' } })).statusCode, 404);
+
+  const res = await server.invoke('get', '/api/facebook/stats', { query: { accountId: 'PG1' } });
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual({ ...res.body.page }, { likes: 120, followers: 340 });
+  assert.deepEqual({ ...res.body.totals }, { posts: 3, reactions: 14, comments: 4, shares: 1, views: 99 });
+  assert.equal(res.body.posts[0].title, 'Foto linda');
+  assert.equal(res.body.posts[1].views, 99);
+  assert.equal(res.body.posts[2].unavailable, true);
+  assert.ok(!/EAA-/.test(JSON.stringify(res.body)), 'token nunca vai pro navegador');
 });

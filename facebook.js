@@ -83,6 +83,44 @@ async function graph(path, { method = 'GET', params = {}, host = 'graph.facebook
 }
 
 /**
+ * Desempenho da Página e dos posts publicados pelo painel.
+ * Só usa campos liberados por pages_read_engagement: alcance e impressões exigiriam read_insights.
+ * posts: [{ mediaId, mediaType }]. Post apagado na Meta vira { unavailable: true } em vez de derrubar tudo.
+ */
+async function getFacebookStats(account, posts = []) {
+  const token = account.accessToken;
+  const pageId = encodeURIComponent(account.accountId);
+
+  const info = await graph(`/${pageId}`, { params: { fields: 'fan_count,followers_count', access_token: token } });
+  const page = {
+    likes: info.fan_count ?? null,
+    followers: info.followers_count ?? null
+  };
+
+  const total = (node) => (node && node.summary && typeof node.summary.total_count === 'number') ? node.summary.total_count : null;
+  const fetchOne = async (post) => {
+    try {
+      if (post.mediaType === 'FB_VIDEO') {
+        const v = await graph(`/${encodeURIComponent(post.mediaId)}`, {
+          params: { fields: 'views,likes.summary(true).limit(0),comments.summary(true).limit(0)', access_token: token }
+        });
+        return { id: post.mediaId, views: v.views ?? null, reactions: total(v.likes), comments: total(v.comments), shares: null };
+      }
+      const p = await graph(`/${encodeURIComponent(post.mediaId)}`, {
+        params: { fields: 'reactions.summary(true).limit(0),comments.summary(true).limit(0),shares', access_token: token }
+      });
+      return { id: post.mediaId, views: null, reactions: total(p.reactions), comments: total(p.comments), shares: p.shares ? p.shares.count : 0 };
+    } catch {
+      return { id: post.mediaId, unavailable: true };
+    }
+  };
+
+  const results = {};
+  for (const stats of await Promise.all(posts.slice(0, 25).map(fetchOne))) results[stats.id] = stats;
+  return { page, posts: results };
+}
+
+/**
  * Pergunta à Meta se o token guardado de uma Página ainda vale (e quando vence).
  * expiresAt null = não vence.
  */
@@ -241,5 +279,6 @@ module.exports = {
   publishToFacebook,
   describeError,
   checkPageToken,
+  getFacebookStats,
   _setFetch
 };

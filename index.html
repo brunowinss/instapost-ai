@@ -1243,6 +1243,11 @@
     </section>
     <!-- ═══════════════ FACEBOOK ═══════════════ -->
     <section id="section-facebook" class="section">
+      <div style="display:flex; gap:10px; margin-bottom:1.5rem;">
+        <button type="button" class="btn btn-primary" id="fb-tab-publish" onclick="switchFacebookView('publish')"><i class="fa-solid fa-paper-plane"></i> Publicar</button>
+        <button type="button" class="btn btn-ghost" id="fb-tab-metrics" onclick="switchFacebookView('metrics')"><i class="fa-solid fa-chart-simple"></i> Métricas</button>
+      </div>
+      <div id="fb-view-publish">
       <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr; gap: 1.5rem;">
 
         <!-- Páginas conectadas -->
@@ -1313,6 +1318,19 @@
         <div id="facebook-queue-list" style="margin-top:1rem; display:flex; flex-direction:column; gap:10px; max-height:520px; overflow-y:auto; padding-right:4px;">
           <p style="color:var(--text-dim); font-size:0.85rem;">Nenhuma publicação ainda.</p>
         </div>
+      </div>
+          </div><!-- /fb-view-publish -->
+
+      <!-- Métricas -->
+      <div id="fb-view-metrics" style="display:none;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:1.5rem;">
+          <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+            <select id="fb-metrics-account-select" class="input" style="min-width:220px;" onchange="renderFacebookMetricsView()"></select>
+            <span id="fb-metrics-updated" style="font-size:0.75rem; color:var(--text-dim);"></span>
+          </div>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="renderFacebookMetricsView(true)"><i class="fa-solid fa-rotate"></i> Atualizar</button>
+        </div>
+        <div id="fb-metrics-body"></div>
       </div>
     </section>
 

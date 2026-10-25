@@ -327,6 +327,50 @@ function isValidOAuthState(state) {
   return signature.length === expected.length && crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
 }
 
+// Desempenho do Facebook (cada consulta gasta cota; 5 min de cache não perde precisão).
+const fbStatsCache = new Map(); // accountId -> { data, ts }
+
+app.get('/api/facebook/stats', requireAuth, async (req, res) => {
+  const { accountId } = req.query;
+  if (!accountId) return res.status(400).json({ error: 'accountId é obrigatório.' });
+
+  const cached = fbStatsCache.get(accountId);
+  if (req.query.refresh !== '1' && cached && Date.now() - cached.ts < YT_STATS_TTL_MS) return res.json(cached.data);
+
+  try {
+    const db = await getDB();
+    const account = await db.get('SELECT * FROM accounts WHERE "accountId" = ?', [accountId]);
+    if (!account || account.platform !== 'facebook' || !account.accessToken) {
+      return res.status(404).json({ error: 'Página do Facebook não encontrada.' });
+    }
+
+    const published = (await db.all(
+      'SELECT "mediaId", "caption", "publishedAt", "mediaType" FROM posts WHERE "accountId" = ? AND "platform" = \'facebook\' AND "status" = \'success\' AND "mediaId" != \'\' ORDER BY "publishedAt" DESC LIMIT 25',
+      [accountId]
+    )).filter(p => p.mediaId);
+
+    const stats = await facebookService.getFacebookStats(account, published);
+    const sum = (key) => published.reduce((total, p) => total + ((stats.posts[p.mediaId] || {})[key] || 0), 0);
+    const data = {
+      page: stats.page,
+      updatedAt: new Date().toISOString(),
+      totals: { posts: published.length, reactions: sum('reactions'), comments: sum('comments'), shares: sum('shares'), views: sum('views') },
+      posts: published.map(p => ({
+        id: p.mediaId,
+        title: (p.caption || '').split('\n')[0] || '(sem texto)',
+        type: p.mediaType,
+        publishedAt: p.publishedAt || null,
+        ...(stats.posts[p.mediaId] || { unavailable: true })
+      }))
+    };
+    fbStatsCache.set(accountId, { data, ts: Date.now() });
+    res.json(data);
+  } catch (err) {
+    console.error('[FACEBOOK-STATS]', err.message);
+    res.status(502).json({ error: err.message });
+  }
+});
+
 // Pergunta à Meta se o token de uma Página ainda vale (a tela usa para avisar "reconecte" antes de falhar).
 app.get('/api/facebook/check', requireAuth, async (req, res) => {
   const { accountId } = req.query;
