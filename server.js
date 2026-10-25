@@ -2626,12 +2626,19 @@ async function sendTelegramText(text) {
   }
 }
 
-const accessAlertedAt = new Map(); // accountId -> quando avisamos pela última vez
-
-/** Avisa (Telegram + push) no máximo uma vez por dia por conta, para não virar spam. */
+/**
+ * Avisa (Telegram + push) no máximo uma vez por dia por conta, para não virar spam.
+ * O horário do último aviso fica no banco: guardado só em memória, cada deploy ou reinício
+ * do servidor esquecia e mandava tudo de novo.
+ */
 async function alertAccessProblem(accountId, title, body) {
-  if (Date.now() - (accessAlertedAt.get(accountId) || 0) < 24 * 3600 * 1000) return false;
-  accessAlertedAt.set(accountId, Date.now());
+  const db = await getDB();
+  const key = `accessAlertedAt:${accountId}`;
+  const row = await db.get('SELECT value FROM global_config WHERE key = ?', [key]);
+  let last = 0;
+  try { last = row ? Number(JSON.parse(row.value)) || 0 : 0; } catch { last = 0; }
+  if (Date.now() - last < 24 * 3600 * 1000) return false;
+  await db.run('INSERT INTO global_config ("key", "value") VALUES (?, ?) ON CONFLICT ("key") DO UPDATE SET "value"=EXCLUDED."value"', [key, JSON.stringify(Date.now())]);
   await sendTelegramText(`⚠️ ${title}\n\n${body}\n\nInsta Post`);
   await sendWebPushNotification(title, body);
   return true;
