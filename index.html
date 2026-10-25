@@ -107,6 +107,8 @@
       <a href="#settings" class="nav-item" data-section="settings" title="Configurações"><i class="fa-solid fa-sliders" aria-hidden="true"></i><span>Configurações</span></a></div>
       <div class="nav-group"><p class="nav-group-label">YouTube</p>
       <a href="#youtube" class="nav-item" data-section="youtube" title="YouTube"><i class="fa-brands fa-youtube" aria-hidden="true"></i><span>YouTube</span></a></div>
+      <div class="nav-group"><p class="nav-group-label">Facebook</p>
+      <a href="#facebook" class="nav-item" data-section="facebook" title="Facebook"><i class="fa-brands fa-facebook" aria-hidden="true"></i><span>Facebook</span></a></div>
     </nav>
     <div class="sidebar-footer">
       <div class="status-badge" id="scheduler-badge">
@@ -1239,6 +1241,81 @@
         <div id="yt-metrics-body"></div>
       </div>
     </section>
+    <!-- ═══════════════ FACEBOOK ═══════════════ -->
+    <section id="section-facebook" class="section">
+      <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+
+        <!-- Páginas conectadas -->
+        <div class="card">
+          <div class="card-title"><i class="fa-brands fa-facebook" style="color:#1877f2;"></i> Páginas do Facebook</div>
+          <div id="facebook-pages-list" style="margin-top:1rem;">
+            <p style="color:var(--text-dim); font-size:0.85rem;">Nenhuma Página conectada.</p>
+          </div>
+          <a href="/auth/facebook" target="_blank" class="btn btn-primary" style="width:100%; margin-top:1rem; text-decoration:none; display:flex; align-items:center; justify-content:center; gap:8px;">
+            <i class="fa-brands fa-facebook"></i> Conectar Página
+          </a>
+          <p style="font-size:0.72rem; color:var(--text-dim); margin-top:0.6rem;">Entre com a conta que administra a Página e marque as Páginas que quer conectar. Veja o <code>FACEBOOK.md</code>.</p>
+        </div>
+
+        <!-- Nova publicação -->
+        <div class="card">
+          <div class="card-title"><i class="fa-solid fa-circle-plus"></i> Nova publicação</div>
+          <form id="facebook-post-form" style="margin-top:1rem;" onsubmit="return false;">
+            <div class="form-group">
+              <label class="label"><i class="fa-solid fa-flag"></i> Página de Destino</label>
+              <select id="facebook-account-select" class="input"><option>Carregando Páginas...</option></select>
+            </div>
+
+            <div class="form-group">
+              <label class="label"><i class="fa-solid fa-shapes"></i> Tipo</label>
+              <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                <button type="button" class="btn btn-ghost btn-tab" id="fb-type-text" onclick="setFacebookPostType('FB_TEXT')"><i class="fa-solid fa-align-left"></i> Texto</button>
+                <button type="button" class="btn btn-primary btn-tab active" id="fb-type-photo" onclick="setFacebookPostType('FB_PHOTO')"><i class="fa-solid fa-image"></i> Foto</button>
+                <button type="button" class="btn btn-ghost btn-tab" id="fb-type-video" onclick="setFacebookPostType('FB_VIDEO')"><i class="fa-solid fa-video"></i> Vídeo</button>
+              </div>
+            </div>
+
+            <div class="form-group" id="facebook-media-group">
+              <label class="label"><i class="fa-solid fa-photo-film"></i> Arquivos (um post para cada)</label>
+              <div class="dropzone" id="facebook-dropzone" style="padding:1.4rem 1rem; border-style:dashed;">
+                <i class="fa-solid fa-cloud-arrow-up" style="font-size:2rem; color:var(--primary); margin-bottom:0.6rem;"></i>
+                <p style="font-weight:600; color:var(--text-main);">Arraste ou clique para escolher</p>
+                <input type="file" id="facebook-file-input" multiple hidden>
+              </div>
+              <div id="facebook-preview" style="display:none; grid-template-columns:repeat(auto-fill, minmax(84px, 1fr)); gap:10px; margin-top:0.8rem;"></div>
+            </div>
+
+            <div class="form-group">
+              <label class="label"><i class="fa-solid fa-pen-nib"></i> Texto</label>
+              <textarea class="textarea" id="facebook-caption" rows="4" placeholder="O que você quer publicar? (em vídeo, a primeira linha vira o título)"></textarea>
+            </div>
+
+            <div class="form-group">
+              <label class="label"><i class="fa-solid fa-clock"></i> Quando publicar</label>
+              <select id="facebook-when" class="input" onchange="onFacebookWhenChange()">
+                <option value="now">Agora</option>
+                <option value="smart" selected>Horário inteligente (melhores picos)</option>
+                <option value="manual">Escolher data e hora</option>
+              </select>
+              <input type="datetime-local" id="facebook-datetime" class="input" style="display:none; margin-top:8px;">
+            </div>
+
+            <button type="button" class="btn btn-primary" id="btn-facebook-publish" style="width:100%; padding:1rem;" onclick="submitFacebookPost()">
+              <i class="fa-solid fa-paper-plane"></i> Publicar
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Fila do Facebook -->
+      <div class="card" style="margin-top:1.5rem;">
+        <div class="card-title"><i class="fa-solid fa-list-ol"></i> Fila do Facebook</div>
+        <div id="facebook-queue-list" style="margin-top:1rem; display:flex; flex-direction:column; gap:10px; max-height:520px; overflow-y:auto; padding-right:4px;">
+          <p style="color:var(--text-dim); font-size:0.85rem;">Nenhuma publicação ainda.</p>
+        </div>
+      </div>
+    </section>
+
     <!-- MULTIPLICADOR removido — app standalone em Downloads/multiplicador-videos -->
     <section id="section-multiplicador" class="section" style="display:none;">
       <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr; gap: 1.5rem;">

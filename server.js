@@ -9,6 +9,7 @@ const webpush = require('web-push');
 const { getDB, initDB } = require('./database');
 const { runAutoImporter } = require('./auto_importer');
 const youtubeService = require('./youtube');
+const facebookService = require('./facebook');
 const { DEFAULT_TIMEZONE, isValidTimeZone, localParts } = require('./time-utils');
 const { generateSmartTimes, learnHourlyEngagement, makeWeightFn } = require('./smart-schedule');
 const { planStoryLoopPosts } = require('./story-loop');
@@ -64,6 +65,16 @@ function safeEqual(a, b) {
   const ha = crypto.createHash('sha256').update(String(a)).digest();
   const hb = crypto.createHash('sha256').update(String(b)).digest();
   return crypto.timingSafeEqual(ha, hb);
+}
+
+/** Contas e posts antigos não têm plataforma: contam como Instagram. */
+function isInstagram(item) {
+  return !item || !item.platform || item.platform === 'instagram';
+}
+
+const HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+function escapeHtml(text) {
+  return String(text ?? '').replace(/[&<>"']/g, c => HTML_ESCAPES[c]);
 }
 
 /** Middleware: exige um token válido no header Authorization. */
@@ -279,9 +290,9 @@ app.get('/auth/youtube/callback', async (req, res) => {
       <body>
         <div class="card">
           <div class="avatar-box">
-            ${info.thumbnail ? `<img src="${info.thumbnail}" style="width:100%;height:100%;object-fit:cover;">` : '✓'}
+            ${info.thumbnail ? `<img src="${escapeHtml(info.thumbnail)}" style="width:100%;height:100%;object-fit:cover;">` : '✓'}
           </div>
-          <h1>Canal "${info.title}" Conectado!</h1>
+          <h1>Canal "${escapeHtml(info.title)}" Conectado!</h1>
           <p>Seu canal do YouTube foi vinculado com sucesso ao painel <b>Insta Post</b>. Se você abriu em outro navegador ou celular, já pode fechar esta aba e voltar para o seu painel.</p>
           <a href="/?connected=${encodeURIComponent(info.title)}" class="btn">Abrir Painel</a>
         </div>
@@ -295,6 +306,110 @@ app.get('/auth/youtube/callback', async (req, res) => {
     `);
   } catch (err) {
     console.error('[YOUTUBE-OAUTH ERROR]', err.message);
+    res.redirect('/?error=' + encodeURIComponent(err.message));
+  }
+});
+
+// Endpoint para verificar se o login do Facebook está configurado
+app.get('/api/facebook-status', (req, res) => {
+  res.json({ configured: facebookService.isConfigured() });
+});
+
+/** `state` do OAuth: valor aleatório assinado com o segredo do servidor, para barrar login forjado (CSRF). */
+function createOAuthState() {
+  const nonce = crypto.randomBytes(12).toString('hex');
+  return `${nonce}.${sign('fb-oauth:' + nonce)}`;
+}
+function isValidOAuthState(state) {
+  if (typeof state !== 'string' || !state.includes('.')) return false;
+  const [nonce, signature] = state.split('.');
+  const expected = sign('fb-oauth:' + nonce);
+  return signature.length === expected.length && crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+}
+
+app.get('/auth/facebook', (req, res) => {
+  const url = facebookService.isConfigured() ? facebookService.getAuthUrl(createOAuthState()) : null;
+  if (!url) {
+    return res.status(500).send(`
+      <html><body style="font-family:sans-serif;padding:40px;background:#111;color:#fff;">
+        <h2>⚠️ Login do Facebook não configurado</h2>
+        <p>Defina no servidor <code>FACEBOOK_APP_ID</code>, <code>FACEBOOK_APP_SECRET</code> (ou <code>APP_SECRET</code>) e <code>FACEBOOK_CONFIG_ID</code>.</p>
+        <p>Veja o <code>FACEBOOK.md</code> para o passo a passo.</p>
+        <a href="/" style="color:#a78bfa;">← Voltar</a>
+      </body></html>
+    `);
+  }
+  console.log('[FACEBOOK-OAUTH] Iniciando login.');
+  res.redirect(url);
+});
+
+app.get('/auth/facebook/callback', async (req, res) => {
+  const { code, error, error_description, state } = req.query;
+  if (error || !code) {
+    const msg = error_description || error || 'Login do Facebook cancelado ou código ausente.';
+    console.error('[FACEBOOK-OAUTH] Erro no callback:', msg);
+    return res.redirect('/?error=' + encodeURIComponent(msg));
+  }
+  if (!isValidOAuthState(state)) {
+    console.error('[FACEBOOK-OAUTH] state inválido — login ignorado.');
+    return res.redirect('/?error=' + encodeURIComponent('Sessão de login inválida. Tente conectar de novo.'));
+  }
+
+  try {
+    const pages = await facebookService.exchangeCodeForPages(code);
+    if (pages.length === 0) {
+      throw new Error('Nenhuma Página encontrada. Na tela de login do Facebook, marque as Páginas que quer conectar (e confirme que você é administrador delas).');
+    }
+
+    const db = await getDB();
+    const isPostgres = !!process.env.DATABASE_URL;
+    for (const page of pages) {
+      const params = [page.id, page.name, page.accessToken, page.picture, new Date().toISOString(), 'facebook', '', ''];
+      if (isPostgres) {
+        await db.run(
+          `INSERT INTO accounts ("accountId","username","accessToken","profilePictureUrl","createdAt","platform","refreshToken","tokenExpiry")
+           VALUES (?,?,?,?,?,?,?,?)
+           ON CONFLICT ("accountId") DO UPDATE SET "username"=EXCLUDED."username","accessToken"=EXCLUDED."accessToken","profilePictureUrl"=EXCLUDED."profilePictureUrl","platform"=EXCLUDED."platform"`,
+          params
+        );
+      } else {
+        await db.run(
+          `INSERT OR REPLACE INTO accounts ("accountId","username","accessToken","profilePictureUrl","createdAt","platform","refreshToken","tokenExpiry") VALUES (?,?,?,?,?,?,?,?)`,
+          params
+        );
+      }
+    }
+    console.log(`[FACEBOOK-OAUTH] ✅ ${pages.length} Página(s) conectada(s): ${pages.map(p => p.name).join(', ')}`);
+
+    const names = pages.map(p => escapeHtml(p.name)).join(', ');
+    res.send(`
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Página Conectada — Insta Post</title>
+        <style>
+          * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
+          body { background: #04070C; color: #F1F5F9; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 1.5rem; }
+          .card { background: #0c121e; border: 1px solid rgba(24,119,242,0.4); border-radius: 16px; padding: 2.5rem 2rem; max-width: 440px; width: 100%; text-align: center; }
+          h1 { font-size: 1.3rem; margin-bottom: 0.6rem; }
+          p { color: #94A3B8; font-size: 0.9rem; line-height: 1.5; margin-bottom: 1.5rem; }
+          .btn { display: block; padding: 12px 20px; background: #1877f2; color: #fff; font-weight: 700; text-decoration: none; border-radius: 10px; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <h1>${pages.length > 1 ? 'Páginas conectadas!' : 'Página conectada!'}</h1>
+          <p><b>${names}</b><br>já pode(m) receber publicações pelo painel <b>Insta Post</b>. Se você abriu em outro navegador, pode fechar esta aba e voltar ao painel.</p>
+          <a href="/?connected=facebook" class="btn">Abrir Painel</a>
+        </div>
+        <script>if (window.opener) { setTimeout(() => window.close(), 2500); }</script>
+      </body>
+      </html>
+    `);
+  } catch (err) {
+    console.error('[FACEBOOK-OAUTH ERROR]', err.message);
     res.redirect('/?error=' + encodeURIComponent(err.message));
   }
 });
@@ -698,7 +813,7 @@ app.get('/api/instagram/media-stats', requireAuth, async (req, res) => {
   try {
     const db = await getDB();
     const account = await db.get('SELECT * FROM accounts WHERE "accountId" = ?', [accountId]);
-    if (!account || account.platform === 'youtube' || !account.accessToken) {
+    if (!account || !isInstagram(account) || !account.accessToken) {
       return res.status(404).json({ error: 'Conta do Instagram não encontrada.' });
     }
     res.json(await fetchInstagramMedia(account, { refresh: req.query.refresh === '1' }));
@@ -954,8 +1069,9 @@ app.get('/api/data', requireAuth, async (req, res) => {
     const scheduledPosts = await db.all('SELECT * FROM posts WHERE "status" IN (\'pending\', \'processing\') ORDER BY "scheduledAt" ASC');
     // Histórico separado por plataforma: senão um lote grande do YouTube
     // empurraria os posts do Instagram para fora da janela de 50.
-    const history = await db.all(`SELECT * FROM posts WHERE "status" != 'pending' AND ${NOT_YOUTUBE_SQL} ORDER BY "publishedAt" DESC LIMIT 50`);
+    const history = await db.all(`SELECT * FROM posts WHERE "status" != 'pending' AND ${INSTAGRAM_ONLY_SQL} ORDER BY "publishedAt" DESC LIMIT 50`);
     const youtubeHistory = await db.all('SELECT * FROM posts WHERE "status" != \'pending\' AND "platform" = \'youtube\' ORDER BY "publishedAt" DESC LIMIT 50');
+    const facebookHistory = await db.all('SELECT * FROM posts WHERE "status" != \'pending\' AND "platform" = \'facebook\' ORDER BY "publishedAt" DESC LIMIT 50');
     
     // Fetch global config
     const configRows = await db.all('SELECT * FROM global_config');
@@ -985,6 +1101,7 @@ app.get('/api/data', requireAuth, async (req, res) => {
       scheduledPosts,
       history,
       youtubeHistory,
+      facebookHistory,
       globalConfig,
       scheduler: {
         lastRun: scheduler.lastRun,
@@ -1360,7 +1477,7 @@ app.post('/api/youtube/bulk-schedule', requireAuth, async (req, res) => {
 // Métricas do YouTube: cada consulta gasta cota da API, e os números do
 // YouTube já atrasam alguns minutos, então 5 min de cache não perde precisão.
 // Posts antigos podem ter platform NULL; contam como Instagram.
-const NOT_YOUTUBE_SQL = '("platform" IS NULL OR "platform" <> \'youtube\')';
+const INSTAGRAM_ONLY_SQL = '("platform" IS NULL OR "platform" = \'instagram\')';
 
 const ytStatsCache = new Map(); // accountId -> { data, ts }
 const YT_STATS_TTL_MS = 5 * 60 * 1000;
@@ -1650,7 +1767,7 @@ async function runStoryLoops(onlyLoopId = null) {
     if (onlyLoopId && loop.id !== onlyLoopId) continue;
     try {
       const account = await db.get('SELECT "accountId", "platform", "accessToken" FROM accounts WHERE "accountId" = ?', [loop.accountId]);
-      if (!account || account.platform === 'youtube' || !account.accessToken) continue;
+      if (!account || !isInstagram(account) || !account.accessToken) continue;
 
       const prefix = `loop:${loop.id}:`;
       const mine = (await db.all(
@@ -1736,7 +1853,7 @@ app.get('/api/accounts/health-check', requireAuth, async (req, res) => {
   const db = await getDB();
   try {
     // Este diagnóstico testa tokens da Meta; canais do YouTube usam outro login.
-    const accounts = (await db.all('SELECT * FROM accounts')).filter(a => a.platform !== 'youtube');
+    const accounts = (await db.all('SELECT * FROM accounts')).filter(isInstagram);
     const results = [];
 
     for (const acc of accounts) {
@@ -1800,11 +1917,11 @@ app.get('/api/analytics/summary', requireAuth, async (req, res) => {
   const db = await getDB();
   try {
     // Resultados do Instagram: canais e vídeos do YouTube têm métricas próprias na aba YouTube.
-    const accounts = (await db.all('SELECT * FROM accounts')).filter(a => a.platform !== 'youtube');
-    const totalPosts = await db.get(`SELECT COUNT(*) as count FROM posts WHERE ${NOT_YOUTUBE_SQL}`);
-    const successPosts = await db.get(`SELECT COUNT(*) as count FROM posts WHERE "status" = 'success' AND ${NOT_YOUTUBE_SQL}`);
-    const pendingPosts = await db.get(`SELECT COUNT(*) as count FROM posts WHERE "status" = 'pending' AND ${NOT_YOUTUBE_SQL}`);
-    const errorPosts = await db.get(`SELECT COUNT(*) as count FROM posts WHERE "status" = 'error' AND ${NOT_YOUTUBE_SQL}`);
+    const accounts = (await db.all('SELECT * FROM accounts')).filter(isInstagram);
+    const totalPosts = await db.get(`SELECT COUNT(*) as count FROM posts WHERE ${INSTAGRAM_ONLY_SQL}`);
+    const successPosts = await db.get(`SELECT COUNT(*) as count FROM posts WHERE "status" = 'success' AND ${INSTAGRAM_ONLY_SQL}`);
+    const pendingPosts = await db.get(`SELECT COUNT(*) as count FROM posts WHERE "status" = 'pending' AND ${INSTAGRAM_ONLY_SQL}`);
+    const errorPosts = await db.get(`SELECT COUNT(*) as count FROM posts WHERE "status" = 'error' AND ${INSTAGRAM_ONLY_SQL}`);
 
     // Mídias por tipo
     const reelsCount = await db.get('SELECT COUNT(*) as count FROM posts WHERE "mediaType" = \'REELS\'');
@@ -1813,10 +1930,10 @@ app.get('/api/analytics/summary', requireAuth, async (req, res) => {
     const storiesCount = await db.get('SELECT COUNT(*) as count FROM posts WHERE "mediaType" = \'STORIES\'');
 
     // Posts por conta
-    const postsPerAccount = await db.all(`SELECT "accountId", COUNT(*) as total, SUM(CASE WHEN "status" = 'success' THEN 1 ELSE 0 END) as published FROM posts WHERE ${NOT_YOUTUBE_SQL} GROUP BY "accountId"`);
+    const postsPerAccount = await db.all(`SELECT "accountId", COUNT(*) as total, SUM(CASE WHEN "status" = 'success' THEN 1 ELSE 0 END) as published FROM posts WHERE ${INSTAGRAM_ONLY_SQL} GROUP BY "accountId"`);
 
     // Histórico de publicações últimos 7 dias
-    const historyRows = await db.all(`SELECT "publishedAt", "status", "mediaType" FROM posts WHERE "publishedAt" IS NOT NULL AND ${NOT_YOUTUBE_SQL} ORDER BY "publishedAt" DESC LIMIT 100`);
+    const historyRows = await db.all(`SELECT "publishedAt", "status", "mediaType" FROM posts WHERE "publishedAt" IS NOT NULL AND ${INSTAGRAM_ONLY_SQL} ORDER BY "publishedAt" DESC LIMIT 100`);
 
     res.json({
       summary: {
@@ -1875,7 +1992,7 @@ async function getPostsPerDay() {
 /** Notas por hora da conta: padrão típico + o que funcionou nas publicações recentes. */
 async function getWeightFnForAccount(account, timeZone) {
   let learned = null;
-  if (account && account.accessToken && account.platform !== 'youtube') {
+  if (account && account.accessToken && isInstagram(account)) {
     try {
       const media = await fetchInstagramMedia(account);
       learned = learnHourlyEngagement(media.posts, timeZone);
@@ -2062,7 +2179,7 @@ app.post('/api/publish-now', requireAuth, async (req, res) => {
   const db = await getDB();
   try {
     await db.run('UPDATE posts SET "status" = \'processing\' WHERE "id" = ?', [post.id]);
-    const mediaId = post.platform === 'youtube' ? await youtubeService.publishToYouTube(post) : await publishToInstagram(post);
+    const mediaId = await publishPost(post);
     await db.run('UPDATE posts SET "status" = \'success\', "mediaId" = ?, "publishedAt" = ? WHERE "id" = ?', [mediaId, new Date().toISOString(), post.id]);
     
     // ✅ Notifica Telegram e WebPush sobre publicação manual
@@ -2375,10 +2492,19 @@ async function publishToInstagram(post) {
  * ⏰ Scheduler Runner
  */
 
-/** "@usuario" para Instagram, "Canal (YouTube)" para YouTube. */
+/** "@usuario" para Instagram, "Canal (YouTube)" e "Página (Facebook)" nas outras redes. */
 function accountLabel(acc, post) {
   if (!acc) return post.accountId;
-  return acc.platform === 'youtube' ? `${acc.username} (YouTube)` : `@${acc.username}`;
+  if (acc.platform === 'youtube') return `${acc.username} (YouTube)`;
+  if (acc.platform === 'facebook') return `${acc.username} (Facebook)`;
+  return `@${acc.username}`;
+}
+
+/** Publica um post na rede certa e devolve o ID publicado. */
+async function publishPost(post) {
+  if (post.platform === 'youtube') return youtubeService.publishToYouTube(post);
+  if (post.platform === 'facebook') return facebookService.publishToFacebook(post);
+  return publishToInstagram(post);
 }
 
 async function sendTelegramNotification(post, status, errorMsg) {
@@ -2454,7 +2580,7 @@ async function cron() {
         console.log(`[CRON] Iniciando publicação do post ${post.id} (@${post.accountId})...`);
 
         try {
-          const mediaId = post.platform === 'youtube' ? await youtubeService.publishToYouTube(post) : await publishToInstagram(post);
+          const mediaId = await publishPost(post);
           await db.run('UPDATE posts SET "status" = \'success\', "mediaId" = ?, "publishedAt" = ? WHERE "id" = ?', [mediaId, new Date().toISOString(), post.id]);
           console.log(`✅ Publicado: ${post.id}`);
           await notifyAll(post, 'success');

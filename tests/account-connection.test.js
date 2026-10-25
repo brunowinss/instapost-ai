@@ -17,6 +17,7 @@ function serverHarness(fetch, accounts = [], postgres = false, config = {}, publ
   const writes = [];
   const logs = [];
   const youtubeCalls = [];
+  const facebookCalls = [];
   const app = { use() {}, listen() {} };
   for (const method of ['get', 'post', 'delete']) {
     app[method] = (route, ...handlers) => routes.set(`${method} ${route}`, handlers.at(-1));
@@ -42,6 +43,17 @@ function serverHarness(fetch, accounts = [], postgres = false, config = {}, publ
     './time-utils': require('../time-utils'),
     './smart-schedule': require('../smart-schedule'),
     './story-loop': require('../story-loop'),
+    './facebook': {
+      isConfigured: () => true,
+      getAuthUrl: state => `https://www.facebook.com/dialog/oauth?state=${state}`,
+      exchangeCodeForPages: async code => {
+        facebookCalls.push(code);
+        if (code === 'bad') throw new Error('[Facebook 100] código inválido');
+        if (code === 'empty') return [];
+        return [{ id: 'PG1', name: 'Minha <b>Página</b>', accessToken: 'EAA-page-token', picture: 'https://cdn.example/p.jpg' }];
+      },
+      publishToFacebook: async () => 'fb_post_1'
+    },
     './youtube': {
       isConfigured: () => false,
       getAuthUrl: () => null,
@@ -74,7 +86,7 @@ function serverHarness(fetch, accounts = [], postgres = false, config = {}, publ
     setInterval() {}, URLSearchParams, Buffer
   });
   return {
-    writes, logs, youtubeCalls, reads,
+    writes, logs, youtubeCalls, facebookCalls, reads,
     async invoke(method, route, req = {}) {
       const res = {
         statusCode: 200,
@@ -303,7 +315,7 @@ test('Instagram diagnostics and results ignore YouTube channels', async () => {
   // As contagens por mediaType (REELS/IMAGE/...) já são só de Instagram por natureza.
   const postQueries = server.reads.filter(sql => sql.includes('FROM posts') && !sql.includes('"mediaType" ='));
   assert.equal(postQueries.length, 6);
-  for (const sql of postQueries) assert.match(sql, /<> 'youtube'/, `analytics query must exclude YouTube: ${sql}`);
+  for (const sql of postQueries) assert.match(sql, /"platform" = 'instagram'/, `analytics query must be Instagram-only: ${sql}`);
 });
 
 test('data endpoint keeps Instagram and YouTube history in separate windows', async () => {
@@ -313,9 +325,11 @@ test('data endpoint keeps Instagram and YouTube history in separate windows', as
   assert.ok(Array.isArray(res.body.history) && Array.isArray(res.body.youtubeHistory));
 
   const historyQueries = server.reads.filter(sql => sql.includes('"status" != \'pending\''));
-  assert.equal(historyQueries.length, 2);
+  assert.equal(historyQueries.length, 3);
   assert.equal(historyQueries.filter(sql => sql.includes(`"platform" = 'youtube'`)).length, 1);
-  assert.equal(historyQueries.filter(sql => sql.includes(`<> 'youtube'`)).length, 1);
+  assert.equal(historyQueries.filter(sql => sql.includes(`"platform" = 'facebook'`)).length, 1);
+  assert.equal(historyQueries.filter(sql => sql.includes(`"platform" = 'instagram'`)).length, 1);
+  assert.ok(Array.isArray(res.body.facebookHistory));
 });
 
 test('Instagram media stats map likes/comments, total them, cache and never leak the token', async () => {
@@ -445,4 +459,63 @@ test('Stories loop warns when it is on but has no media, and queues nothing when
   const off = await server.invoke('post', '/api/stories/loop', { body: { accountId: 'IG1', enabled: 0, times: ['09:00'], activeMedia: ['https://cdn.example/a.jpg'] } });
   assert.equal(off.body.queued, 0);
   assert.equal(server.writes.filter(w => /INTO posts/.test(w.sql)).length, 0);
+});
+
+function stateFrom(redirectUrl) {
+  return new URL(redirectUrl).searchParams.get('state');
+}
+
+test('Facebook login: callback saves each Page with its own token, escapes names and never leaks tokens to the panel', async () => {
+  const server = serverHarness(async () => response({}), []);
+
+  const start = await server.invoke('get', '/auth/facebook');
+  assert.match(start.redirectUrl, /^https:\/\/www\.facebook\.com\/dialog\/oauth\?state=/);
+  const state = stateFrom(start.redirectUrl);
+
+  const done = await server.invoke('get', '/auth/facebook/callback', { query: { code: 'good', state } });
+  assert.deepEqual(Array.from(server.facebookCalls), ['good']);
+  const saved = server.writes.find(w => /INTO accounts/.test(w.sql));
+  assert.equal(saved.params[0], 'PG1');
+  assert.equal(saved.params[2], 'EAA-page-token');
+  assert.equal(saved.params[5], 'facebook');
+  assert.match(done.body, /Minha &lt;b&gt;Página&lt;\/b&gt;/, 'page name is HTML-escaped');
+  assert.ok(!done.body.includes('EAA-page-token'));
+});
+
+test('Facebook login rejects forged state, empty page lists and provider errors without saving anything', async () => {
+  const server = serverHarness(async () => response({}), []);
+  const state = stateFrom((await server.invoke('get', '/auth/facebook')).redirectUrl);
+
+  const forged = await server.invoke('get', '/auth/facebook/callback', { query: { code: 'good', state: 'abc.def' } });
+  assert.match(decodeURIComponent(forged.redirectUrl), /Sessão de login inválida/);
+  const missing = await server.invoke('get', '/auth/facebook/callback', { query: { code: 'good' } });
+  assert.match(decodeURIComponent(missing.redirectUrl), /Sessão de login inválida/);
+  assert.equal(server.facebookCalls.length, 0, 'forged state never reaches the token exchange');
+
+  const empty = await server.invoke('get', '/auth/facebook/callback', { query: { code: 'empty', state } });
+  assert.match(decodeURIComponent(empty.redirectUrl), /Nenhuma Página encontrada/);
+  const bad = await server.invoke('get', '/auth/facebook/callback', { query: { code: 'bad', state } });
+  assert.match(decodeURIComponent(bad.redirectUrl), /código inválido/);
+  const denied = await server.invoke('get', '/auth/facebook/callback', { query: { error: 'access_denied', error_description: 'Usuário cancelou' } });
+  assert.match(decodeURIComponent(denied.redirectUrl), /Usuário cancelou/);
+  assert.equal(server.writes.filter(w => /INTO accounts/.test(w.sql)).length, 0);
+});
+
+test('Facebook Pages stay out of Instagram diagnostics, results and settings data', async () => {
+  const accounts = [
+    { accountId: 'IG1', username: 'insta', platform: 'instagram', accessToken: 'IGAA-token' },
+    { accountId: 'PG1', username: 'Minha Página', platform: 'facebook', accessToken: 'EAA-page-token' }
+  ];
+  const server = serverHarness(async () => response({ id: 'IG1', username: 'insta' }), accounts);
+
+  const health = await server.invoke('get', '/api/accounts/health-check');
+  assert.deepEqual(Array.from(health.body.accounts, a => a.accountId), ['IG1']);
+  const analytics = await server.invoke('get', '/api/analytics/summary');
+  assert.equal(analytics.body.summary.totalAccounts, 1);
+
+  const data = await server.invoke('get', '/api/data');
+  const page = data.body.accounts.find(a => a.accountId === 'PG1');
+  assert.equal(page.hasToken, true);
+  assert.ok(!('accessToken' in page), 'o token da Página nunca sai do servidor');
+  assert.equal((await server.invoke('get', '/api/instagram/media-stats', { query: { accountId: 'PG1' } })).statusCode, 404);
 });

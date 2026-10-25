@@ -71,6 +71,9 @@ const STATE = {
   storySlots: ['09:00', '13:00', '18:00', '21:00'],
   storyMediaPool: [],
   libraryActiveTab: 'captions',
+  // Facebook
+  facebookPostType: 'FB_PHOTO',
+  facebookFiles: [],
   // YouTube
   youtubePostType: 'YOUTUBE_SHORT',
   youtubeFile: null,
@@ -389,7 +392,8 @@ function switchSection(name) {
     'new-post': { t: 'Nova publicação', s: 'Escolha a conta, prepare seu conteúdo e defina quando publicar.' },
     'schedule': { t: 'Calendário', s: 'Organize seu calendário de conteúdo.' },
     'settings': { t: 'Configurações', s: 'Suas contas, integrações e preferências em um só lugar.' },
-    'youtube': { t: 'YouTube', s: 'Conecte canais e publique vídeos e Shorts no YouTube.' }
+    'youtube': { t: 'YouTube', s: 'Conecte canais e publique vídeos e Shorts no YouTube.' },
+    'facebook': { t: 'Facebook', s: 'Conecte suas Páginas e publique texto, fotos e vídeos.' }
   };
   
   if (titles[name]) {
@@ -420,14 +424,19 @@ async function loadData() {
     // Instagram e YouTube ficam em listas separadas: todas as telas antigas
     // (painel, calendário, resultados, diagnóstico) continuam só com Instagram.
     const isYoutube = (item) => item.platform === 'youtube';
+    const isFacebook = (item) => item.platform === 'facebook';
+    const isInstagram = (item) => !isYoutube(item) && !isFacebook(item);
     const allAccounts = data.accounts || [];
     const allScheduled = data.scheduledPosts || [];
-    STATE.accounts = allAccounts.filter(a => !isYoutube(a));
+    STATE.accounts = allAccounts.filter(isInstagram);
     STATE.youtubeAccounts = allAccounts.filter(isYoutube);
-    STATE.scheduledPosts = allScheduled.filter(p => !isYoutube(p));
+    STATE.facebookAccounts = allAccounts.filter(isFacebook);
+    STATE.scheduledPosts = allScheduled.filter(isInstagram);
     STATE.youtubeScheduled = allScheduled.filter(isYoutube);
+    STATE.facebookScheduled = allScheduled.filter(isFacebook);
     STATE.history = data.history || [];
     STATE.youtubeHistory = data.youtubeHistory || [];
+    STATE.facebookHistory = data.facebookHistory || [];
     STATE.globalConfig = data.globalConfig || STATE.globalConfig;
     
     if (STATE.accounts.length > 0 && !STATE.activeAccountId) {
@@ -578,6 +587,7 @@ function renderActiveSection() {
     renderSettingsAccounts();
   }
   if (n === 'youtube') renderYoutubeSection();
+  if (n === 'facebook') renderFacebookSection();
 }
 
 /** Ícone de marca por plataforma da conta — tudo aqui era hardcoded pro Instagram. */
@@ -4801,4 +4811,305 @@ function renderYoutubeQueueList() {
     </div>
   `;
   }).join('');
+}
+
+
+// ============================================================
+// 📘 FACEBOOK (Páginas)
+// ============================================================
+
+const FACEBOOK_TYPES = {
+  FB_TEXT: { label: 'Texto', button: 'fb-type-text', accept: '' },
+  FB_PHOTO: { label: 'Foto', button: 'fb-type-photo', accept: 'image/*' },
+  FB_VIDEO: { label: 'Vídeo', button: 'fb-type-video', accept: 'video/*' }
+};
+
+function getFacebookAccounts() {
+  return STATE.facebookAccounts || [];
+}
+
+function renderFacebookSection() {
+  renderFacebookPagesList();
+  populateFacebookSelect();
+  setupFacebookDropzone();
+  applyFacebookTypeUI();
+  renderFacebookQueue();
+}
+
+function renderFacebookPagesList() {
+  const list = document.getElementById('facebook-pages-list');
+  if (!list) return;
+  const pages = getFacebookAccounts();
+
+  if (pages.length === 0) {
+    list.innerHTML = '<p style="color:var(--text-dim); font-size:0.85rem;">Nenhuma Página conectada.</p>';
+    return;
+  }
+
+  list.innerHTML = pages.map(page => {
+    const avatar = page.profilePictureUrl && page.profilePictureUrl.startsWith('https://')
+      ? `<img src="${escapeHtml(page.profilePictureUrl)}" referrerpolicy="no-referrer" onerror="this.remove()" style="width:100%;height:100%;object-fit:cover;">`
+      : '<i class="fa-brands fa-facebook"></i>';
+    return `
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:1rem; background:rgba(255,255,255,0.03); border-radius:14px; border:1px solid var(--glass-border); margin-bottom:0.8rem; flex-wrap:wrap; gap:10px;">
+      <div style="display:flex; align-items:center; gap:12px;">
+        <div style="width:38px; height:38px; border-radius:50%; background:#1877f2; display:flex; align-items:center; justify-content:center; color:white; overflow:hidden; flex-shrink:0;">${avatar}</div>
+        <div>
+          <div style="font-weight:700; font-size:0.95rem;">${escapeHtml(page.username)}</div>
+          <div style="font-size:0.72rem; margin-top:2px;">
+            ${page.hasToken
+              ? '<span style="color:var(--success);"><i class="fa-solid fa-circle-check"></i> Conectada</span>'
+              : '<span style="color:var(--error);"><i class="fa-solid fa-triangle-exclamation"></i> Reconecte a Página</span>'}
+          </div>
+        </div>
+      </div>
+      <button class="btn btn-sm btn-ghost btn-delete" onclick="deleteAccount('${escapeHtml(page.accountId)}')" title="Desconectar Página" style="padding:0.4rem; width:32px; height:32px; color:var(--error); border-color:rgba(239,68,68,0.2);">
+        <i class="fa-solid fa-trash-can"></i>
+      </button>
+    </div>`;
+  }).join('');
+}
+
+function populateFacebookSelect() {
+  const select = document.getElementById('facebook-account-select');
+  if (!select) return;
+  const pages = getFacebookAccounts();
+  if (pages.length === 0) {
+    select.innerHTML = '<option value="">Nenhuma Página conectada</option>';
+    return;
+  }
+  const previous = select.value;
+  select.innerHTML = pages.map(p =>
+    `<option value="${escapeHtml(p.accountId)}" ${p.accountId === previous ? 'selected' : ''}>${escapeHtml(p.username)}</option>`
+  ).join('');
+}
+
+function setFacebookPostType(type) {
+  STATE.facebookPostType = type;
+  // Troca de foto para vídeo (ou o contrário): descarta os arquivos que não servem mais.
+  const accept = FACEBOOK_TYPES[type].accept;
+  const prefix = accept ? accept.replace('/*', '/') : null;
+  STATE.facebookFiles = (STATE.facebookFiles || []).filter(item => prefix && item.file.type.startsWith(prefix));
+  applyFacebookTypeUI();
+  renderFacebookPreview();
+}
+
+function applyFacebookTypeUI() {
+  const type = STATE.facebookPostType;
+  Object.entries(FACEBOOK_TYPES).forEach(([key, meta]) => {
+    const btn = document.getElementById(meta.button);
+    if (!btn) return;
+    const active = key === type;
+    btn.classList.toggle('active', active);
+    btn.classList.toggle('btn-primary', active);
+    btn.classList.toggle('btn-ghost', !active);
+  });
+  const mediaGroup = document.getElementById('facebook-media-group');
+  if (mediaGroup) mediaGroup.style.display = type === 'FB_TEXT' ? 'none' : 'block';
+  const input = document.getElementById('facebook-file-input');
+  if (input) input.accept = FACEBOOK_TYPES[type].accept;
+}
+
+function setupFacebookDropzone() {
+  const dropzone = document.getElementById('facebook-dropzone');
+  const input = document.getElementById('facebook-file-input');
+  if (!dropzone || !input) return;
+  dropzone.onclick = () => input.click();
+  input.onchange = (e) => handleFacebookFiles(Array.from(e.target.files));
+  dropzone.ondragover = (e) => { e.preventDefault(); dropzone.style.borderColor = 'var(--primary)'; };
+  dropzone.ondragleave = () => { dropzone.style.borderColor = 'var(--border-color)'; };
+  dropzone.ondrop = (e) => {
+    e.preventDefault();
+    dropzone.style.borderColor = 'var(--border-color)';
+    if (e.dataTransfer.files?.length) handleFacebookFiles(Array.from(e.dataTransfer.files));
+  };
+}
+
+function handleFacebookFiles(files) {
+  const prefix = FACEBOOK_TYPES[STATE.facebookPostType].accept.replace('/*', '/');
+  const valid = files.filter(f => f.type.startsWith(prefix));
+  if (valid.length === 0) return showToast(`Escolha arquivos de ${STATE.facebookPostType === 'FB_VIDEO' ? 'vídeo' : 'imagem'}.`, 'warning');
+
+  STATE.facebookFiles = valid.map(file => ({ file, thumb: file.type.startsWith('image/') ? URL.createObjectURL(file) : null }));
+  renderFacebookPreview();
+  STATE.facebookFiles.forEach((item) => {
+    if (item.thumb) return;
+    generateVideoThumbnail(item.file).then(thumb => {
+      if (!STATE.facebookFiles.includes(item)) return;
+      item.thumb = thumb;
+      renderFacebookPreview();
+    });
+  });
+}
+
+function renderFacebookPreview() {
+  const box = document.getElementById('facebook-preview');
+  if (!box) return;
+  const items = STATE.facebookFiles || [];
+  if (items.length === 0) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = 'grid';
+  box.innerHTML = items.map((item, idx) => `
+    <div style="position:relative; aspect-ratio:1; border-radius:8px; overflow:hidden; background:var(--primary-bg); border:1px solid var(--border-color); display:flex; align-items:center; justify-content:center; color:var(--primary);">
+      ${item.thumb ? `<img src="${escapeHtml(item.thumb)}" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fa-solid fa-video"></i>'}
+      <span style="position:absolute; top:4px; right:4px; background:rgba(239,68,68,0.85); color:#fff; width:18px; height:18px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.6rem; cursor:pointer;" onclick="removeFacebookFile(${idx})"><i class="fa-solid fa-times"></i></span>
+    </div>`).join('');
+}
+
+function removeFacebookFile(index) {
+  STATE.facebookFiles.splice(index, 1);
+  renderFacebookPreview();
+}
+
+function onFacebookWhenChange() {
+  const manual = document.getElementById('facebook-when')?.value === 'manual';
+  const input = document.getElementById('facebook-datetime');
+  if (input) input.style.display = manual ? 'block' : 'none';
+}
+
+/** Publica na Página agora, no melhor horário ou numa data marcada — um post por arquivo (ou um só, se for texto). */
+async function submitFacebookPost() {
+  const accountId = document.getElementById('facebook-account-select')?.value;
+  const type = STATE.facebookPostType;
+  const caption = document.getElementById('facebook-caption')?.value.trim() || '';
+  const when = document.getElementById('facebook-when')?.value || 'smart';
+  const files = STATE.facebookFiles || [];
+
+  if (!accountId) return showToast('Conecte e escolha uma Página do Facebook.', 'warning');
+  if (type === 'FB_TEXT' && !caption) return showToast('Escreva o texto da publicação.', 'warning');
+  if (type !== 'FB_TEXT' && files.length === 0) return showToast('Escolha pelo menos um arquivo.', 'warning');
+
+  let manualDate = null;
+  if (when === 'manual') {
+    const value = document.getElementById('facebook-datetime')?.value;
+    if (!value) return showToast('Escolha a data e a hora.', 'warning');
+    manualDate = new Date(value);
+  }
+
+  const items = type === 'FB_TEXT' ? [null] : files.map(f => f.file);
+  const btn = document.getElementById('btn-facebook-publish');
+  if (btn) btn.disabled = true;
+  const results = { ok: 0, failed: [] };
+
+  try {
+    let smartTimes = null;
+    if (when === 'smart') {
+      showLoading(true, 'CALCULANDO O MELHOR HORÁRIO...');
+      smartTimes = await fetchSmartTimes(accountId, items.length, undefined, { perDay: 2 });
+      if (!smartTimes) throw new Error('Não consegui calcular os horários agora. Tente "Agora" ou escolha uma data.');
+    }
+
+    for (let i = 0; i < items.length; i++) {
+      const file = items[i];
+      const label = file ? file.name : 'texto';
+      try {
+        let url = '';
+        if (file) {
+          showLoading(true, `ENVIANDO ${i + 1}/${items.length}...`);
+          url = type === 'FB_VIDEO' ? await uploadToCloudinary(file) : await uploadStoryMedia(file);
+        }
+
+        const publishNow = when === 'now';
+        const scheduledAt = publishNow ? new Date() : smartTimes ? smartTimes[i] : new Date(manualDate.getTime() + i * 60000);
+        const post = {
+          id: `fb_${Date.now()}_${i}`,
+          accountId,
+          mediaType: type,
+          imageUrl: url,
+          caption,
+          scheduledAt: scheduledAt.toISOString(),
+          // Já nasce "processing" quando sai agora, para o agendador não publicar em duplicidade.
+          status: publishNow ? 'processing' : 'pending',
+          platform: 'facebook'
+        };
+
+        const saved = await fetch(`${API_BASE}/save-post`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(post) });
+        if (!saved.ok) throw new Error('Não foi possível salvar a publicação.');
+
+        if (publishNow) {
+          showLoading(true, `PUBLICANDO ${i + 1}/${items.length}...`);
+          const res = await fetch(`${API_BASE}/publish-now`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ post }) });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || `O Facebook recusou (HTTP ${res.status}).`);
+        }
+        results.ok++;
+      } catch (err) {
+        results.failed.push(`${label}: ${err.message}`);
+      }
+    }
+  } catch (err) {
+    results.failed.push(err.message);
+  } finally {
+    showLoading(false);
+    if (btn) btn.disabled = false;
+  }
+
+  if (results.ok > 0) {
+    showToast(when === 'now' ? `${results.ok} publicação(ões) enviada(s) ao Facebook!` : `${results.ok} publicação(ões) agendada(s)!`, 'success');
+    STATE.facebookFiles = [];
+    const input = document.getElementById('facebook-file-input');
+    if (input) input.value = '';
+    const captionInput = document.getElementById('facebook-caption');
+    if (captionInput) captionInput.value = '';
+    renderFacebookPreview();
+  }
+  results.failed.forEach(message => showToast(message, 'error'));
+  await loadData();
+}
+
+function renderFacebookQueue() {
+  const list = document.getElementById('facebook-queue-list');
+  if (!list) return;
+
+  const items = [...(STATE.facebookScheduled || []), ...(STATE.facebookHistory || [])]
+    .sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt));
+
+  if (items.length === 0) {
+    list.innerHTML = '<p style="color:var(--text-dim); font-size:0.85rem;">Nenhuma publicação ainda.</p>';
+    return;
+  }
+
+  const statusLabel = { pending: 'Agendado', processing: 'Publicando...', success: 'Publicado', error: 'Erro' };
+  const statusColor = { pending: 'var(--accent)', processing: 'var(--warning)', success: 'var(--success)', error: 'var(--error)' };
+
+  list.innerHTML = items.map(p => {
+    const page = getFacebookAccounts().find(a => a.accountId === p.accountId);
+    const when = new Date(p.scheduledAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+    const text = escapeHtml((p.caption || '(sem texto)').split('\n')[0].slice(0, 80));
+    const typeLabel = (FACEBOOK_TYPES[p.mediaType] || {}).label || 'Post';
+    const live = p.status === 'success' && p.mediaId;
+    const title = live
+      ? `<a href="https://www.facebook.com/${encodeURIComponent(p.mediaId)}" target="_blank" rel="noopener" style="color:inherit; text-decoration:underline dotted;">${text}</a>`
+      : text;
+    return `
+    <div style="display:flex; align-items:center; justify-content:space-between; background:rgba(255,255,255,0.03); border:1px solid var(--border-color); border-radius:10px; padding:10px 14px; gap:12px;">
+      <div style="flex:1; min-width:0;">
+        <div style="font-weight:600; font-size:0.85rem; color:var(--text-main); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${title} <span style="font-size:0.65rem; color:var(--text-dim);">· ${typeLabel}</span></div>
+        <div style="font-size:0.72rem; color:var(--text-dim); display:flex; gap:8px; align-items:center; margin-top:2px; flex-wrap:wrap;">
+          <span>${escapeHtml(page ? page.username : p.accountId)}</span>
+          <span><i class="fa-solid fa-clock"></i> ${when}</span>
+          <span style="color:${statusColor[p.status] || 'var(--text-dim)'};">${statusLabel[p.status] || escapeHtml(p.status)}</span>
+        </div>
+      </div>
+      ${p.status === 'pending' ? `
+        <button class="btn btn-ghost btn-sm" onclick="publishFacebookNow('${escapeHtml(p.id)}')" title="Publicar agora" style="padding:4px 8px;"><i class="fa-solid fa-paper-plane"></i></button>
+        <button class="btn btn-ghost btn-sm" onclick="deletePost('${escapeHtml(p.id)}')" title="Remover da fila" style="padding:4px 8px; color:var(--error);"><i class="fa-solid fa-trash"></i></button>` : ''}
+    </div>`;
+  }).join('');
+}
+
+async function publishFacebookNow(postId) {
+  const post = (STATE.facebookScheduled || []).find(p => p.id === postId);
+  if (!post) return;
+  showLoading(true, 'PUBLICANDO NO FACEBOOK...');
+  try {
+    const res = await fetch(`${API_BASE}/publish-now`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ post }) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `O Facebook recusou (HTTP ${res.status}).`);
+    showToast('Publicado no Facebook!', 'success');
+  } catch (err) {
+    showToast(err.message, 'error');
+  } finally {
+    showLoading(false);
+    await loadData();
+  }
 }
