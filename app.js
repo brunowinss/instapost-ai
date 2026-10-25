@@ -5626,7 +5626,9 @@ const NETWORK_UI = {
     prefix: 'yt', label: 'YouTube', icon: 'fa-brands fa-youtube', color: '#ff0000', accountWord: 'canais',
     accounts: () => getYoutubeAccounts(),
     posts: () => [...(STATE.youtubeScheduled || []), ...(STATE.youtubeHistory || [])],
-    title: (p) => (p.caption || '').split('\n')[0] || '(sem título)',
+    title: (p) => (p.caption || '').split('\n')[0] || (p.mediaType === 'YOUTUBE_SHORT' ? 'Short sem título' : 'Vídeo sem título'),
+    typeLabel: (p) => p.mediaType === 'YOUTUBE_SHORT' ? 'Short' : 'Vídeo',
+    link: (p) => `https://www.youtube.com/watch?v=${encodeURIComponent(p.mediaId)}`,
     typeIcon: (p) => p.mediaType === 'YOUTUBE_SHORT' ? 'fa-film' : 'fa-video',
     render: () => renderYoutubeQueueList()
   },
@@ -5634,7 +5636,9 @@ const NETWORK_UI = {
     prefix: 'fb', label: 'Facebook', icon: 'fa-brands fa-facebook', color: '#1877f2', accountWord: 'Páginas',
     accounts: () => getFacebookAccounts(),
     posts: () => [...(STATE.facebookScheduled || []), ...(STATE.facebookHistory || [])],
-    title: (p) => (p.caption || '').split('\n')[0] || '(sem texto)',
+    title: (p) => (p.caption || '').split('\n')[0] || `${(FACEBOOK_TYPES[p.mediaType] || {}).label || 'Post'} sem texto`,
+    typeLabel: (p) => (FACEBOOK_TYPES[p.mediaType] || {}).label || 'Post',
+    link: (p) => `https://www.facebook.com/${encodeURIComponent(p.mediaId)}`,
     typeIcon: (p) => p.mediaType === 'FB_TEXT' ? 'fa-align-left' : p.mediaType === 'FB_VIDEO' ? 'fa-video' : 'fa-image',
     render: () => renderFacebookQueue()
   }
@@ -5750,58 +5754,85 @@ function renderNetworkCalendar(net) {
   const months = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
   label.innerText = `${months[month]} ${year}`;
 
+  const weekdays = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
   const today = new Date();
-  const weekdays = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+  const monthPosts = networkPosts(net)
+    .filter(p => { const d = new Date(p.scheduledAt); return d.getMonth() === month && d.getFullYear() === year; })
+    .sort((x, y) => new Date(x.scheduledAt) - new Date(y.scheduledAt));
 
-  // Só entram os dias que têm publicação: dia vazio não ocupa espaço.
-  const byDay = new Map();
-  networkPosts(net).forEach(p => {
-    const d = new Date(p.scheduledAt);
-    if (d.getMonth() === month && d.getFullYear() === year) {
-      if (!byDay.has(d.getDate())) byDay.set(d.getDate(), []);
-      byDay.get(d.getDate()).push(p);
-    }
-  });
-
-  if (byDay.size === 0) {
+  if (monthPosts.length === 0) {
     grid.innerHTML = `<div style="text-align:center; padding:2.5rem 1rem; color:var(--text-dim);"><i class="fa-solid fa-calendar-xmark" style="font-size:2.2rem; opacity:0.3; display:block; margin-bottom:0.8rem;"></i>Nada agendado em ${months[month]}. Use as setas para ver outros meses.</div>`;
     return;
   }
 
-  const statusDot = { pending: 'var(--warning)', processing: 'var(--warning)', success: 'var(--success)', error: 'var(--error)' };
-  const days = Array.from(byDay.keys()).sort((x, y) => x - y);
-  grid.innerHTML = `<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap:12px;">` + days.map(day => {
-    const posts = byDay.get(day).sort((x, y) => new Date(x.scheduledAt) - new Date(y.scheduledAt));
-    const date = new Date(year, month, day);
-    const isToday = today.getDate() === day && today.getMonth() === month && today.getFullYear() === year;
-    const rows = posts.map(p => {
-      const time = new Date(p.scheduledAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-      const url = p.mediaType === 'FB_TEXT' ? '' : getThumbnailUrl(p.imageUrl);
-      const thumb = url
-        ? `<img src="${escapeHtml(url)}" loading="lazy" alt="" onerror="this.style.display='none';" style="width:34px; height:34px; border-radius:6px; object-fit:cover; flex-shrink:0;">`
-        : `<div style="width:34px; height:34px; border-radius:6px; background:rgba(16,184,245,0.15); display:flex; align-items:center; justify-content:center; flex-shrink:0;"><i class="fa-solid ${ui.typeIcon(p)}" style="font-size:0.8rem; color:var(--accent);"></i></div>`;
-      return `<div style="display:flex; align-items:center; gap:8px; min-width:0;">
-        ${thumb}
-        <div style="min-width:0; flex:1;">
-          <div style="font-size:0.78rem; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(ui.title(p))}</div>
-          <div style="font-size:0.7rem; color:var(--text-dim);"><span style="display:inline-block; width:7px; height:7px; border-radius:50%; background:${statusDot[p.status] || 'var(--text-dim)'}; margin-right:5px;"></span>${time}</div>
+  const status = {
+    pending: { label: 'Agendado', color: 'var(--accent)', icon: 'fa-clock' },
+    processing: { label: 'Publicando…', color: 'var(--warning)', icon: 'fa-spinner fa-spin' },
+    success: { label: 'Publicado', color: 'var(--success)', icon: 'fa-circle-check' },
+    error: { label: 'Erro', color: 'var(--error)', icon: 'fa-circle-xmark' }
+  };
+  const count = (s) => monthPosts.filter(p => p.status === s).length;
+  const chip = (text, color) => `<span style="font-size:0.72rem; font-weight:700; color:${color}; background:rgba(255,255,255,0.05); border-radius:100px; padding:4px 12px;">${text}</span>`;
+  const summary = [
+    chip(`${count('pending') + count('processing')} agendados`, 'var(--accent)'),
+    chip(`${count('success')} publicados`, 'var(--success)'),
+    count('error') ? chip(`${count('error')} com erro`, 'var(--error)') : ''
+  ].join('');
+
+  const byDay = new Map();
+  monthPosts.forEach(p => {
+    const day = new Date(p.scheduledAt).getDate();
+    if (!byDay.has(day)) byDay.set(day, []);
+    byDay.get(day).push(p);
+  });
+
+  const accounts = ui.accounts();
+  const cards = (posts) => posts.map(p => {
+    const st = status[p.status] || { label: p.status, color: 'var(--text-dim)', icon: 'fa-circle' };
+    const account = accounts.find(a => a.accountId === p.accountId);
+    const time = new Date(p.scheduledAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const url = p.mediaType === 'FB_TEXT' ? '' : getThumbnailUrl(p.imageUrl);
+    const thumb = url
+      ? `<img src="${escapeHtml(url)}" loading="lazy" alt="" onerror="this.style.display='none';" style="width:100%; height:100%; object-fit:cover; display:block;">`
+      : `<i class="fa-solid ${ui.typeIcon(p)}" style="font-size:1.3rem; color:var(--accent);" aria-hidden="true"></i>`;
+    const title = escapeHtml(ui.title(p));
+    const titleHtml = p.status === 'success' && p.mediaId
+      ? `<a href="${escapeHtml(ui.link(p))}" target="_blank" rel="noopener" style="color:inherit; text-decoration:none;">${title} <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:0.6rem; opacity:0.6;"></i></a>`
+      : title;
+    const actions = p.status === 'pending' ? `
+      <div style="display:flex; gap:6px; margin-top:8px;">
+        ${net === 'facebook' ? `<button class="btn btn-ghost btn-sm" onclick="publishFacebookNow('${escapeHtml(p.id)}')" title="Publicar agora" style="padding:4px 10px;"><i class="fa-solid fa-paper-plane"></i> Agora</button>` : ''}
+        <button class="btn btn-ghost btn-sm" onclick="deletePost('${escapeHtml(p.id)}')" title="Remover da fila" style="padding:4px 10px; color:var(--error);"><i class="fa-solid fa-trash"></i></button>
+      </div>` : '';
+    return `
+    <div style="display:flex; gap:12px; background:rgba(255,255,255,0.03); border:1px solid var(--border-color); border-left:3px solid ${st.color}; border-radius:12px; padding:10px;">
+      <div style="width:58px; height:74px; border-radius:8px; overflow:hidden; background:var(--primary-bg); display:flex; align-items:center; justify-content:center; flex-shrink:0;">${thumb}</div>
+      <div style="min-width:0; flex:1;">
+        <div style="display:flex; align-items:baseline; gap:8px;">
+          <span style="font-size:1.1rem; font-weight:800;">${time}</span>
+          <span style="font-size:0.7rem; color:${st.color}; font-weight:700;"><i class="fa-solid ${st.icon}"></i> ${st.label}</span>
         </div>
+        <div style="font-size:0.85rem; font-weight:600; margin-top:2px; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; word-break:break-word;">${titleHtml}</div>
+        <div style="font-size:0.72rem; color:var(--text-dim); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><i class="${ui.icon}" style="color:${ui.color};"></i> ${escapeHtml(account ? account.username : p.accountId)} · ${ui.typeLabel(p)}</div>
+        ${actions}
+      </div>
+    </div>`;
+  }).join('');
+
+  grid.innerHTML = `<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:1.2rem;">${summary}</div>` +
+    Array.from(byDay.keys()).sort((x, y) => x - y).map(day => {
+      const date = new Date(year, month, day);
+      const isToday = today.getDate() === day && today.getMonth() === month && today.getFullYear() === year;
+      return `
+      <div style="margin-bottom:1.5rem;">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:0.7rem; padding-bottom:0.5rem; border-bottom:1px solid var(--border-color);">
+          <span style="font-size:1.5rem; font-weight:800; ${isToday ? 'color:var(--accent);' : ''}">${String(day).padStart(2, '0')}</span>
+          <span style="font-size:0.85rem; font-weight:600;">${weekdays[date.getDay()]}${isToday ? ' · hoje' : ''}</span>
+          <span style="margin-left:auto; font-size:0.75rem; color:var(--text-dim);">${byDay.get(day).length} ${byDay.get(day).length === 1 ? 'publicação' : 'publicações'}</span>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap:10px;">${cards(byDay.get(day))}</div>
       </div>`;
     }).join('');
-    return `<div style="background:rgba(255,255,255,0.03); border:1px solid ${isToday ? 'var(--accent)' : 'var(--border-color)'}; border-radius:14px; padding:12px 14px;">
-      <div style="display:flex; align-items:baseline; gap:8px; margin-bottom:10px;">
-        <span style="font-size:1.4rem; font-weight:800;">${day}</span>
-        <span style="font-size:0.72rem; text-transform:uppercase; color:var(--text-dim); font-weight:600;">${weekdays[date.getDay()]}${isToday ? ' · hoje' : ''}</span>
-        <span style="margin-left:auto; font-size:0.72rem; color:var(--accent); font-weight:700;">${posts.length} ${posts.length === 1 ? 'post' : 'posts'}</span>
-      </div>
-      <div style="display:flex; flex-direction:column; gap:8px;">${rows}</div>
-    </div>`;
-  }).join('') + `</div>
-  <div class="cal-legend" style="margin-top:1rem;">
-    <span><span class="cal-legend-dot" style="background:var(--warning);"></span> Pendente</span>
-    <span><span class="cal-legend-dot" style="background:var(--success);"></span> Sucesso</span>
-    <span><span class="cal-legend-dot" style="background:var(--error);"></span> Falhou</span>
-  </div>`;
 }
 
 
