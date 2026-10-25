@@ -92,24 +92,55 @@
     </a>
     <div class="workspace-label"><span class="workspace-avatar">IP</span><div>Meu espaço<small>Estúdio de conteúdo</small></div></div>
     <nav class="nav-links" aria-label="Navegação principal">
-      <div class="nav-group"><p class="nav-group-label"><i class="fa-brands fa-instagram nav-brand nav-brand-instagram" aria-hidden="true"></i>Instagram</p>
-      <a href="#dashboard" class="nav-item active" data-section="dashboard" title="Visão geral" aria-current="page"><i class="fa-solid fa-table-cells-large" aria-hidden="true"></i><span>Visão geral</span></a>
-      <a href="#schedule" class="nav-item" data-section="schedule" title="Calendário"><i class="fa-solid fa-calendar-days" aria-hidden="true"></i><span>Calendário</span></a>
-      <a href="#analytics" class="nav-item" data-section="analytics" title="Resultados"><i class="fa-solid fa-chart-line" aria-hidden="true"></i><span>Resultados</span></a>
-      <a href="#new-post" class="nav-item" data-section="new-post" title="Nova publicação"><i class="fa-solid fa-circle-plus" aria-hidden="true"></i><span>Nova publicação</span></a>
-      <a href="#bulk-reels" class="nav-item" data-section="bulk-reels" title="Reels em massa"><i class="fa-solid fa-clapperboard" aria-hidden="true"></i><span>Reels em massa</span></a>
-      <a href="#bulk-carousel" class="nav-item" data-section="bulk-carousel" title="Carrossel e fotos"><i class="fa-solid fa-layer-group" aria-hidden="true"></i><span>Carrossel e fotos</span></a>
-      <a href="#stories-loop" class="nav-item" data-section="stories-loop" title="Stories 24/7"><i class="fa-solid fa-arrows-spin" aria-hidden="true"></i><span>Stories 24/7</span></a></div>
-      <div class="nav-group"><p class="nav-group-label"><i class="fa-brands fa-youtube nav-brand nav-brand-youtube" aria-hidden="true"></i>YouTube</p>
-      <a href="#youtube" class="nav-item" data-section="youtube" title="YouTube"><i class="fa-brands fa-youtube" aria-hidden="true"></i><span>YouTube</span></a></div>
-      <div class="nav-group"><p class="nav-group-label"><i class="fa-brands fa-facebook nav-brand nav-brand-facebook" aria-hidden="true"></i>Facebook</p>
-      <a href="#facebook" class="nav-item" data-section="facebook" title="Facebook"><i class="fa-brands fa-facebook" aria-hidden="true"></i><span>Facebook</span></a></div>
-      <div class="nav-group"><p class="nav-group-label">Todas as redes</p>
-      <a href="#crosspost" class="nav-item" data-section="crosspost" title="Publicar em várias redes"><i class="fa-solid fa-share-nodes" aria-hidden="true"></i><span>Publicar em várias redes</span></a></div>
-      <div class="nav-group"><p class="nav-group-label">Organizar</p>
-      <a href="#captions" class="nav-item" data-section="captions" title="Legendas e tags"><i class="fa-solid fa-bookmark" aria-hidden="true"></i><span>Legendas e tags</span></a>
-      <a href="#drive" class="nav-item" data-section="drive" title="Acervo de mídias"><i class="fa-solid fa-folder-open" aria-hidden="true"></i><span>Acervo de mídias</span></a>
-      <a href="#settings" class="nav-item" data-section="settings" title="Configurações"><i class="fa-solid fa-sliders" aria-hidden="true"></i><span>Configurações</span></a></div>
+      <div class="nav-group" data-group="instagram">
+        <button type="button" class="nav-group-label" aria-expanded="true" aria-controls="nav-items-instagram"><i class="fa-brands fa-instagram nav-brand nav-brand-instagram" aria-hidden="true"></i><span>Instagram</span><i class="fa-solid fa-chevron-down nav-chevron" aria-hidden="true"></i></button>
+        <div class="nav-group-items" id="nav-items-instagram">
+        <a href="#dashboard" class="nav-item active" data-section="dashboard" title="Visão geral" aria-current="page"><i class="fa-solid fa-table-cells-large" aria-hidden="true"></i><span>Visão geral</span></a>
+        <a href="#instagram-accounts" class="nav-item" data-section="instagram-accounts" title="Contas"><i class="fa-solid fa-plug" aria-hidden="true"></i><span>Contas</span></a>
+        <a href="#schedule" class="nav-item" data-section="schedule" title="Calendário"><i class="fa-solid fa-calendar-days" aria-hidden="true"></i><span>Calendário</span></a>
+        <a href="#analytics" class="nav-item" data-section="analytics" title="Resultados"><i class="fa-solid fa-chart-line" aria-hidden="true"></i><span>Resultados</span></a>
+        <a href="#new-post" class="nav-item" data-section="new-post" title="Nova publicação"><i class="fa-solid fa-circle-plus" aria-hidden="true"></i><span>Nova publicação</span></a>
+        <a href="#bulk-reels" class="nav-item" data-section="bulk-reels" title="Reels em massa"><i class="fa-solid fa-clapperboard" aria-hidden="true"></i><span>Reels em massa</span></a>
+        <a href="#bulk-carousel" class="nav-item" data-section="bulk-carousel" title="Carrossel e fotos"><i class="fa-solid fa-layer-group" aria-hidden="true"></i><span>Carrossel e fotos</span></a>
+        <a href="#stories-loop" class="nav-item" data-section="stories-loop" title="Stories 24/7"><i class="fa-solid fa-arrows-spin" aria-hidden="true"></i><span>Stories 24/7</span></a>
+        </div>
+      </div>
+      <div class="nav-group" data-group="youtube">
+        <button type="button" class="nav-group-label" aria-expanded="true" aria-controls="nav-items-youtube"><i class="fa-brands fa-youtube nav-brand nav-brand-youtube" aria-hidden="true"></i><span>YouTube</span><i class="fa-solid fa-chevron-down nav-chevron" aria-hidden="true"></i></button>
+        <div class="nav-group-items" id="nav-items-youtube">
+        <a href="#youtube" class="nav-item" data-section="youtube" title="Visão geral"><i class="fa-solid fa-table-cells-large" aria-hidden="true"></i><span>Visão geral</span></a>
+        <a href="#youtube-accounts" class="nav-item" data-section="youtube-accounts" title="Canais"><i class="fa-solid fa-plug" aria-hidden="true"></i><span>Canais</span></a>
+        <a href="#youtube-calendar" class="nav-item" data-section="youtube-calendar" title="Calendário"><i class="fa-solid fa-calendar-days" aria-hidden="true"></i><span>Calendário</span></a>
+        <a href="#youtube-metrics" class="nav-item" data-section="youtube-metrics" title="Resultados"><i class="fa-solid fa-chart-line" aria-hidden="true"></i><span>Resultados</span></a>
+        <a href="#youtube-new" class="nav-item" data-section="youtube-new" title="Nova publicação"><i class="fa-solid fa-circle-plus" aria-hidden="true"></i><span>Nova publicação</span></a>
+        <a href="#youtube-bulk" class="nav-item" data-section="youtube-bulk" title="Shorts e vídeos em massa"><i class="fa-solid fa-clapperboard" aria-hidden="true"></i><span>Shorts e vídeos em massa</span></a>
+        </div>
+      </div>
+      <div class="nav-group" data-group="facebook">
+        <button type="button" class="nav-group-label" aria-expanded="true" aria-controls="nav-items-facebook"><i class="fa-brands fa-facebook nav-brand nav-brand-facebook" aria-hidden="true"></i><span>Facebook</span><i class="fa-solid fa-chevron-down nav-chevron" aria-hidden="true"></i></button>
+        <div class="nav-group-items" id="nav-items-facebook">
+        <a href="#facebook" class="nav-item" data-section="facebook" title="Visão geral"><i class="fa-solid fa-table-cells-large" aria-hidden="true"></i><span>Visão geral</span></a>
+        <a href="#facebook-accounts" class="nav-item" data-section="facebook-accounts" title="Páginas"><i class="fa-solid fa-plug" aria-hidden="true"></i><span>Páginas</span></a>
+        <a href="#facebook-calendar" class="nav-item" data-section="facebook-calendar" title="Calendário"><i class="fa-solid fa-calendar-days" aria-hidden="true"></i><span>Calendário</span></a>
+        <a href="#facebook-metrics" class="nav-item" data-section="facebook-metrics" title="Resultados"><i class="fa-solid fa-chart-line" aria-hidden="true"></i><span>Resultados</span></a>
+        <a href="#facebook-new" class="nav-item" data-section="facebook-new" title="Nova publicação"><i class="fa-solid fa-circle-plus" aria-hidden="true"></i><span>Nova publicação</span></a>
+        <a href="#facebook-bulk" class="nav-item" data-section="facebook-bulk" title="Fotos e vídeos em massa"><i class="fa-solid fa-layer-group" aria-hidden="true"></i><span>Fotos e vídeos em massa</span></a>
+        </div>
+      </div>
+      <div class="nav-group" data-group="all">
+        <button type="button" class="nav-group-label" aria-expanded="true" aria-controls="nav-items-all"><i class="fa-solid fa-share-nodes nav-brand" aria-hidden="true"></i><span>Todas as redes</span><i class="fa-solid fa-chevron-down nav-chevron" aria-hidden="true"></i></button>
+        <div class="nav-group-items" id="nav-items-all">
+        <a href="#crosspost" class="nav-item" data-section="crosspost" title="Publicar em várias redes"><i class="fa-solid fa-share-nodes" aria-hidden="true"></i><span>Publicar em várias redes</span></a>
+        </div>
+      </div>
+      <div class="nav-group" data-group="tools">
+        <button type="button" class="nav-group-label" aria-expanded="true" aria-controls="nav-items-tools"><i class="fa-solid fa-toolbox nav-brand" aria-hidden="true"></i><span>Organizar</span><i class="fa-solid fa-chevron-down nav-chevron" aria-hidden="true"></i></button>
+        <div class="nav-group-items" id="nav-items-tools">
+        <a href="#captions" class="nav-item" data-section="captions" title="Legendas e tags"><i class="fa-solid fa-bookmark" aria-hidden="true"></i><span>Legendas e tags</span></a>
+        <a href="#drive" class="nav-item" data-section="drive" title="Acervo de mídias"><i class="fa-solid fa-folder-open" aria-hidden="true"></i><span>Acervo de mídias</span></a>
+        <a href="#settings" class="nav-item" data-section="settings" title="Configurações"><i class="fa-solid fa-sliders" aria-hidden="true"></i><span>Configurações</span></a>
+        </div>
+      </div>
     </nav>
     <div class="sidebar-footer">
       <div class="status-badge" id="scheduler-badge">
@@ -388,10 +419,8 @@
       </div>
     </section>
 
-    <!-- ═══════════════ SETTINGS ═══════════════ -->
-    <section id="section-settings" class="section">
-      <div class="dashboard-grid settings-grid">
-        <!-- Accounts Card -->
+    <section id="section-instagram-accounts" class="section">
+      <div style="max-width:760px;">
         <div class="card">
           <h3 class="card-title"><i class="fa-solid fa-user-gear"></i> Contas Conectadas</h3>
           <div id="ig-config-warning" style="display:none; background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.4); border-radius:8px; padding:12px 14px; margin-bottom:1rem; font-size:0.82rem; color:#fca5a5;">
@@ -404,6 +433,12 @@
             <i class="fa-brands fa-instagram"></i> Conectar Conta do Instagram
           </button>
         </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════ SETTINGS ═══════════════ -->
+    <section id="section-settings" class="section">
+      <div class="dashboard-grid settings-grid">
         <!-- API Keys Card -->
         <div class="card">
           <h3 class="card-title"><i class="fa-solid fa-key"></i> Integrações</h3>
@@ -1087,6 +1122,7 @@
                 <input type="file" id="crosspost-file-input" multiple accept="image/*,video/*" hidden>
               </div>
               <div id="crosspost-preview" style="display:none; grid-template-columns:repeat(auto-fill, minmax(84px, 1fr)); gap:10px; margin-top:0.8rem;"></div>
+              <button type="button" class="btn btn-ghost btn-sm" id="crosspost-preview-btn" style="display:none; margin-top:0.8rem;" onclick="previewCrosspost(0)"><i class="fa-solid fa-eye"></i> Ver prévia real em cada rede</button>
             </div>
 
             <div class="form-group">
@@ -1131,16 +1167,8 @@
     </section>
 
     <!-- ═══════════════ YOUTUBE ═══════════════ -->
-    <section id="section-youtube" class="section">
-      <div style="display:flex; gap:10px; margin-bottom:1.5rem;">
-        <button type="button" class="btn btn-primary" id="yt-tab-publish" onclick="switchYoutubeView('publish')"><i class="fa-solid fa-paper-plane"></i> Publicar</button>
-        <button type="button" class="btn btn-ghost" id="yt-tab-metrics" onclick="switchYoutubeView('metrics')"><i class="fa-solid fa-chart-simple"></i> Métricas</button>
-      </div>
-
-      <div id="yt-view-publish">
-      <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr; gap: 1.5rem;">
-
-        <!-- Canais conectados -->
+    <section id="section-youtube-accounts" class="section">
+      <div style="max-width:760px;">
         <div class="card">
           <div class="card-title"><i class="fa-brands fa-youtube" style="color:#ff0000;"></i> Canais do YouTube</div>
           <div id="youtube-channels-list" style="margin-top:1rem;">
@@ -1151,14 +1179,71 @@
           </a>
           <p style="font-size:0.72rem; color:var(--text-dim); margin-top:0.6rem;">Requer <code>YOUTUBE_CLIENT_ID</code>/<code>YOUTUBE_CLIENT_SECRET</code>/<code>YOUTUBE_REDIRECT_URI</code> configurados no servidor. Veja o <code>YOUTUBE.md</code>.</p>
         </div>
+      </div>
+    </section>
 
-        <!-- Nova publicação -->
+    <section id="section-youtube" class="section">
+      <div id="yt-overview-stats" class="dashboard-grid dashboard-stats"></div>
+      <div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 1.5rem; margin-top:1.5rem;">
+
+        <div class="card">
+          <div class="card-title"><i class="fa-solid fa-hourglass-half"></i> Próximas publicações</div>
+          <div id="yt-overview-upcoming" style="margin-top:1rem; display:flex; flex-direction:column; gap:10px;"></div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:1.2rem;">
+            <button type="button" class="btn btn-primary btn-sm" onclick="switchSection('youtube-new')"><i class="fa-solid fa-circle-plus"></i> Nova publicação</button>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="switchSection('youtube-bulk')"><i class="fa-solid fa-bolt-lightning"></i> Em massa</button>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="switchSection('youtube-calendar')"><i class="fa-solid fa-calendar-days"></i> Calendário</button>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="switchSection('youtube-metrics')"><i class="fa-solid fa-chart-line"></i> Resultados</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="section-youtube-calendar" class="section">
+      <div class="card" style="padding:1.2rem 2rem; margin-bottom:1.5rem;">
+        <div style="display:flex; align-items:center; gap:12px; overflow-x:auto;">
+          <span style="font-size:0.75rem; font-weight:600; color:var(--text-dim); text-transform:uppercase;">Filtrar canal:</span>
+          <div id="yt-filter-tabs" style="display:flex; gap:8px;"></div>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:2rem;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-calendar-days"></i> Calendário</div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button class="btn btn-ghost btn-sm" style="padding:0.5rem;" onclick="shiftNetworkMonth('youtube', -1)" aria-label="Mês anterior"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i></button>
+            <span id="yt-cal-label" style="font-weight:600; font-size:1rem; min-width:140px; text-align:center;"></span>
+            <button class="btn btn-ghost btn-sm" style="padding:0.5rem;" onclick="shiftNetworkMonth('youtube', 1)" aria-label="Próximo mês"><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button>
+          </div>
+        </div>
+        <div id="yt-calendar-grid" style="margin-top:1.5rem;"></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-list-ol"></i> Fila do YouTube</div>
+        <div id="youtube-queue-list" style="margin-top:1rem; display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:10px;">
+          <p style="color:var(--text-dim); font-size:0.85rem;">Nenhum post agendado.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="section-youtube-metrics" class="section">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:1.5rem;">
+          <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+            <select id="yt-metrics-account-select" class="input" style="min-width:220px;" onchange="renderYoutubeMetricsView()"></select>
+            <span id="yt-metrics-updated" style="font-size:0.75rem; color:var(--text-dim);"></span>
+          </div>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="renderYoutubeMetricsView(true)"><i class="fa-solid fa-rotate"></i> Atualizar</button>
+        </div>
+        <div id="yt-metrics-body"></div>
+    </section>
+
+    <section id="section-youtube-new" class="section">
+      <div style="max-width:760px;">
         <div class="card">
           <div class="card-title"><i class="fa-solid fa-circle-plus"></i> Nova publicação</div>
           <form id="youtube-post-form" style="margin-top:1rem;" onsubmit="return false;">
             <div class="form-group">
               <label class="label"><i class="fa-solid fa-user-circle"></i> Canal de Destino</label>
-              <select id="youtube-account-select" class="input"><option>Carregando canais...</option></select>
+              <select id="youtube-account-select" class="input" onchange="updateLivePreview('youtube')"><option>Carregando canais...</option></select>
             </div>
 
             <div class="form-group">
@@ -1181,15 +1266,20 @@
 
             <div class="form-group">
               <label class="label"><i class="fa-solid fa-heading"></i> Título</label>
-              <input type="text" class="input" id="youtube-title-input" maxlength="100" placeholder="Título do vídeo">
+              <input type="text" class="input" id="youtube-title-input" oninput="updateLivePreview('youtube')" maxlength="100" placeholder="Título do vídeo">
             </div>
             <div class="form-group">
               <label class="label"><i class="fa-solid fa-align-left"></i> Descrição</label>
-              <textarea class="textarea" id="youtube-description-input" rows="3" placeholder="Descrição do vídeo — #hashtags aqui também viram tags do vídeo"></textarea>
+              <textarea class="textarea" id="youtube-description-input" oninput="updateLivePreview('youtube')" rows="3" placeholder="Descrição do vídeo — #hashtags aqui também viram tags do vídeo"></textarea>
             </div>
             <div class="form-group">
-              <label class="label"><i class="fa-solid fa-calendar-days"></i> Agendar para</label>
-              <input type="datetime-local" class="input" id="youtube-schedule-input">
+              <label class="label"><i class="fa-solid fa-clock"></i> Quando publicar</label>
+              <select id="youtube-when" class="input" onchange="onYoutubeWhenChange()">
+                <option value="smart" selected>Horário inteligente (melhores picos)</option>
+                <option value="now">Agora</option>
+                <option value="manual">Escolher data e hora</option>
+              </select>
+              <input type="datetime-local" class="input" id="youtube-schedule-input" style="display:none; margin-top:8px;">
             </div>
 
             <button type="button" class="btn btn-primary" id="btn-submit-youtube-post" style="width:100%; padding:1rem;" onclick="submitYoutubePost()">
@@ -1197,10 +1287,15 @@
             </button>
           </form>
         </div>
+      <div class="card rp-live" style="margin-top:1.5rem;">
+        <div class="card-title"><i class="fa-solid fa-eye"></i> Prévia real — como vai ficar no YouTube</div>
+        <div id="youtube-live-preview" style="margin-top:1rem;"></div>
       </div>
+      </div>
+    </section>
 
-      <!-- Envio em massa -->
-      <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 1.5rem;">
+    <section id="section-youtube-bulk" class="section">
+      <div style="max-width:760px;">
         <div class="card">
           <div class="card-title"><i class="fa-solid fa-bolt-lightning"></i> Envio em Massa</div>
           <form id="youtube-bulk-form" style="margin-top:1rem;" onsubmit="return false;">
@@ -1267,39 +1362,12 @@
             </button>
           </form>
         </div>
-
-        <!-- Fila do YouTube -->
-        <div class="card" style="display:flex; flex-direction:column;">
-          <div class="card-title"><i class="fa-solid fa-list-ol"></i> Fila do YouTube</div>
-          <div id="youtube-queue-list" style="margin-top:1rem; display:flex; flex-direction:column; gap:10px; max-height:560px; overflow-y:auto; padding-right:4px;">
-            <p style="color:var(--text-dim); font-size:0.85rem;">Nenhum post agendado.</p>
-          </div>
-        </div>
-      </div>
-      </div><!-- /yt-view-publish -->
-
-      <!-- Métricas -->
-      <div id="yt-view-metrics" style="display:none;">
-        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:1.5rem;">
-          <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-            <select id="yt-metrics-account-select" class="input" style="min-width:220px;" onchange="renderYoutubeMetricsView()"></select>
-            <span id="yt-metrics-updated" style="font-size:0.75rem; color:var(--text-dim);"></span>
-          </div>
-          <button type="button" class="btn btn-ghost btn-sm" onclick="renderYoutubeMetricsView(true)"><i class="fa-solid fa-rotate"></i> Atualizar</button>
-        </div>
-        <div id="yt-metrics-body"></div>
       </div>
     </section>
-    <!-- ═══════════════ FACEBOOK ═══════════════ -->
-    <section id="section-facebook" class="section">
-      <div style="display:flex; gap:10px; margin-bottom:1.5rem;">
-        <button type="button" class="btn btn-primary" id="fb-tab-publish" onclick="switchFacebookView('publish')"><i class="fa-solid fa-paper-plane"></i> Publicar</button>
-        <button type="button" class="btn btn-ghost" id="fb-tab-metrics" onclick="switchFacebookView('metrics')"><i class="fa-solid fa-chart-simple"></i> Métricas</button>
-      </div>
-      <div id="fb-view-publish">
-      <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr; gap: 1.5rem;">
 
-        <!-- Páginas conectadas -->
+    <!-- ═══════════════ FACEBOOK ═══════════════ -->
+    <section id="section-facebook-accounts" class="section">
+      <div style="max-width:760px;">
         <div class="card">
           <div class="card-title"><i class="fa-brands fa-facebook" style="color:#1877f2;"></i> Páginas do Facebook</div>
           <div id="facebook-pages-list" style="margin-top:1rem;">
@@ -1310,14 +1378,70 @@
           </a>
           <p style="font-size:0.72rem; color:var(--text-dim); margin-top:0.6rem;"><b style="color:var(--warning);">Importante:</b> cada conexão <b>substitui</b> a anterior. Na tela da Meta clique em <b>Editar configurações</b> e use <b>Selecionar tudo</b> (ou "Aceitar todas as Páginas"), senão as Páginas não marcadas perdem o acesso.</p>
         </div>
+      </div>
+    </section>
 
-        <!-- Nova publicação -->
+    <section id="section-facebook" class="section">
+      <div id="fb-overview-stats" class="dashboard-grid dashboard-stats"></div>
+      <div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 1.5rem; margin-top:1.5rem;">
+        <div class="card">
+          <div class="card-title"><i class="fa-solid fa-hourglass-half"></i> Próximas publicações</div>
+          <div id="fb-overview-upcoming" style="margin-top:1rem; display:flex; flex-direction:column; gap:10px;"></div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:1.2rem;">
+            <button type="button" class="btn btn-primary btn-sm" onclick="switchSection('facebook-new')"><i class="fa-solid fa-circle-plus"></i> Nova publicação</button>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="switchSection('facebook-bulk')"><i class="fa-solid fa-bolt-lightning"></i> Em massa</button>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="switchSection('facebook-calendar')"><i class="fa-solid fa-calendar-days"></i> Calendário</button>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="switchSection('facebook-metrics')"><i class="fa-solid fa-chart-line"></i> Resultados</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="section-facebook-calendar" class="section">
+      <div class="card" style="padding:1.2rem 2rem; margin-bottom:1.5rem;">
+        <div style="display:flex; align-items:center; gap:12px; overflow-x:auto;">
+          <span style="font-size:0.75rem; font-weight:600; color:var(--text-dim); text-transform:uppercase;">Filtrar Página:</span>
+          <div id="fb-filter-tabs" style="display:flex; gap:8px;"></div>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:2rem;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-calendar-days"></i> Calendário</div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button class="btn btn-ghost btn-sm" style="padding:0.5rem;" onclick="shiftNetworkMonth('facebook', -1)" aria-label="Mês anterior"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i></button>
+            <span id="fb-cal-label" style="font-weight:600; font-size:1rem; min-width:140px; text-align:center;"></span>
+            <button class="btn btn-ghost btn-sm" style="padding:0.5rem;" onclick="shiftNetworkMonth('facebook', 1)" aria-label="Próximo mês"><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button>
+          </div>
+        </div>
+        <div id="fb-calendar-grid" style="margin-top:1.5rem;"></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-list-ol"></i> Fila do Facebook</div>
+        <div id="facebook-queue-list" style="margin-top:1rem; display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:10px;">
+          <p style="color:var(--text-dim); font-size:0.85rem;">Nenhuma publicação ainda.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="section-facebook-metrics" class="section">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:1.5rem;">
+          <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+            <select id="fb-metrics-account-select" class="input" style="min-width:220px;" onchange="renderFacebookMetricsView()"></select>
+            <span id="fb-metrics-updated" style="font-size:0.75rem; color:var(--text-dim);"></span>
+          </div>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="renderFacebookMetricsView(true)"><i class="fa-solid fa-rotate"></i> Atualizar</button>
+        </div>
+        <div id="fb-metrics-body"></div>
+    </section>
+
+    <section id="section-facebook-new" class="section">
+      <div style="max-width:760px;">
         <div class="card">
           <div class="card-title"><i class="fa-solid fa-circle-plus"></i> Nova publicação</div>
           <form id="facebook-post-form" style="margin-top:1rem;" onsubmit="return false;">
             <div class="form-group">
               <label class="label"><i class="fa-solid fa-flag"></i> Página de Destino</label>
-              <select id="facebook-account-select" class="input"><option>Carregando Páginas...</option></select>
+              <select id="facebook-account-select" class="input" onchange="updateLivePreview('facebook')"><option>Carregando Páginas...</option></select>
             </div>
 
             <div class="form-group">
@@ -1341,7 +1465,7 @@
 
             <div class="form-group">
               <label class="label"><i class="fa-solid fa-pen-nib"></i> Texto</label>
-              <textarea class="textarea" id="facebook-caption" rows="4" placeholder="O que você quer publicar? (em vídeo, a primeira linha vira o título)"></textarea>
+              <textarea class="textarea" id="facebook-caption" oninput="updateLivePreview('facebook')" rows="4" placeholder="O que você quer publicar? (em vídeo, a primeira linha vira o título)"></textarea>
             </div>
 
             <div class="form-group">
@@ -1359,27 +1483,75 @@
             </button>
           </form>
         </div>
+      <div class="card rp-live" style="margin-top:1.5rem;">
+        <div class="card-title"><i class="fa-solid fa-eye"></i> Prévia real — como vai ficar no Facebook</div>
+        <div id="facebook-live-preview" style="margin-top:1rem;"></div>
       </div>
-
-      <!-- Fila do Facebook -->
-      <div class="card" style="margin-top:1.5rem;">
-        <div class="card-title"><i class="fa-solid fa-list-ol"></i> Fila do Facebook</div>
-        <div id="facebook-queue-list" style="margin-top:1rem; display:flex; flex-direction:column; gap:10px; max-height:520px; overflow-y:auto; padding-right:4px;">
-          <p style="color:var(--text-dim); font-size:0.85rem;">Nenhuma publicação ainda.</p>
-        </div>
       </div>
-          </div><!-- /fb-view-publish -->
+    </section>
 
-      <!-- Métricas -->
-      <div id="fb-view-metrics" style="display:none;">
-        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:1.5rem;">
-          <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-            <select id="fb-metrics-account-select" class="input" style="min-width:220px;" onchange="renderFacebookMetricsView()"></select>
-            <span id="fb-metrics-updated" style="font-size:0.75rem; color:var(--text-dim);"></span>
-          </div>
-          <button type="button" class="btn btn-ghost btn-sm" onclick="renderFacebookMetricsView(true)"><i class="fa-solid fa-rotate"></i> Atualizar</button>
+    <section id="section-facebook-bulk" class="section">
+      <div style="max-width:760px;">
+        <div class="card">
+          <div class="card-title"><i class="fa-solid fa-bolt-lightning"></i> Fotos e vídeos em massa</div>
+          <form id="facebook-bulk-form" style="margin-top:1rem;" onsubmit="return false;">
+            <div class="form-group">
+              <label class="label"><i class="fa-solid fa-flag"></i> Página de Destino</label>
+              <select id="facebook-bulk-account-select" class="input"><option>Carregando Páginas...</option></select>
+            </div>
+            <div class="form-group">
+              <label class="label"><i class="fa-solid fa-photo-film"></i> Fotos e vídeos (selecione vários — um post para cada)</label>
+              <div class="dropzone" id="facebook-bulk-dropzone" style="padding:1.4rem 1rem; border-style:dashed;">
+                <i class="fa-solid fa-cloud-arrow-up" style="font-size:2rem; color:var(--primary); margin-bottom:0.6rem;"></i>
+                <p style="font-weight:600; color:var(--text-main);">Arraste vários arquivos ou clique</p>
+                <p style="font-size:0.78rem; color:var(--text-dim); margin-top:4px;">Fotos viram foto na Página e vídeos viram vídeo, na ordem escolhida</p>
+                <input type="file" id="facebook-bulk-file-input" multiple accept="image/*,video/*" hidden>
+              </div>
+              <div id="facebook-bulk-preview-list" style="display:none; flex-direction:column; gap:8px; margin-top:0.8rem; max-height:300px; overflow-y:auto; padding-right:4px;"></div>
+            </div>
+            <div class="form-group">
+              <label class="label"><i class="fa-solid fa-pen-nib"></i> Texto padrão (usado nos arquivos sem texto próprio)</label>
+              <textarea class="textarea" id="facebook-bulk-caption" rows="3" placeholder="Legenda comum a todos os posts (opcional)"></textarea>
+            </div>
+            <div class="form-group">
+              <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+                <input type="checkbox" id="facebook-bulk-auto-times" checked style="width:16px; height:16px; accent-color:var(--primary);">
+                <label for="facebook-bulk-auto-times" style="font-size:0.82rem; color:var(--text-secondary); cursor:pointer;">Escolher os horários por mim (picos de audiência)</label>
+              </div>
+              <div class="col-2" style="gap:12px;">
+                <div>
+                  <label class="label" style="font-size:0.7rem;">Por dia (se automático)</label>
+                  <select class="input" id="facebook-bulk-per-day">
+                    <option value="1">1 por dia</option>
+                    <option value="2" selected>2 por dia</option>
+                    <option value="3">3 por dia</option>
+                    <option value="4">4 por dia</option>
+                    <option value="5">5 por dia</option>
+                    <option value="6">6 por dia</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="label" style="font-size:0.7rem;">Horários manuais (se desmarcado)</label>
+                  <input type="text" class="input" id="facebook-bulk-manual-times" placeholder="12:00,18:30">
+                </div>
+              </div>
+              <div style="margin-top:10px;">
+                <label class="label" style="font-size:0.7rem;">Começar em (opcional — padrão: a partir de agora)</label>
+                <input type="date" class="input" id="facebook-bulk-start-date">
+              </div>
+            </div>
+            <div id="facebook-bulk-progress-box" style="display:none; margin-bottom:1rem;">
+              <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-bottom:4px;">
+                <span id="facebook-bulk-progress-status" style="color:var(--accent);">Enviando arquivos...</span>
+                <span id="facebook-bulk-progress-percentage" style="font-weight:700;">0%</span>
+              </div>
+              <div class="progress-bar"><div class="progress-fill" id="facebook-bulk-progress-bar" style="width:0%;"></div></div>
+            </div>
+            <button type="button" class="btn btn-primary" id="btn-submit-facebook-bulk" style="width:100%; padding:1rem;" onclick="submitFacebookBulk()">
+              <i class="fa-solid fa-calendar-check"></i> Agendar lote
+            </button>
+          </form>
         </div>
-        <div id="fb-metrics-body"></div>
       </div>
     </section>
 

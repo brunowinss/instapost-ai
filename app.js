@@ -362,6 +362,7 @@ function setMobileNavigation(open) {
 }
 
 function setupNavigation() {
+  setupNavGroups();
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && document.body.classList.contains('nav-open')) setMobileNavigation(false);
   });
@@ -381,7 +382,12 @@ function switchSection(name) {
   // Update UI Navigation state
   document.querySelectorAll('.nav-item').forEach(n => { n.classList.remove('active'); n.removeAttribute('aria-current'); });
   const activeNavItem = document.querySelector(`.nav-item[data-section="${name}"]`);
-  if (activeNavItem) { activeNavItem.classList.add('active'); activeNavItem.setAttribute('aria-current', 'page'); }
+  if (activeNavItem) {
+    activeNavItem.classList.add('active');
+    activeNavItem.setAttribute('aria-current', 'page');
+    const group = activeNavItem.closest('.nav-group');
+    if (group) openNavGroup(group);
+  }
   
   // Update Header
   const titles = {
@@ -395,13 +401,24 @@ function switchSection(name) {
     'new-post': { t: 'Nova publicação', s: 'Escolha a conta, prepare seu conteúdo e defina quando publicar.' },
     'schedule': { t: 'Calendário', s: 'Organize seu calendário de conteúdo.' },
     'settings': { t: 'Configurações', s: 'Suas contas, integrações e preferências em um só lugar.' },
-    'youtube': { t: 'YouTube', s: 'Conecte canais e publique vídeos e Shorts no YouTube.' },
-    'facebook': { t: 'Facebook', s: 'Conecte suas Páginas e publique texto, fotos e vídeos.' },
+    'instagram-accounts': { t: 'Contas do Instagram', s: 'Conecte e gerencie as contas do Instagram.' },
+    'youtube-accounts': { t: 'Canais do YouTube', s: 'Conecte e gerencie os canais do YouTube.' },
+    'facebook-accounts': { t: 'Páginas do Facebook', s: 'Conecte e gerencie as Páginas do Facebook.' },
+    'youtube': { t: 'Visão geral do YouTube', s: 'Seus canais, o que está agendado e o que já saiu.' },
+    'youtube-calendar': { t: 'Calendário do YouTube', s: 'Organize os vídeos e Shorts de cada canal.' },
+    'youtube-metrics': { t: 'Resultados do YouTube', s: 'Inscritos, visualizações e desempenho dos vídeos.' },
+    'youtube-new': { t: 'Nova publicação no YouTube', s: 'Envie um vídeo ou Short agora ou no melhor horário.' },
+    'youtube-bulk': { t: 'Shorts e vídeos em massa', s: 'Suba vários vídeos e deixe os horários por conta do painel.' },
+    'facebook': { t: 'Visão geral do Facebook', s: 'Suas Páginas, o que está agendado e o que já saiu.' },
+    'facebook-calendar': { t: 'Calendário do Facebook', s: 'Organize as publicações de cada Página.' },
+    'facebook-metrics': { t: 'Resultados do Facebook', s: 'Seguidores, reações e desempenho dos posts.' },
+    'facebook-new': { t: 'Nova publicação no Facebook', s: 'Publique texto, foto ou vídeo agora ou no melhor horário.' },
+    'facebook-bulk': { t: 'Fotos e vídeos em massa', s: 'Suba vários arquivos e deixe os horários por conta do painel.' },
     'crosspost': { t: 'Publicar em várias redes', s: 'Um conteúdo, cada rede no melhor horário.' }
   };
   
   if (titles[name]) {
-    const brand = ['dashboard','schedule','analytics','new-post','bulk-reels','bulk-carousel','stories-loop'].includes(name) ? 'instagram' : (name === 'youtube' || name === 'facebook' ? name : null);
+    const brand = ['dashboard','instagram-accounts','schedule','analytics','new-post','bulk-reels','bulk-carousel','stories-loop'].includes(name) ? 'instagram' : (name.startsWith('youtube') ? 'youtube' : name.startsWith('facebook') ? 'facebook' : null);
     const titleEl = document.getElementById('page-title');
     titleEl.innerText = titles[name].t;
     if (brand) {
@@ -595,12 +612,12 @@ function renderActiveSection() {
   if (n === 'drive') renderDriveSection();
   if (n === 'analytics') renderAnalyticsSection();
   if (n === 'schedule') renderScheduleGrid();
-  if (n === 'settings') {
+  if (n === 'settings' || n === 'instagram-accounts') {
     renderSettings();
     renderSettingsAccounts();
   }
-  if (n === 'youtube') renderYoutubeSection();
-  if (n === 'facebook') renderFacebookSection();
+  if (n === 'youtube' || n.startsWith('youtube-')) renderYoutubeSection();
+  if (n === 'facebook' || n.startsWith('facebook-')) renderFacebookSection();
   if (n === 'crosspost') renderCrosspostSection();
 }
 
@@ -1384,11 +1401,7 @@ function setupForms() {
 
     const localUrl = URL.createObjectURL(first);
     const box = document.getElementById('preview-image-box');
-    if (isVideo) {
-      box.innerHTML = `<video src="${localUrl}" autoplay muted loop playsinline style="width:100%;height:100%;object-fit:cover;border-radius:12px;"></video>`;
-    } else {
-      box.innerHTML = `<img src="${localUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:12px;">`;
-    }
+    setInstagramPreviewMedia(localUrl, isVideo);
     
     const submitBtn = document.querySelector('#post-form button[type="submit"]');
     if (files.length > 1) {
@@ -3489,11 +3502,7 @@ function useDriveMediaInComposer(url) {
   STATE.uploadedUrl = url;
   const previewBox = document.getElementById('preview-image-box');
   if (previewBox) {
-    if (url.toLowerCase().includes('.mp4')) {
-      previewBox.innerHTML = `<video src="${url}" controls style="width:100%;height:100%;object-fit:cover;"></video>`;
-    } else {
-      previewBox.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;">`;
-    }
+    setInstagramPreviewMedia(url, /\.(mp4|mov)(\?|$)/i.test(url));
   }
   showToast('Mídia do acervo carregada no agendador!', 'success');
 }
@@ -4284,13 +4293,13 @@ function getYoutubeAccounts() {
 }
 
 function renderYoutubeSection() {
+  updateLivePreview('youtube');
   renderYoutubeChannelsList();
   populateYoutubeAccountSelectors();
   setupYoutubeDropzone();
   setupYoutubeBulkDropzone();
   renderYoutubeBulkPreviewList();
-  renderYoutubeQueueList();
-  switchYoutubeView(STATE.youtubeView || 'publish');
+  renderNetworkExtras('youtube');
 }
 
 function escapeHtml(text) {
@@ -4298,21 +4307,6 @@ function escapeHtml(text) {
 }
 
 const YT_STATS_TTL_MS = 5 * 60 * 1000;
-
-function switchYoutubeView(view) {
-  STATE.youtubeView = view;
-  const publish = document.getElementById('yt-view-publish');
-  const metrics = document.getElementById('yt-view-metrics');
-  if (publish) publish.style.display = view === 'publish' ? 'block' : 'none';
-  if (metrics) metrics.style.display = view === 'metrics' ? 'block' : 'none';
-  [['yt-tab-publish', 'publish'], ['yt-tab-metrics', 'metrics']].forEach(([id, value]) => {
-    const btn = document.getElementById(id);
-    if (!btn) return;
-    btn.classList.toggle('btn-primary', value === view);
-    btn.classList.toggle('btn-ghost', value !== view);
-  });
-  if (view === 'metrics') renderYoutubeMetricsView();
-}
 
 /** Métricas de um canal, com cache de 5 min no navegador (o servidor tem o seu). Erros não ficam em cache. */
 async function fetchYoutubeStats(accountId, force = false) {
@@ -4365,7 +4359,7 @@ async function renderYoutubeMetricsView(force = false) {
   const entry = await fetchYoutubeStats(accountId, force === true);
 
   // Quem está olhando pode ter trocado de canal ou de aba enquanto carregava.
-  if (STATE.youtubeView !== 'metrics' || select.value !== accountId) return;
+  if (STATE.activeSection !== 'youtube-metrics' || select.value !== accountId) return;
   if (entry.error) {
     body.innerHTML = notice('fa-circle-exclamation', `Métricas indisponíveis: ${escapeHtml(entry.error)}`);
     return;
@@ -4481,6 +4475,7 @@ function populateYoutubeAccountSelectors() {
 
 function setYoutubePostType(type) {
   STATE.youtubePostType = type;
+  setTimeout(() => updateLivePreview('youtube'), 0);
   [['yt-type-short', 'YOUTUBE_SHORT'], ['yt-type-video', 'YOUTUBE_VIDEO']].forEach(([id, value]) => {
     const btn = document.getElementById(id);
     if (!btn) return;
@@ -4520,6 +4515,7 @@ function handleYoutubeFileSelect(file) {
     return;
   }
   STATE.youtubeFile = file;
+  setTimeout(() => updateLivePreview('youtube'), 0);
   const summaryEl = document.getElementById('youtube-file-summary');
   if (summaryEl) {
     summaryEl.style.display = 'flex';
@@ -4547,6 +4543,7 @@ async function submitYoutubePost() {
   const accountId = document.getElementById('youtube-account-select')?.value;
   const title = document.getElementById('youtube-title-input')?.value.trim();
   const description = document.getElementById('youtube-description-input')?.value.trim();
+  const when = document.getElementById('youtube-when')?.value || 'smart';
   const scheduleInput = document.getElementById('youtube-schedule-input')?.value;
   const mediaType = STATE.youtubePostType || 'YOUTUBE_SHORT';
   const file = STATE.youtubeFile;
@@ -4555,7 +4552,14 @@ async function submitYoutubePost() {
   if (!file) return showToast('Selecione o arquivo de vídeo.', 'warning');
   if (!title) return showToast('Digite um título.', 'warning');
 
-  const scheduledAt = scheduleInput ? new Date(scheduleInput).toISOString() : new Date().toISOString();
+  if (when === 'manual' && !scheduleInput) return showToast('Escolha a data e a hora.', 'warning');
+  let scheduledAt = new Date().toISOString();
+  if (when === 'manual') scheduledAt = new Date(scheduleInput).toISOString();
+  if (when === 'smart') {
+    const [slot] = (await fetchSmartTimes(accountId, 1)) || [];
+    if (!slot) return showToast('Não consegui calcular o melhor horário agora. Tente "Agora" ou escolha uma data.', 'error');
+    scheduledAt = slot.toISOString();
+  }
   const caption = description ? `${title}\n\n${description}` : title;
 
   const btn = document.getElementById('btn-submit-youtube-post');
@@ -4581,7 +4585,8 @@ async function submitYoutubePost() {
     const data = await res.json();
     if (!data.success) throw new Error(data.error || 'Falha ao salvar a publicação.');
 
-    showToast('Vídeo agendado para o YouTube!', 'success');
+    if (when === 'now') fetch(`${API_BASE}/scheduler/run-now`, { method: 'POST' }).catch(() => {});
+    showToast(when === 'now' ? 'Vídeo enviado — o YouTube leva alguns minutos para processar.' : 'Vídeo agendado para o YouTube!', 'success');
     document.getElementById('youtube-title-input').value = '';
     document.getElementById('youtube-description-input').value = '';
     document.getElementById('youtube-schedule-input').value = '';
@@ -4697,7 +4702,7 @@ function renderYoutubeBulkPreviewList() {
   list.style.display = 'flex';
   list.innerHTML = items.map((item, idx) => `
     <div style="display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.03); border:1px solid var(--border-color); border-radius:10px; padding:8px 10px;">
-      <div style="width:48px; height:48px; border-radius:8px; overflow:hidden; background:var(--primary-bg); color:var(--primary); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+      <div class="rp-thumb-open" role="button" tabindex="0" title="Ver prévia real" onclick="previewYoutubeBulk(${idx})" onkeydown="if(event.key==='Enter')previewYoutubeBulk(${idx})" style="width:48px; height:48px; border-radius:8px; overflow:hidden; background:var(--primary-bg); color:var(--primary); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
         ${item.thumbnail ? `<img src="${item.thumbnail}" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fa-solid fa-video"></i>'}
       </div>
       <div style="flex:1; min-width:0;">
@@ -4821,7 +4826,7 @@ function renderYoutubeQueueList() {
   const list = document.getElementById('youtube-queue-list');
   if (!list) return;
 
-  const posts = [...(STATE.youtubeScheduled || []), ...(STATE.youtubeHistory || [])]
+  const posts = networkPosts('youtube')
     .sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt));
 
   if (posts.length === 0) {
@@ -4873,13 +4878,15 @@ function getFacebookAccounts() {
 }
 
 function renderFacebookSection() {
+  updateLivePreview('facebook');
   renderFacebookPagesList();
   checkFacebookPages();
   populateFacebookSelect();
   setupFacebookDropzone();
   applyFacebookTypeUI();
-  renderFacebookQueue();
-  switchFacebookView(STATE.facebookView || 'publish');
+  setupFacebookBulkDropzone();
+  renderFacebookBulkList();
+  renderNetworkExtras('facebook');
 }
 
 function renderFacebookPagesList() {
@@ -4913,17 +4920,19 @@ function renderFacebookPagesList() {
 }
 
 function populateFacebookSelect() {
-  const select = document.getElementById('facebook-account-select');
-  if (!select) return;
   const pages = getFacebookAccounts();
-  if (pages.length === 0) {
-    select.innerHTML = '<option value="">Nenhuma Página conectada</option>';
-    return;
-  }
-  const previous = select.value;
-  select.innerHTML = pages.map(p =>
-    `<option value="${escapeHtml(p.accountId)}" ${p.accountId === previous ? 'selected' : ''}>${escapeHtml(p.username)}</option>`
-  ).join('');
+  ['facebook-account-select', 'facebook-bulk-account-select'].forEach(id => {
+    const select = document.getElementById(id);
+    if (!select) return;
+    if (pages.length === 0) {
+      select.innerHTML = '<option value="">Nenhuma Página conectada</option>';
+      return;
+    }
+    const previous = select.value;
+    select.innerHTML = pages.map(p =>
+      `<option value="${escapeHtml(p.accountId)}" ${p.accountId === previous ? 'selected' : ''}>${escapeHtml(p.username)}</option>`
+    ).join('');
+  });
 }
 
 function setFacebookPostType(type) {
@@ -4985,6 +4994,7 @@ function handleFacebookFiles(files) {
 }
 
 function renderFacebookPreview() {
+  updateLivePreview('facebook');
   const box = document.getElementById('facebook-preview');
   if (!box) return;
   const items = STATE.facebookFiles || [];
@@ -5000,6 +5010,11 @@ function renderFacebookPreview() {
 function removeFacebookFile(index) {
   STATE.facebookFiles.splice(index, 1);
   renderFacebookPreview();
+}
+
+function onYoutubeWhenChange() {
+  const input = document.getElementById('youtube-schedule-input');
+  if (input) input.style.display = document.getElementById('youtube-when')?.value === 'manual' ? 'block' : 'none';
 }
 
 function onFacebookWhenChange() {
@@ -5102,7 +5117,7 @@ function renderFacebookQueue() {
   const list = document.getElementById('facebook-queue-list');
   if (!list) return;
 
-  const items = [...(STATE.facebookScheduled || []), ...(STATE.facebookHistory || [])]
+  const items = networkPosts('facebook')
     .sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt));
 
   if (items.length === 0) {
@@ -5199,21 +5214,6 @@ async function checkFacebookPages() {
 
 // ---- Facebook: desempenho ----
 
-function switchFacebookView(view) {
-  STATE.facebookView = view;
-  const publish = document.getElementById('fb-view-publish');
-  const metrics = document.getElementById('fb-view-metrics');
-  if (publish) publish.style.display = view === 'publish' ? 'block' : 'none';
-  if (metrics) metrics.style.display = view === 'metrics' ? 'block' : 'none';
-  [['fb-tab-publish', 'publish'], ['fb-tab-metrics', 'metrics']].forEach(([id, value]) => {
-    const btn = document.getElementById(id);
-    if (!btn) return;
-    btn.classList.toggle('btn-primary', value === view);
-    btn.classList.toggle('btn-ghost', value !== view);
-  });
-  if (view === 'metrics') renderFacebookMetricsView();
-}
-
 /** Desempenho de uma Página, com cache de 5 min no navegador (o servidor tem o seu). Erros não ficam em cache. */
 async function fetchFacebookStats(accountId, force = false) {
   STATE.facebookStats = STATE.facebookStats || {};
@@ -5265,7 +5265,7 @@ async function renderFacebookMetricsView(force = false) {
   const entry = await fetchFacebookStats(accountId, force === true);
 
   // Quem está olhando pode ter trocado de Página ou de aba enquanto carregava.
-  if (STATE.facebookView !== 'metrics' || select.value !== accountId) return;
+  if (STATE.activeSection !== 'facebook-metrics' || select.value !== accountId) return;
   if (entry.error) {
     body.innerHTML = notice('fa-circle-exclamation', `Desempenho indisponível: ${escapeHtml(entry.error)}`);
     return;
@@ -5386,10 +5386,12 @@ function renderCrosspostPreview() {
   const box = document.getElementById('crosspost-preview');
   if (!box) return;
   const items = STATE.crosspostFiles || [];
+  const previewBtn = document.getElementById('crosspost-preview-btn');
+  if (previewBtn) previewBtn.style.display = items.length ? 'inline-flex' : 'none';
   if (items.length === 0) { box.style.display = 'none'; box.innerHTML = ''; return; }
   box.style.display = 'grid';
   box.innerHTML = items.map((item, idx) => `
-    <div style="position:relative; aspect-ratio:1; border-radius:8px; overflow:hidden; background:var(--primary-bg); border:1px solid var(--border-color); display:flex; align-items:center; justify-content:center; color:var(--primary);">
+    <div class="rp-thumb-open" role="button" tabindex="0" title="Ver prévia real" onclick="previewCrosspost(${idx})" style="position:relative; aspect-ratio:1; border-radius:8px; overflow:hidden; background:var(--primary-bg); border:1px solid var(--border-color); display:flex; align-items:center; justify-content:center; color:var(--primary);">
       ${item.thumb ? `<img src="${escapeHtml(item.thumb)}" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fa-solid fa-video"></i>'}
       ${item.file.type.startsWith('video/') ? '<span style="position:absolute; bottom:4px; left:4px; background:rgba(0,0,0,0.7); color:#fff; font-size:0.6rem; padding:1px 5px; border-radius:4px;"><i class="fa-solid fa-play"></i></span>' : ''}
       <span style="position:absolute; top:4px; right:4px; background:rgba(239,68,68,0.85); color:#fff; width:18px; height:18px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.6rem; cursor:pointer;" onclick="removeCrosspostFile(${idx})"><i class="fa-solid fa-times"></i></span>
@@ -5613,4 +5615,599 @@ async function trackCrosspost(entries, publishNow) {
     paint();
     if (entries.every(entry => { const p = findPostById(entry.id); return p && (p.status === 'success' || p.status === 'error'); })) return;
   }
+}
+
+
+// ============================================================
+// 🌐 YOUTUBE E FACEBOOK: visão geral, calendário e fila (mesma estrutura do Instagram)
+// ============================================================
+
+const NETWORK_UI = {
+  youtube: {
+    prefix: 'yt', label: 'YouTube', icon: 'fa-brands fa-youtube', color: '#ff0000', accountWord: 'canais',
+    accounts: () => getYoutubeAccounts(),
+    posts: () => [...(STATE.youtubeScheduled || []), ...(STATE.youtubeHistory || [])],
+    title: (p) => (p.caption || '').split('\n')[0] || '(sem título)',
+    typeIcon: (p) => p.mediaType === 'YOUTUBE_SHORT' ? 'fa-film' : 'fa-video',
+    render: () => renderYoutubeQueueList()
+  },
+  facebook: {
+    prefix: 'fb', label: 'Facebook', icon: 'fa-brands fa-facebook', color: '#1877f2', accountWord: 'Páginas',
+    accounts: () => getFacebookAccounts(),
+    posts: () => [...(STATE.facebookScheduled || []), ...(STATE.facebookHistory || [])],
+    title: (p) => (p.caption || '').split('\n')[0] || '(sem texto)',
+    typeIcon: (p) => p.mediaType === 'FB_TEXT' ? 'fa-align-left' : p.mediaType === 'FB_VIDEO' ? 'fa-video' : 'fa-image',
+    render: () => renderFacebookQueue()
+  }
+};
+
+const NETWORK_STATUS = {
+  pending: { label: 'Agendado', color: 'var(--accent)' },
+  processing: { label: 'Publicando...', color: 'var(--warning)' },
+  success: { label: 'Publicado', color: 'var(--success)' },
+  error: { label: 'Erro', color: 'var(--error)' }
+};
+
+/** Posts da rede, já respeitando o filtro de conta escolhido no calendário. */
+function networkPosts(net) {
+  const filter = (STATE.netFilter || {})[net];
+  const posts = NETWORK_UI[net].posts();
+  return !filter || filter === 'all' ? posts : posts.filter(p => p.accountId === filter);
+}
+
+/** Desenha tudo que é comum às telas de uma rede; cada tela mostra só o seu pedaço. */
+function renderNetworkExtras(net) {
+  renderNetworkOverview(net);
+  renderNetworkFilterTabs(net);
+  renderNetworkCalendar(net);
+  NETWORK_UI[net].render();
+  if (STATE.activeSection === `${net}-metrics`) {
+    if (net === 'youtube') renderYoutubeMetricsView();
+    else renderFacebookMetricsView();
+  }
+}
+
+function renderNetworkOverview(net) {
+  const ui = NETWORK_UI[net];
+  const statsBox = document.getElementById(`${ui.prefix}-overview-stats`);
+  const upcomingBox = document.getElementById(`${ui.prefix}-overview-upcoming`);
+  if (!statsBox || !upcomingBox) return;
+
+  const posts = ui.posts();
+  const accounts = ui.accounts();
+  const count = (...statuses) => posts.filter(p => statuses.includes(p.status)).length;
+  const broken = accounts.filter(a => !a.hasToken).length;
+  const stat = (icon, label, value, desc) => `
+    <div class="card">
+      <div class="card-title"><i class="fa-solid ${icon}"></i> ${label}</div>
+      <div class="stat-value">${value}</div>
+      <p class="stat-desc">${desc}</p>
+    </div>`;
+
+  statsBox.innerHTML = [
+    stat('fa-clock', 'Agendados', count('pending', 'processing'), 'Esperando a hora de sair'),
+    stat('fa-circle-check', 'Publicados', count('success'), 'Já no ar'),
+    stat('fa-triangle-exclamation', 'Com erro', count('error'), count('error') ? 'Veja o motivo no calendário' : 'Nenhum problema'),
+    stat('fa-plug', `Contas (${ui.accountWord})`, accounts.length, broken ? `${broken} precisa(m) reconectar` : accounts.length ? 'Todas com acesso' : 'Nenhuma conectada ainda')
+  ].join('');
+
+  const upcoming = posts.filter(p => p.status === 'pending')
+    .sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt)).slice(0, 5);
+  if (upcoming.length === 0) {
+    upcomingBox.innerHTML = '<p style="color:var(--text-dim); font-size:0.85rem;">Nada agendado. Crie uma publicação ou um lote.</p>';
+    return;
+  }
+  upcomingBox.innerHTML = upcoming.map(p => {
+    const account = accounts.find(a => a.accountId === p.accountId);
+    const when = new Date(p.scheduledAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+    return `
+    <div style="display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.03); border:1px solid var(--border-color); border-radius:10px; padding:10px 14px;">
+      <i class="fa-solid ${ui.typeIcon(p)}" style="color:${ui.color};" aria-hidden="true"></i>
+      <div style="flex:1; min-width:0;">
+        <div style="font-weight:600; font-size:0.85rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(ui.title(p))}</div>
+        <div style="font-size:0.72rem; color:var(--text-dim);">${escapeHtml(account ? account.username : p.accountId)} · ${when}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderNetworkFilterTabs(net) {
+  const ui = NETWORK_UI[net];
+  const container = document.getElementById(`${ui.prefix}-filter-tabs`);
+  if (!container) return;
+  const current = (STATE.netFilter || {})[net] || 'all';
+  const tab = (id, text, count) => {
+    const active = current === id;
+    return `<button class="btn btn-sm ${active ? 'btn-primary' : 'btn-ghost'}" aria-pressed="${active}" onclick="setNetworkFilter('${net}', '${escapeHtml(id)}')" style="border-radius:100px; font-size:0.75rem; padding:0.5rem 1rem; white-space:nowrap;">${text} <span style="opacity:0.6; margin-left:4px;">(${count})</span></button>`;
+  };
+  const posts = ui.posts();
+  container.innerHTML = tab('all', 'Todas', posts.length) +
+    ui.accounts().map(a => tab(a.accountId, escapeHtml(a.username), posts.filter(p => p.accountId === a.accountId).length)).join('');
+}
+
+function setNetworkFilter(net, accountId) {
+  STATE.netFilter = Object.assign({}, STATE.netFilter, { [net]: accountId || 'all' });
+  renderNetworkFilterTabs(net);
+  renderNetworkCalendar(net);
+  NETWORK_UI[net].render();
+}
+
+function shiftNetworkMonth(net, delta) {
+  const current = (STATE.netCalendar || {})[net] || new Date();
+  const next = new Date(current.getFullYear(), current.getMonth() + delta, 1);
+  STATE.netCalendar = Object.assign({}, STATE.netCalendar, { [net]: next });
+  renderNetworkCalendar(net);
+}
+
+function renderNetworkCalendar(net) {
+  const ui = NETWORK_UI[net];
+  const grid = document.getElementById(`${ui.prefix}-calendar-grid`);
+  const label = document.getElementById(`${ui.prefix}-cal-label`);
+  if (!grid || !label) return;
+
+  const reference = (STATE.netCalendar || {})[net] || new Date();
+  const year = reference.getFullYear();
+  const month = reference.getMonth();
+  const months = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  label.innerText = `${months[month]} ${year}`;
+
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const today = new Date();
+
+  const byDay = new Map();
+  networkPosts(net).forEach(p => {
+    const d = new Date(p.scheduledAt);
+    if (d.getMonth() === month && d.getFullYear() === year) {
+      if (!byDay.has(d.getDate())) byDay.set(d.getDate(), []);
+      byDay.get(d.getDate()).push(p);
+    }
+  });
+
+  let html = '<div class="cal-header">';
+  ['DOM','SEG','TER','QUA','QUI','SEX','SÁB'].forEach(d => html += `<div class="cal-header-cell">${d}</div>`);
+  html += '</div><div class="cal-grid">';
+  for (let i = 0; i < firstDay; i++) html += '<div class="cal-day empty"></div>';
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dayPosts = byDay.get(day) || [];
+    const classes = ['cal-day'];
+    if (today.getDate() === day && today.getMonth() === month && today.getFullYear() === year) classes.push('today');
+    if (dayPosts.length > 0) classes.push('has-posts');
+
+    let thumbs = '';
+    if (dayPosts.length > 0) {
+      const shown = dayPosts.slice(0, 2).map(p => {
+        const url = p.mediaType === 'FB_TEXT' ? '' : getThumbnailUrl(p.imageUrl);
+        return url
+          ? `<img class="cal-day-thumb" src="${escapeHtml(url)}" loading="lazy" onerror="this.style.display='none';" data-tip="${escapeHtml(p.status)}">`
+          : `<div class="cal-day-thumb" style="display:flex;align-items:center;justify-content:center;background:rgba(16,184,245,0.15);" data-tip="${escapeHtml(p.status)}"><i class="fa-solid ${ui.typeIcon(p)}" style="font-size:0.5rem;color:var(--accent);"></i></div>`;
+      }).join('');
+      const overflow = dayPosts.length > 2 ? `<div class="cal-day-thumb-overflow">+${dayPosts.length - 2}</div>` : '';
+      thumbs = `<div class="cal-day-thumbs">${shown}${overflow}</div><span class="cal-day-count" aria-label="${dayPosts.length} publicações">${dayPosts.length}</span>`;
+    }
+    html += `<div class="${classes.join(' ')}">${day}${thumbs}</div>`;
+  }
+
+  html += `</div><div class="cal-legend">
+    <span><span class="cal-legend-dot" style="background:var(--warning);"></span> Pendente</span>
+    <span><span class="cal-legend-dot" style="background:var(--success);"></span> Sucesso</span>
+    <span><span class="cal-legend-dot" style="background:var(--error);"></span> Falhou</span>
+  </div>`;
+  grid.innerHTML = html;
+}
+
+
+// ============================================================
+// 📘 FACEBOOK: fotos e vídeos em massa
+// ============================================================
+
+function setupFacebookBulkDropzone() {
+  const dropzone = document.getElementById('facebook-bulk-dropzone');
+  const input = document.getElementById('facebook-bulk-file-input');
+  if (!dropzone || !input) return;
+  dropzone.onclick = () => input.click();
+  input.onchange = (e) => { handleFacebookBulkFiles(Array.from(e.target.files)); e.target.value = ''; };
+  dropzone.ondragover = (e) => { e.preventDefault(); dropzone.style.borderColor = 'var(--primary)'; };
+  dropzone.ondragleave = () => { dropzone.style.borderColor = 'var(--border-color)'; };
+  dropzone.ondrop = (e) => {
+    e.preventDefault();
+    dropzone.style.borderColor = 'var(--border-color)';
+    if (e.dataTransfer.files?.length) handleFacebookBulkFiles(Array.from(e.dataTransfer.files));
+  };
+}
+
+function handleFacebookBulkFiles(files) {
+  const valid = files.filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'));
+  if (valid.length === 0) return showToast('Escolha fotos ou vídeos.', 'warning');
+  const added = valid.map(file => ({ file, caption: '', thumb: file.type.startsWith('image/') ? URL.createObjectURL(file) : null }));
+  STATE.facebookBulkFiles = [...(STATE.facebookBulkFiles || []), ...added];
+  renderFacebookBulkList();
+  added.forEach((item) => {
+    if (item.thumb) return;
+    generateVideoThumbnail(item.file).then(thumb => {
+      if (!STATE.facebookBulkFiles.includes(item)) return;
+      item.thumb = thumb;
+      renderFacebookBulkList();
+    });
+  });
+}
+
+function renderFacebookBulkList() {
+  const list = document.getElementById('facebook-bulk-preview-list');
+  if (!list) return;
+  const items = STATE.facebookBulkFiles || [];
+  if (items.length === 0) { list.style.display = 'none'; list.innerHTML = ''; return; }
+  list.style.display = 'flex';
+  list.innerHTML = items.map((item, idx) => `
+    <div style="display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.03); border:1px solid var(--border-color); border-radius:10px; padding:8px 10px;">
+      <div class="rp-thumb-open" role="button" tabindex="0" title="Ver prévia real" onclick="previewFacebookBulk(${idx})" onkeydown="if(event.key==='Enter')previewFacebookBulk(${idx})" style="width:48px; height:48px; border-radius:8px; overflow:hidden; background:var(--primary-bg); color:var(--primary); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+        ${item.thumb ? `<img src="${escapeHtml(item.thumb)}" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fa-solid fa-video"></i>'}
+      </div>
+      <div style="flex:1; min-width:0;">
+        <input type="text" class="input" style="padding:6px 10px; font-size:0.82rem;" placeholder="Texto deste post (opcional)" value="${escapeHtml(item.caption)}" oninput="updateFacebookBulkCaption(${idx}, this.value)">
+        <div style="font-size:0.68rem; color:var(--text-dim); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">#${idx + 1} · ${item.file.type.startsWith('video/') ? 'Vídeo' : 'Foto'} · ${escapeHtml(item.file.name)}</div>
+      </div>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="removeFacebookBulkFile(${idx})" aria-label="Remover" style="padding:4px 8px; color:var(--error); flex-shrink:0;"><i class="fa-solid fa-trash"></i></button>
+    </div>`).join('');
+}
+
+function updateFacebookBulkCaption(index, value) {
+  if (STATE.facebookBulkFiles[index]) STATE.facebookBulkFiles[index].caption = value;
+}
+
+function removeFacebookBulkFile(index) {
+  STATE.facebookBulkFiles.splice(index, 1);
+  renderFacebookBulkList();
+}
+
+/** "12:00,18:30" → horários dos próximos dias, um por arquivo, pulando o que já passou. Devolve null se algo estiver inválido. */
+function manualSlotsFor(count, timesText, startDate) {
+  const times = timesText.split(/[,\s;]+/).filter(Boolean).map(t => t.match(/^(\d{1,2}):(\d{2})$/));
+  if (times.length === 0 || times.some(m => !m || +m[1] > 23 || +m[2] > 59)) return null;
+  const slots = [];
+  const start = startDate ? new Date(`${startDate}T00:00:00`) : new Date();
+  start.setHours(0, 0, 0, 0);
+  const now = Date.now();
+  for (let day = 0; slots.length < count && day < 400; day++) {
+    for (const m of times) {
+      const slot = new Date(start);
+      slot.setDate(start.getDate() + day);
+      slot.setHours(+m[1], +m[2], 0, 0);
+      if (slot.getTime() > now) slots.push(slot);
+      if (slots.length === count) break;
+    }
+  }
+  return slots.length === count ? slots : null;
+}
+
+async function submitFacebookBulk() {
+  const accountId = document.getElementById('facebook-bulk-account-select')?.value;
+  const common = document.getElementById('facebook-bulk-caption')?.value.trim() || '';
+  const auto = document.getElementById('facebook-bulk-auto-times')?.checked;
+  const perDay = parseInt(document.getElementById('facebook-bulk-per-day')?.value, 10) || 2;
+  const manual = document.getElementById('facebook-bulk-manual-times')?.value.trim();
+  const startDate = document.getElementById('facebook-bulk-start-date')?.value;
+  const files = STATE.facebookBulkFiles || [];
+
+  if (!accountId) return showToast('Conecte e escolha uma Página do Facebook.', 'warning');
+  if (files.length === 0) return showToast('Escolha as fotos e vídeos primeiro.', 'warning');
+  if (!auto && !manual) return showToast('Informe os horários manuais ou marque "Escolher por mim".', 'warning');
+
+  let times;
+  if (auto) {
+    times = await fetchSmartTimes(accountId, files.length, startDate, { perDay });
+    if (!times) return showToast('Não consegui calcular os horários agora. Tente de novo ou use horários manuais.', 'error');
+  } else {
+    times = manualSlotsFor(files.length, manual, startDate);
+    if (!times) return showToast('Horários inválidos. Use o formato 12:00,18:30.', 'warning');
+  }
+
+  const btn = document.getElementById('btn-submit-facebook-bulk');
+  const box = document.getElementById('facebook-bulk-progress-box');
+  const bar = document.getElementById('facebook-bulk-progress-bar');
+  const status = document.getElementById('facebook-bulk-progress-status');
+  const pct = document.getElementById('facebook-bulk-progress-percentage');
+  if (btn) btn.disabled = true;
+  if (box) box.style.display = 'block';
+
+  let ok = 0;
+  const failed = [];
+  for (let i = 0; i < files.length; i++) {
+    const { file, caption } = files[i];
+    const percent = Math.round((i / files.length) * 100);
+    if (bar) bar.style.width = `${percent}%`;
+    if (pct) pct.innerText = `${percent}%`;
+    if (status) status.innerText = `Enviando ${i + 1} de ${files.length} (${file.name})...`;
+    try {
+      const isVideo = file.type.startsWith('video/');
+      const url = isVideo ? await uploadToCloudinary(file) : await uploadStoryMedia(file);
+      const post = {
+        id: `fb_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 6)}`,
+        accountId,
+        mediaType: isVideo ? 'FB_VIDEO' : 'FB_PHOTO',
+        imageUrl: url,
+        caption: caption.trim() || common,
+        scheduledAt: times[i].toISOString(),
+        status: 'pending',
+        platform: 'facebook'
+      };
+      const res = await fetch(`${API_BASE}/save-post`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(post) });
+      if (!res.ok) throw new Error('não foi possível salvar');
+      ok++;
+    } catch (err) {
+      failed.push(`${file.name}: ${err.message}`);
+    }
+  }
+
+  if (btn) btn.disabled = false;
+  if (box) box.style.display = 'none';
+  failed.forEach(message => showToast(message, 'error'));
+  if (ok > 0) {
+    showToast(`🎉 ${ok} publicação(ões) agendada(s) no Facebook!`, 'success');
+    STATE.facebookBulkFiles = failed.length ? files.filter(f => failed.some(m => m.startsWith(f.file.name + ':'))) : [];
+    renderFacebookBulkList();
+    await loadData();
+  }
+}
+
+
+/** Menu em sanfona: só um grupo fica aberto por vez (Instagram, YouTube, Facebook...). */
+function setNavGroupCollapsed(group, collapsed) {
+  group.classList.toggle('collapsed', collapsed);
+  group.querySelector('.nav-group-label')?.setAttribute('aria-expanded', String(!collapsed));
+}
+
+function openNavGroup(group) {
+  document.querySelectorAll('.nav-group').forEach(other => setNavGroupCollapsed(other, other !== group));
+}
+
+function setupNavGroups() {
+  const groups = document.querySelectorAll('.nav-group');
+  const current = Array.from(groups).find(g => g.querySelector('.nav-item.active')) || groups[0];
+  if (current) openNavGroup(current);
+  groups.forEach(group => {
+    group.querySelector('.nav-group-label')?.addEventListener('click', () => {
+      if (group.classList.contains('collapsed')) openNavGroup(group);
+      else setNavGroupCollapsed(group, true);
+    });
+  });
+}
+
+
+// ============================================================
+// 👁️ PRÉVIA REAL — o post como vai aparecer na rede
+// ============================================================
+
+const RP_ICONS = { instagram: 'fa-brands fa-instagram', facebook: 'fa-brands fa-facebook', youtube: 'fa-brands fa-youtube' };
+const RP_NAMES = { instagram: 'Instagram', facebook: 'Facebook', youtube: 'YouTube' };
+const RP_URLS = new WeakMap();
+
+/** URL local do arquivo escolhido (uma só por arquivo, para não recriar a cada tecla digitada). */
+function rpUrlFor(file) {
+  if (!file) return '';
+  if (!RP_URLS.has(file)) RP_URLS.set(file, URL.createObjectURL(file));
+  return RP_URLS.get(file);
+}
+
+function rpAvatar(o, fallbackIcon) {
+  const url = o.avatar && /^https?:\/\//.test(o.avatar) ? o.avatar : '';
+  const bg = url ? ` style="background-image:url('${escapeHtml(url)}')"` : '';
+  return `<div class="rp-avatar"${bg}>${url ? '' : `<i class="${fallbackIcon}" aria-hidden="true"></i>`}</div>`;
+}
+
+function rpMedia(o, { autoplay = false } = {}) {
+  if (!o.src) return '';
+  if (o.isVideo) {
+    if (autoplay) {
+      // Moldura de celular: sem barra do navegador, toca mudo em loop; clicar pausa e o botão liga o som.
+      return `<video src="${escapeHtml(o.src)}#t=0.1" autoplay muted loop playsinline preload="metadata" onclick="rpToggle(this)"></video><button type="button" class="rp-sound" aria-label="Ligar ou desligar o som" onclick="rpSound(this)"><i class="fa-solid fa-volume-xmark"></i></button>`;
+    }
+    return `<video src="${escapeHtml(o.src)}#t=0.1" controls playsinline muted loop preload="metadata"></video>`;
+  }
+  return `<img class="rp-media" src="${escapeHtml(o.src)}" alt="">`;
+}
+
+/**
+ * HTML da prévia de um post. `o`: { network, mediaType, src, isVideo, username, avatar, title, caption, note }
+ * network: instagram | facebook | youtube
+ */
+function realPreviewHtml(o) {
+  const network = o.network;
+  const username = o.username || (network === 'instagram' ? 'seu_perfil' : 'Sua conta');
+  const caption = (o.caption || '').trim();
+  const wrap = (kind, inner) => `
+    <div class="rp-wrap">
+      <div class="rp-label"><i class="${RP_ICONS[network]}" aria-hidden="true"></i> Como vai ficar no ${RP_NAMES[network]} · ${kind}</div>
+      <div class="rp">${inner}</div>
+      ${o.note ? `<div style="font-size:0.72rem; color:var(--text-dim); text-align:center;">${escapeHtml(o.note)}</div>` : ''}
+    </div>`;
+  const empty = (kind, text) => wrap(kind, `<div class="rp-empty">${text}</div>`);
+
+  if (network === 'instagram') {
+    const isStory = o.mediaType === 'STORIES';
+    const vertical = o.isVideo || o.mediaType === 'REELS' || isStory;
+    if (!o.src) return empty(vertical ? 'Reels' : 'Feed', 'Escolha uma foto ou vídeo para ver a prévia.');
+    if (vertical) {
+      return wrap(isStory ? 'Story' : 'Reels', `
+        <div class="rp-phone">
+          ${rpMedia(o, { autoplay: true })}
+          <div class="rp-badge">${isStory ? '' : 'Reels'}</div>
+          ${isStory ? '<div style="position:absolute; top:10px; left:12px; right:12px; height:3px; background:rgba(255,255,255,.35); border-radius:3px; z-index:2;"><div style="width:35%; height:100%; background:#fff; border-radius:3px;"></div></div>' : ''}
+          ${isStory ? '' : `<div class="rp-rail"><div><i class="fa-regular fa-heart"></i><small>0</small></div><div><i class="fa-regular fa-comment"></i><small>0</small></div><div><i class="fa-regular fa-paper-plane"></i></div><div><i class="fa-solid fa-ellipsis"></i></div></div>`}
+          <div class="rp-overlay">
+            <div class="rp-user">${rpAvatar(o, 'fa-brands fa-instagram')}<span>${escapeHtml(username)}</span>${isStory ? '' : '<span style="border:1px solid #fff; border-radius:6px; padding:1px 8px; font-size:11px; font-weight:600;">Seguir</span>'}</div>
+            ${caption && !isStory ? `<div class="rp-text">${escapeHtml(caption)}</div>` : ''}
+          </div>
+        </div>`);
+    }
+    return wrap('Feed', `
+      <div class="rp-card">
+        <div class="rp-card-head">${rpAvatar(o, 'fa-brands fa-instagram')}<div><b>${escapeHtml(username)}</b></div><i class="fa-solid fa-ellipsis" style="margin-left:auto;"></i></div>
+        <div class="rp-card-media rp-feed45">${rpMedia(o)}</div>
+        <div class="rp-card-actions"><i class="fa-regular fa-heart"></i><i class="fa-regular fa-comment"></i><i class="fa-regular fa-paper-plane"></i><i class="fa-regular fa-bookmark" style="margin-left:auto;"></i></div>
+        <div class="rp-card-text"><b>${escapeHtml(username)}</b> ${escapeHtml(caption)}</div>
+      </div>`);
+  }
+
+  if (network === 'facebook') {
+    const kind = o.mediaType === 'FB_TEXT' ? 'Texto' : o.isVideo ? 'Vídeo' : 'Foto';
+    if (o.mediaType !== 'FB_TEXT' && !o.src) return empty(kind, 'Escolha um arquivo para ver a prévia.');
+    return wrap(kind, `
+      <div class="rp-card">
+        <div class="rp-card-head">${rpAvatar(o, 'fa-brands fa-facebook')}<div><b>${escapeHtml(username)}</b><small>Agora · <i class="fa-solid fa-earth-americas"></i></small></div><i class="fa-solid fa-ellipsis" style="margin-left:auto;"></i></div>
+        <div class="rp-card-text">${escapeHtml(o.mediaType === 'FB_VIDEO' ? (o.caption || '') : caption) || '<span style="color:#9aa7b6;">Seu texto aparece aqui…</span>'}</div>
+        ${o.mediaType === 'FB_TEXT' ? '' : `<div class="rp-card-media">${rpMedia(o)}</div>`}
+        <div class="rp-card-foot"><span><i class="fa-regular fa-thumbs-up"></i> Curtir</span><span><i class="fa-regular fa-comment"></i> Comentar</span><span><i class="fa-solid fa-share"></i> Compartilhar</span></div>
+      </div>`);
+  }
+
+  // YouTube
+  const title = (o.title || '').trim() || 'Título do vídeo';
+  if (o.mediaType === 'YOUTUBE_SHORT') {
+    if (!o.src) return empty('Short', 'Escolha um vídeo para ver a prévia.');
+    return wrap('Short', `
+      <div class="rp-phone">
+        ${rpMedia(o, { autoplay: true })}
+        <div class="rp-badge">Shorts</div>
+        <div class="rp-rail"><div><i class="fa-solid fa-thumbs-up"></i><small>Gostei</small></div><div><i class="fa-solid fa-thumbs-down"></i><small>Não gostei</small></div><div><i class="fa-solid fa-comment-dots"></i><small>0</small></div><div><i class="fa-solid fa-share"></i><small>Compart.</small></div></div>
+        <div class="rp-overlay">
+          <div class="rp-user">${rpAvatar(o, 'fa-brands fa-youtube')}<span>@${escapeHtml(username.replace(/^@/, ''))}</span><span style="background:#fff; color:#000; border-radius:14px; padding:2px 10px; font-size:11px; font-weight:700;">Inscrever-se</span></div>
+          <div class="rp-text">${escapeHtml(title)}</div>
+        </div>
+      </div>`);
+  }
+  if (!o.src) return empty('Vídeo', 'Escolha um vídeo para ver a prévia.');
+  return wrap('Vídeo', `
+    <div class="rp-yt-player">${rpMedia(o)}</div>
+    <div class="rp-yt-meta">${rpAvatar(o, 'fa-brands fa-youtube')}<div><b>${escapeHtml(title)}</b><small>${escapeHtml(username)} · 0 visualizações · agora</small></div></div>`);
+}
+
+function rpToggle(video) { if (video.paused) video.play().catch(() => {}); else video.pause(); }
+function rpSound(btn) {
+  const video = btn.parentElement.querySelector('video');
+  if (!video) return;
+  video.muted = !video.muted;
+  btn.innerHTML = `<i class="fa-solid ${video.muted ? 'fa-volume-xmark' : 'fa-volume-high'}"></i>`;
+}
+
+function closeRealPreview() {
+  document.getElementById('rp-modal')?.remove();
+  document.removeEventListener('keydown', rpEscClose);
+}
+function rpEscClose(e) { if (e.key === 'Escape') closeRealPreview(); }
+
+/** Abre a prévia grande, com um painel por rede. `panels` = lista de opções de realPreviewHtml. */
+function openRealPreview(panels, heading = 'Prévia real') {
+  closeRealPreview();
+  const modal = document.createElement('div');
+  modal.id = 'rp-modal';
+  modal.className = 'rp-modal';
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-modal', 'true');
+  modal.setAttribute('aria-label', heading);
+  modal.innerHTML = `
+    <div class="rp-modal-box">
+      <div class="rp-modal-top">
+        <h3><i class="fa-solid fa-eye" aria-hidden="true"></i> ${escapeHtml(heading)}</h3>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="closeRealPreview()"><i class="fa-solid fa-xmark"></i> Fechar</button>
+      </div>
+      <div class="rp-panels">${panels.map(realPreviewHtml).join('')}</div>
+    </div>`;
+  modal.addEventListener('click', (e) => { if (e.target === modal) closeRealPreview(); });
+  document.addEventListener('keydown', rpEscClose);
+  document.body.appendChild(modal);
+}
+
+/** Dados da conta escolhida num <select> (ou da primeira da rede). */
+function rpAccountFor(network, selectId) {
+  const list = network === 'instagram' ? STATE.accounts : network === 'facebook' ? getFacebookAccounts() : getYoutubeAccounts();
+  const id = selectId ? document.getElementById(selectId)?.value : '';
+  const account = list.find(a => a.accountId === id) || list[0] || null;
+  return {
+    username: account ? (network === 'instagram' ? `@${account.username}` : account.username) : '',
+    avatar: account ? account.profilePictureUrl : ''
+  };
+}
+
+/** Prévia ao vivo dos formulários de YouTube e Facebook: muda conforme o usuário escolhe o arquivo e digita. */
+function updateLivePreview(network) {
+  const box = document.getElementById(`${network}-live-preview`);
+  if (!box) return;
+  if (network === 'youtube') {
+    const file = STATE.youtubeFile;
+    const description = document.getElementById('youtube-description-input')?.value || '';
+    box.innerHTML = realPreviewHtml({
+      network, mediaType: STATE.youtubePostType || 'YOUTUBE_SHORT', src: rpUrlFor(file), isVideo: true,
+      title: document.getElementById('youtube-title-input')?.value || (file ? guessTitleFromFilename(file.name) : ''),
+      caption: description, ...rpAccountFor('youtube', 'youtube-account-select')
+    });
+    return;
+  }
+  const files = STATE.facebookFiles || [];
+  const first = files[0]?.file;
+  const type = STATE.facebookPostType || 'FB_PHOTO';
+  box.innerHTML = realPreviewHtml({
+    network, mediaType: type, src: type === 'FB_TEXT' ? '' : rpUrlFor(first), isVideo: type === 'FB_VIDEO',
+    caption: document.getElementById('facebook-caption')?.value || '',
+    note: files.length > 1 ? `Mostrando o 1º de ${files.length} arquivos — cada um vira um post.` : '',
+    ...rpAccountFor('facebook', 'facebook-account-select')
+  });
+}
+
+function previewYoutubeBulk(index) {
+  const item = (STATE.youtubeBulkFiles || [])[index];
+  if (!item) return;
+  const type = document.getElementById('youtube-bulk-type-select')?.value || 'YOUTUBE_SHORT';
+  openRealPreview([{
+    network: 'youtube', mediaType: type, src: rpUrlFor(item.file), isVideo: true,
+    title: item.title || guessTitleFromFilename(item.file.name), ...rpAccountFor('youtube', 'youtube-bulk-account-select')
+  }], `Prévia · ${item.title || item.file.name}`);
+}
+
+function previewFacebookBulk(index) {
+  const item = (STATE.facebookBulkFiles || [])[index];
+  if (!item) return;
+  const isVideo = item.file.type.startsWith('video/');
+  const common = document.getElementById('facebook-bulk-caption')?.value || '';
+  openRealPreview([{
+    network: 'facebook', mediaType: isVideo ? 'FB_VIDEO' : 'FB_PHOTO', src: rpUrlFor(item.file), isVideo,
+    caption: item.caption || common, ...rpAccountFor('facebook', 'facebook-bulk-account-select')
+  }], `Prévia · ${item.file.name}`);
+}
+
+/** Publicar em várias redes: um painel para cada rede marcada, do jeito que o arquivo vai sair em cada uma. */
+function previewCrosspost(index = 0) {
+  const entry = (STATE.crosspostFiles || [])[index];
+  if (!entry) return showToast('Escolha um arquivo primeiro.', 'warning');
+  const selected = crosspostSelection();
+  const caption = document.getElementById('crosspost-caption')?.value || '';
+  const title = document.getElementById('crosspost-yt-title')?.value.trim() || guessTitleFromFilename(entry.file.name);
+  const short = document.getElementById('crosspost-yt-short')?.checked !== false;
+  const isVideo = entry.file.type.startsWith('video/');
+  const panels = [];
+
+  CROSSPOST_NETWORKS.forEach(network => {
+    const account = network.accounts().find(a => a.hasToken && selected.has(a.accountId));
+    if (!account) return;
+    const post = crosspostPostFor(network.key, entry.file, { caption, title, short });
+    if (!post) return;
+    panels.push({
+      network: network.key, mediaType: post.mediaType, src: rpUrlFor(entry.file), isVideo,
+      username: network.key === 'instagram' ? `@${account.username}` : account.username, avatar: account.profilePictureUrl,
+      title, caption
+    });
+  });
+  if (panels.length === 0) return showToast('Marque pelo menos uma conta para ver a prévia.', 'warning');
+  openRealPreview(panels, `Prévia · ${entry.file.name}`);
+}
+
+/** Prévia do Instagram em "Nova publicação": vídeo em tela cheia de Reels, foto no formato do feed. */
+function setInstagramPreviewMedia(src, isVideo) {
+  const box = document.getElementById('preview-image-box');
+  if (!box) return;
+  box.style.cssText = `width:100%; ${isVideo ? 'aspect-ratio:9/16; max-width:320px; border-radius:22px; border:5px solid #202b38;' : 'aspect-ratio:4/5; max-width:380px; border-radius:12px; border:1px solid var(--border-color);'} margin:0 auto; overflow:hidden; background:#000; display:block;`;
+  box.innerHTML = isVideo
+    ? `<video src="${escapeHtml(src)}#t=0.1" controls autoplay muted loop playsinline style="width:100%;height:100%;object-fit:cover;display:block;"></video>`
+    : `<img src="${escapeHtml(src)}" style="width:100%;height:100%;object-fit:cover;display:block;" alt="">`;
 }
