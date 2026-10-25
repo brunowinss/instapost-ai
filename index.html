@@ -1261,11 +1261,13 @@
             </div>
             <div class="form-group">
               <label class="label"><i class="fa-solid fa-clock"></i> Quando publicar</label>
-              <select id="youtube-when" class="input" onchange="onYoutubeWhenChange()">
-                <option value="smart" selected>Horário inteligente (melhores picos)</option>
-                <option value="now">Agora</option>
-                <option value="manual">Escolher data e hora</option>
-              </select>
+              <input type="hidden" id="youtube-when" value="smart">
+              <div id="youtube-when-buttons" style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button type="button" class="btn btn-ghost btn-tab" data-when="now" onclick="setPublishWhen('youtube', 'now')" style="flex:1 1 150px;"><i class="fa-solid fa-bolt"></i> Agora</button>
+                <button type="button" class="btn btn-primary active btn-tab" data-when="smart" onclick="setPublishWhen('youtube', 'smart')" style="flex:1 1 150px;"><i class="fa-solid fa-wand-magic-sparkles"></i> Melhor horário</button>
+                <button type="button" class="btn btn-ghost btn-tab" data-when="manual" onclick="setPublishWhen('youtube', 'manual')" style="flex:1 1 150px;"><i class="fa-solid fa-calendar-days"></i> Escolher data e hora</button>
+              </div>
+              <p id="youtube-when-hint" style="font-size:0.75rem; color:var(--text-dim); margin-top:8px;"></p>
               <input type="datetime-local" class="input" id="youtube-schedule-input" style="display:none; margin-top:8px;">
             </div>
 
@@ -1451,11 +1453,13 @@
 
             <div class="form-group">
               <label class="label"><i class="fa-solid fa-clock"></i> Quando publicar</label>
-              <select id="facebook-when" class="input" onchange="onFacebookWhenChange()">
-                <option value="now">Agora</option>
-                <option value="smart" selected>Horário inteligente (melhores picos)</option>
-                <option value="manual">Escolher data e hora</option>
-              </select>
+              <input type="hidden" id="facebook-when" value="smart">
+              <div id="facebook-when-buttons" style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button type="button" class="btn btn-ghost btn-tab" data-when="now" onclick="setPublishWhen('facebook', 'now')" style="flex:1 1 150px;"><i class="fa-solid fa-bolt"></i> Agora</button>
+                <button type="button" class="btn btn-primary active btn-tab" data-when="smart" onclick="setPublishWhen('facebook', 'smart')" style="flex:1 1 150px;"><i class="fa-solid fa-wand-magic-sparkles"></i> Melhor horário</button>
+                <button type="button" class="btn btn-ghost btn-tab" data-when="manual" onclick="setPublishWhen('facebook', 'manual')" style="flex:1 1 150px;"><i class="fa-solid fa-calendar-days"></i> Escolher data e hora</button>
+              </div>
+              <p id="facebook-when-hint" style="font-size:0.75rem; color:var(--text-dim); margin-top:8px;"></p>
               <input type="datetime-local" id="facebook-datetime" class="input" style="display:none; margin-top:8px;">
             </div>
 

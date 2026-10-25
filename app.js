@@ -4293,6 +4293,7 @@ function getYoutubeAccounts() {
 
 function renderYoutubeSection() {
   updateLivePreview('youtube');
+  applyPublishWhenUI('youtube');
   renderYoutubeChannelsList();
   populateYoutubeAccountSelectors();
   setupYoutubeDropzone();
@@ -4878,6 +4879,7 @@ function getFacebookAccounts() {
 
 function renderFacebookSection() {
   updateLivePreview('facebook');
+  applyPublishWhenUI('facebook');
   renderFacebookPagesList();
   checkFacebookPages();
   populateFacebookSelect();
@@ -5011,16 +5013,9 @@ function removeFacebookFile(index) {
   renderFacebookPreview();
 }
 
-function onYoutubeWhenChange() {
-  const input = document.getElementById('youtube-schedule-input');
-  if (input) input.style.display = document.getElementById('youtube-when')?.value === 'manual' ? 'block' : 'none';
-}
+function onYoutubeWhenChange() { applyPublishWhenUI('youtube'); }
 
-function onFacebookWhenChange() {
-  const manual = document.getElementById('facebook-when')?.value === 'manual';
-  const input = document.getElementById('facebook-datetime');
-  if (input) input.style.display = manual ? 'block' : 'none';
-}
+function onFacebookWhenChange() { applyPublishWhenUI('facebook'); }
 
 /** Publica na Página agora, no melhor horário ou numa data marcada — um post por arquivo (ou um só, se for texto). */
 async function submitFacebookPost() {
@@ -6293,4 +6288,51 @@ function updateInstagramLivePreview() {
     caption: document.getElementById('post-caption')?.value || '',
     note: STATE.igPreviewNote || ''
   });
+}
+
+
+// ---- Quando publicar: agora, melhor horário ou data escolhida (YouTube e Facebook) ----
+
+const PUBLISH_WHEN = {
+  youtube: { input: 'youtube-schedule-input', button: 'btn-submit-youtube-post', now: 'Enviar agora', smart: 'Agendar no melhor horário', manual: 'Agendar para a data escolhida' },
+  facebook: { input: 'facebook-datetime', button: 'btn-facebook-publish', now: 'Publicar agora', smart: 'Agendar no melhor horário', manual: 'Agendar para a data escolhida' }
+};
+const PUBLISH_WHEN_HINTS = {
+  now: 'Sai assim que o painel processar (em até 5 minutos).',
+  smart: 'O painel escolhe o horário em que a audiência dessa conta mais responde.',
+  manual: 'Escolha o dia e a hora em que o post deve sair.'
+};
+
+function setPublishWhen(net, value) {
+  const hidden = document.getElementById(`${net}-when`);
+  if (hidden) hidden.value = value;
+  applyPublishWhenUI(net);
+}
+
+function applyPublishWhenUI(net) {
+  const cfg = PUBLISH_WHEN[net];
+  const value = document.getElementById(`${net}-when`)?.value || 'smart';
+  document.querySelectorAll(`#${net}-when-buttons [data-when]`).forEach(btn => {
+    const active = btn.dataset.when === value;
+    btn.classList.toggle('active', active);
+    btn.classList.toggle('btn-primary', active);
+    btn.classList.toggle('btn-ghost', !active);
+    btn.setAttribute('aria-pressed', String(active));
+  });
+  const hint = document.getElementById(`${net}-when-hint`);
+  if (hint) hint.textContent = PUBLISH_WHEN_HINTS[value];
+
+  const input = document.getElementById(cfg.input);
+  if (input) {
+    input.style.display = value === 'manual' ? 'block' : 'none';
+    if (value === 'manual' && !input.value) {
+      // Já sugere daqui a 1 hora, arredondado, para o usuário só ajustar.
+      const next = new Date(Date.now() + 3600 * 1000);
+      next.setMinutes(0, 0, 0);
+      const pad = (n) => String(n).padStart(2, '0');
+      input.value = `${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}T${pad(next.getHours())}:00`;
+    }
+  }
+  const btn = document.getElementById(cfg.button);
+  if (btn) btn.innerHTML = `<i class="fa-solid ${value === 'now' ? 'fa-paper-plane' : 'fa-calendar-check'}"></i> ${cfg[value]}`;
 }
