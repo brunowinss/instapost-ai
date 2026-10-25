@@ -6052,73 +6052,102 @@ function rpMedia(o, { autoplay = false } = {}) {
  */
 function realPreviewHtml(o) {
   const network = o.network;
-  const username = o.username || (network === 'instagram' ? 'seu_perfil' : 'Sua conta');
+  const username = o.username || (network === 'instagram' ? '@seu_perfil' : 'Sua conta');
+  const handle = username.replace(/^@/, '');
   const caption = (o.caption || '').trim();
-  const wrap = (kind, inner) => `
+  const rail = (items) => `<div class="rp-rail">${items.map(([icon, text]) => `<div><i class="${icon}"></i>${text ? `<small>${text}</small>` : ''}</div>`).join('')}</div>`;
+  const sound = (text) => `<div class="rp-sound-line"><i class="fa-solid fa-music"></i> <span>${escapeHtml(text)}</span></div>`;
+  const phone = (inner) => `<div class="rp-phone"><div class="rp-safe"><span>área segura</span></div>${inner}</div>`;
+  const wrap = (kind, inner, isPhone) => `
     <div class="rp-wrap">
-      <div class="rp-label"><i class="${RP_ICONS[network]}" aria-hidden="true"></i> Como vai ficar no ${RP_NAMES[network]} · ${kind}</div>
+      <div class="rp-label"><i class="${RP_ICONS[network]}" aria-hidden="true"></i> Como vai ficar no ${RP_NAMES[network]} · ${kind}
+        ${isPhone ? '<button type="button" class="rp-safe-btn" onclick="rpSafeToggle(this)" aria-pressed="false"><i class="fa-solid fa-border-all"></i> Zona segura</button>' : ''}
+      </div>
       <div class="rp">${inner}</div>
-      ${o.note ? `<div style="font-size:0.72rem; color:var(--text-dim); text-align:center;">${escapeHtml(o.note)}</div>` : ''}
+      ${isPhone ? '<div class="rp-hint">Clique no vídeo para pausar ou tocar. Ative <b>Zona segura</b> para checar as margens.</div>' : ''}
+      ${o.note ? `<div class="rp-hint">${escapeHtml(o.note)}</div>` : ''}
     </div>`;
-  const empty = (kind, text) => wrap(kind, `<div class="rp-empty">${text}</div>`);
+  const empty = (kind, text) => wrap(kind, `<div class="rp-empty">${text}</div>`, false);
 
   if (network === 'instagram') {
     const isStory = o.mediaType === 'STORIES';
     const vertical = o.isVideo || o.mediaType === 'REELS' || isStory;
     if (!o.src) return empty(vertical ? 'Reels' : 'Feed', 'Escolha uma foto ou vídeo para ver a prévia.');
-    if (vertical) {
-      return wrap(isStory ? 'Story' : 'Reels', `
-        <div class="rp-phone">
+    if (isStory) {
+      return wrap('Story', phone(`
           ${rpMedia(o, { autoplay: true })}
-          <div class="rp-badge">${isStory ? '' : 'Reels'}</div>
-          ${isStory ? '<div style="position:absolute; top:10px; left:12px; right:12px; height:3px; background:rgba(255,255,255,.35); border-radius:3px; z-index:2;"><div style="width:35%; height:100%; background:#fff; border-radius:3px;"></div></div>' : ''}
-          ${isStory ? '' : `<div class="rp-rail"><div><i class="fa-regular fa-heart"></i><small>0</small></div><div><i class="fa-regular fa-comment"></i><small>0</small></div><div><i class="fa-regular fa-paper-plane"></i></div><div><i class="fa-solid fa-ellipsis"></i></div></div>`}
+          <div class="rp-story-bar"><div style="width:35%;"></div></div>
+          <div class="rp-story-top">${rpAvatar(o, 'fa-brands fa-instagram')}<b>${escapeHtml(handle)}</b><span>agora</span><i class="fa-solid fa-xmark" style="margin-left:auto;"></i></div>
+          <div class="rp-story-reply"><span>Enviar mensagem</span><i class="fa-regular fa-heart"></i><i class="fa-regular fa-paper-plane"></i></div>`), true);
+    }
+    if (vertical) {
+      return wrap('Reels', phone(`
+          ${rpMedia(o, { autoplay: true })}
+          <div class="rp-top"><b>Reels</b><span><i class="fa-solid fa-chevron-down" style="font-size:11px;"></i></span><i class="fa-solid fa-camera" style="margin-left:auto;"></i></div>
+          ${rail([['fa-regular fa-heart', '0'], ['fa-regular fa-comment', '0'], ['fa-regular fa-paper-plane', ''], ['fa-solid fa-ellipsis', '']])}
           <div class="rp-overlay">
-            <div class="rp-user">${rpAvatar(o, 'fa-brands fa-instagram')}<span>${escapeHtml(username)}</span>${isStory ? '' : '<span style="border:1px solid #fff; border-radius:6px; padding:1px 8px; font-size:11px; font-weight:600;">Seguir</span>'}</div>
-            ${caption && !isStory ? `<div class="rp-text">${escapeHtml(caption)}</div>` : ''}
-          </div>
-        </div>`);
+            <div class="rp-user">${rpAvatar(o, 'fa-brands fa-instagram')}<span>${escapeHtml(handle)}</span><span class="rp-follow">Seguir</span></div>
+            ${caption ? `<div class="rp-text">${escapeHtml(caption)}</div>` : ''}
+            ${sound('Áudio original · ' + handle)}
+          </div>`), true);
     }
     return wrap('Feed', `
       <div class="rp-card">
-        <div class="rp-card-head">${rpAvatar(o, 'fa-brands fa-instagram')}<div><b>${escapeHtml(username)}</b></div><i class="fa-solid fa-ellipsis" style="margin-left:auto;"></i></div>
+        <div class="rp-card-head">${rpAvatar(o, 'fa-brands fa-instagram')}<div><b>${escapeHtml(handle)}</b></div><i class="fa-solid fa-ellipsis" style="margin-left:auto;"></i></div>
         <div class="rp-card-media rp-feed45">${rpMedia(o)}</div>
         <div class="rp-card-actions"><i class="fa-regular fa-heart"></i><i class="fa-regular fa-comment"></i><i class="fa-regular fa-paper-plane"></i><i class="fa-regular fa-bookmark" style="margin-left:auto;"></i></div>
-        <div class="rp-card-text"><b>${escapeHtml(username)}</b> ${escapeHtml(caption)}</div>
-      </div>`);
+        <div class="rp-card-text" style="padding-top:2px;"><b>0 curtidas</b></div>
+        <div class="rp-card-text"><b>${escapeHtml(handle)}</b> ${escapeHtml(caption)}</div>
+      </div>`, false);
   }
 
   if (network === 'facebook') {
     const kind = o.mediaType === 'FB_TEXT' ? 'Texto' : o.isVideo ? 'Vídeo' : 'Foto';
     if (o.mediaType !== 'FB_TEXT' && !o.src) return empty(kind, 'Escolha um arquivo para ver a prévia.');
+    const text = o.mediaType === 'FB_VIDEO' ? (o.caption || '') : caption;
+    const long = text.length > 220;
+    const shown = long ? text.slice(0, 220).trimEnd() + '… ' : text;
     return wrap(kind, `
       <div class="rp-card">
         <div class="rp-card-head">${rpAvatar(o, 'fa-brands fa-facebook')}<div><b>${escapeHtml(username)}</b><small>Agora · <i class="fa-solid fa-earth-americas"></i></small></div><i class="fa-solid fa-ellipsis" style="margin-left:auto;"></i></div>
-        <div class="rp-card-text">${escapeHtml(o.mediaType === 'FB_VIDEO' ? (o.caption || '') : caption) || '<span style="color:#9aa7b6;">Seu texto aparece aqui…</span>'}</div>
+        <div class="rp-card-text" ${o.mediaType === 'FB_TEXT' && text.length < 90 ? 'style="font-size:20px; padding-bottom:18px;"' : ''}>${text ? escapeHtml(shown) + (long ? '<span style="color:#9aa7b6;">Ver mais</span>' : '') : '<span style="color:#9aa7b6;">Seu texto aparece aqui…</span>'}</div>
         ${o.mediaType === 'FB_TEXT' ? '' : `<div class="rp-card-media">${rpMedia(o)}</div>`}
+        <div class="rp-card-counts"><span><i class="fa-solid fa-thumbs-up" style="color:#1877f2;"></i> 0</span><span>0 comentários · 0 compartilhamentos</span></div>
         <div class="rp-card-foot"><span><i class="fa-regular fa-thumbs-up"></i> Curtir</span><span><i class="fa-regular fa-comment"></i> Comentar</span><span><i class="fa-solid fa-share"></i> Compartilhar</span></div>
-      </div>`);
+      </div>`, false);
   }
 
   // YouTube
   const title = (o.title || '').trim() || 'Título do vídeo';
   if (o.mediaType === 'YOUTUBE_SHORT') {
     if (!o.src) return empty('Short', 'Escolha um vídeo para ver a prévia.');
-    return wrap('Short', `
-      <div class="rp-phone">
+    return wrap('Short', phone(`
         ${rpMedia(o, { autoplay: true })}
-        <div class="rp-badge">Shorts</div>
-        <div class="rp-rail"><div><i class="fa-solid fa-thumbs-up"></i><small>Gostei</small></div><div><i class="fa-solid fa-thumbs-down"></i><small>Não gostei</small></div><div><i class="fa-solid fa-comment-dots"></i><small>0</small></div><div><i class="fa-solid fa-share"></i><small>Compart.</small></div></div>
+        <div class="rp-top" style="justify-content:flex-end; gap:18px;"><i class="fa-solid fa-magnifying-glass"></i><i class="fa-solid fa-ellipsis-vertical"></i></div>
+        ${rail([['fa-solid fa-thumbs-up', 'Gostei'], ['fa-solid fa-thumbs-down', 'Não gostei'], ['fa-solid fa-comment-dots', '0'], ['fa-solid fa-share', 'Compart.'], ['fa-solid fa-retweet', 'Remix']])}
         <div class="rp-overlay">
-          <div class="rp-user">${rpAvatar(o, 'fa-brands fa-youtube')}<span>@${escapeHtml(username.replace(/^@/, ''))}</span><span style="background:#fff; color:#000; border-radius:14px; padding:2px 10px; font-size:11px; font-weight:700;">Inscrever-se</span></div>
+          <div class="rp-user">${rpAvatar(o, 'fa-brands fa-youtube')}<span>@${escapeHtml(handle)}</span><span class="rp-follow rp-sub">Inscrever-se</span></div>
           <div class="rp-text">${escapeHtml(title)}</div>
+          ${sound('Som original – ' + handle)}
         </div>
-      </div>`);
+        <div class="rp-progress"><div></div></div>`), true);
   }
   if (!o.src) return empty('Vídeo', 'Escolha um vídeo para ver a prévia.');
+  const description = caption ? `<div class="rp-yt-desc"><b>0 visualizações · há instantes</b><div>${escapeHtml(caption)}</div></div>` : '<div class="rp-yt-desc"><b>0 visualizações · há instantes</b></div>';
   return wrap('Vídeo', `
     <div class="rp-yt-player">${rpMedia(o)}</div>
-    <div class="rp-yt-meta">${rpAvatar(o, 'fa-brands fa-youtube')}<div><b>${escapeHtml(title)}</b><small>${escapeHtml(username)} · 0 visualizações · agora</small></div></div>`);
+    <div class="rp-yt-title">${escapeHtml(title)}</div>
+    <div class="rp-yt-channel">${rpAvatar(o, 'fa-brands fa-youtube')}<div><b>${escapeHtml(username)}</b><small>0 inscritos</small></div><span class="rp-yt-sub">Inscrever-se</span></div>
+    <div class="rp-yt-actions"><span><i class="fa-regular fa-thumbs-up"></i> 0 <i class="fa-regular fa-thumbs-down" style="margin-left:10px;"></i></span><span><i class="fa-solid fa-share"></i> Compartilhar</span><span><i class="fa-solid fa-download"></i> Salvar</span></div>
+    ${description}`, false);
+}
+
+function rpSafeToggle(btn) {
+  const phone = btn.closest('.rp-wrap')?.querySelector('.rp-phone');
+  if (!phone) return;
+  const on = phone.classList.toggle('rp-safe-on');
+  btn.classList.toggle('active', on);
+  btn.setAttribute('aria-pressed', String(on));
 }
 
 function rpToggle(video) { if (video.paused) video.play().catch(() => {}); else video.pause(); }

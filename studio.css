@@ -447,3 +447,62 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .rp-overlay .rp-user > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rp-overlay .rp-user > span:last-child { flex-shrink: 0; }
 .rp-overlay .rp-user .rp-avatar { width: 28px; height: 28px; }
+
+
+/* ── Prévia real: detalhes de cada plataforma ── */
+.rp-phone::before { content: ""; position: absolute; top: 8px; left: 50%; transform: translateX(-50%); width: 74px; height: 20px; background: #000; border-radius: 12px; z-index: 4; pointer-events: none; }
+.rp-top { position: absolute; top: 34px; left: 14px; right: 14px; display: flex; align-items: center; gap: 8px; font-size: 16px; z-index: 3; pointer-events: none; text-shadow: 0 1px 4px rgba(0,0,0,.6); }
+.rp-top b { font-size: 18px; }
+.rp-sound-line { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 12px; opacity: .95; overflow: hidden; white-space: nowrap; }
+.rp-sound-line span { overflow: hidden; text-overflow: ellipsis; }
+.rp-follow { border: 1px solid #fff; border-radius: 7px; padding: 1px 9px; font-size: 11px; font-weight: 600; }
+.rp-follow.rp-sub { background: #fff; color: #000; border-color: #fff; border-radius: 14px; padding: 3px 11px; font-weight: 700; }
+.rp-safe { display: none; position: absolute; top: 12%; left: 4%; right: 17%; bottom: 25%; border: 2px dashed rgba(255,255,255,.85); background: rgba(255,255,255,.07); border-radius: 10px; z-index: 3; pointer-events: none; }
+.rp-safe span { position: absolute; top: 6px; left: 8px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; background: rgba(0,0,0,.55); border-radius: 4px; padding: 1px 6px; }
+.rp-phone.rp-safe-on .rp-safe { display: block; }
+.rp-safe-btn { margin-left: auto; background: rgba(255,255,255,.07); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 100px; font-size: 0.68rem; font-weight: 700; padding: 3px 10px; cursor: pointer; font-family: inherit; }
+.rp-safe-btn.active { background: var(--primary-bg); color: var(--primary); border-color: var(--primary); }
+.rp-label { width: 100%; max-width: 330px; flex-wrap: wrap; }
+.rp-hint { font-size: 0.7rem; color: var(--text-dim); text-align: center; max-width: 330px; line-height: 1.5; }
+.rp-progress { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(255,255,255,.3); z-index: 3; }
+.rp-progress div { width: 30%; height: 100%; background: #f00; }
+.rp-story-bar { position: absolute; top: 34px; left: 12px; right: 12px; height: 3px; background: rgba(255,255,255,.35); border-radius: 3px; z-index: 3; }
+.rp-story-bar div { height: 100%; background: #fff; border-radius: 3px; }
+.rp-story-top { position: absolute; top: 46px; left: 12px; right: 12px; display: flex; align-items: center; gap: 8px; z-index: 3; font-size: 13px; text-shadow: 0 1px 4px rgba(0,0,0,.6); pointer-events: none; }
+.rp-story-top span { opacity: .8; }
+.rp-story-reply { position: absolute; left: 12px; right: 12px; bottom: 14px; display: flex; align-items: center; gap: 14px; z-index: 3; pointer-events: none; font-size: 18px; }
+.rp-story-reply span { flex: 1; border: 1px solid rgba(255,255,255,.8); border-radius: 24px; padding: 9px 14px; font-size: 13px; }
+.rp-card-counts { display: flex; justify-content: space-between; padding: 8px 12px; color: #9aa7b6; font-size: 12px; }
+.rp-yt-title { font-size: 15px; font-weight: 700; padding: 10px 2px 2px; word-break: break-word; }
+.rp-yt-channel { display: flex; align-items: center; gap: 10px; padding: 8px 2px; }
+.rp-yt-channel > div { min-width: 0; flex: 1; }
+.rp-yt-channel b { display: block; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rp-yt-channel small { color: #9aa7b6; font-size: 11px; }
+.rp-yt-sub { background: #fff; color: #000; font-weight: 700; font-size: 12px; border-radius: 100px; padding: 6px 12px; white-space: nowrap; }
+.rp-yt-actions { display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px 8px; }
+.rp-yt-actions span { background: rgba(255,255,255,.1); border-radius: 100px; padding: 7px 13px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.rp-yt-desc { background: rgba(255,255,255,.08); border-radius: 12px; padding: 10px 12px; font-size: 12px; word-break: break-word; }
+.rp-yt-desc div { margin-top: 6px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.rp-rail small { white-space: nowrap; }
+
+@media (min-width: 981px) { .net-compose .rp-live { position: sticky; top: 1rem; } }
+
+/* Moldura de celular proporcional: tudo escala com a largura da prévia (funciona do celular ao computador) */
+.rp-phone { container-type: inline-size; font-size: 4cqw; }
+.rp-phone::before { width: 22cqw; height: 6cqw; top: 2.4cqw; border-radius: 4cqw; }
+.rp-phone .rp-rail { font-size: 6.6cqw; gap: 4.4cqw; right: 3cqw; bottom: 24cqw; }
+.rp-phone .rp-rail small { font-size: 2.9cqw; }
+.rp-phone .rp-top { top: 11cqw; left: 4cqw; right: 4cqw; font-size: 5cqw; }
+.rp-phone .rp-top b { font-size: 5.4cqw; }
+.rp-phone .rp-overlay { padding: 16cqw 17cqw 4.5cqw 4cqw; font-size: 3.9cqw; }
+.rp-phone .rp-overlay .rp-user { gap: 2cqw; margin-bottom: 1.6cqw; }
+.rp-phone .rp-overlay .rp-user .rp-avatar { width: 8.5cqw; height: 8.5cqw; font-size: 4cqw; }
+.rp-phone .rp-follow { font-size: 3cqw; padding: 0.4cqw 2.6cqw; }
+.rp-phone .rp-sound-line { font-size: 3.3cqw; margin-top: 2cqw; }
+.rp-phone .rp-sound { top: 19cqw; left: 4cqw; right: auto; width: 8cqw; height: 8cqw; font-size: 3.4cqw; }
+.rp-phone .rp-story-bar { top: 10cqw; }
+.rp-phone .rp-story-top { top: 14cqw; font-size: 3.8cqw; }
+.rp-phone .rp-story-top .rp-avatar { width: 8.5cqw; height: 8.5cqw; }
+.rp-phone .rp-story-reply { bottom: 4cqw; font-size: 5.4cqw; }
+.rp-phone .rp-story-reply span { font-size: 3.8cqw; padding: 2.6cqw 4cqw; }
+.rp-phone .rp-safe span { font-size: 2.8cqw; }
