@@ -401,7 +401,16 @@ function switchSection(name) {
   };
   
   if (titles[name]) {
-    document.getElementById('page-title').innerText = titles[name].t;
+    const brand = ['dashboard','schedule','analytics','new-post','bulk-reels','bulk-carousel','stories-loop'].includes(name) ? 'instagram' : (name === 'youtube' || name === 'facebook' ? name : null);
+    const titleEl = document.getElementById('page-title');
+    titleEl.innerText = titles[name].t;
+    if (brand) {
+      const logo = document.createElement('i');
+      logo.className = `fa-brands fa-${brand} nav-brand nav-brand-${brand}`;
+      logo.style.cssText = 'font-size:0.8em; margin-right:10px;';
+      logo.setAttribute('aria-hidden', 'true');
+      titleEl.prepend(logo);
+    }
     document.getElementById('page-subtitle').innerText = titles[name].s;
   }
   
