@@ -96,18 +96,70 @@ async function exchangeCodeForPages(code) {
     // Sem token de longa duração ainda dá para listar as Páginas; o token da Página sai igual.
   }
 
-  const pages = await graph('/me/accounts', {
-    params: { fields: 'id,name,access_token,picture.type(large){url}', limit: '100', access_token: userToken }
+  const PAGE_FIELDS = 'id,name,access_token,picture.type(large){url}';
+  const toPage = (page) => ({
+    id: String(page.id),
+    name: page.name || `Página ${page.id}`,
+    accessToken: page.access_token,
+    picture: (page.picture && page.picture.data && page.picture.data.url) || ''
   });
 
-  return (pages.data || [])
-    .filter(page => page.id && page.access_token)
-    .map(page => ({
-      id: String(page.id),
-      name: page.name || `Página ${page.id}`,
-      accessToken: page.access_token,
-      picture: (page.picture && page.picture.data && page.picture.data.url) || ''
-    }));
+  const listed = await graph('/me/accounts', { params: { fields: PAGE_FIELDS, limit: '100', access_token: userToken } });
+  const rows = listed.data || [];
+  let pages = rows.filter(page => page.id && page.access_token).map(toPage);
+  if (pages.length > 0) return pages;
+
+  // A lista veio vazia (ou sem token). Plano B: pegar as Páginas que a pessoa marcou no login
+  // pelo ID, que é como a Meta registra o que foi liberado.
+  const granularIds = await grantedPageIds(userToken);
+  for (const id of granularIds) {
+    try {
+      const page = await graph(`/${encodeURIComponent(id)}`, { params: { fields: PAGE_FIELDS, access_token: userToken } });
+      if (page.id && page.access_token) pages.push(toPage(page));
+    } catch {
+      // Essa Página específica não entregou token; o diagnóstico abaixo explica.
+    }
+  }
+  if (pages.length > 0) return pages;
+
+  throw new Error(explainNoPages({ listed: rows.length, granularIds, permissions: await grantedPermissions(userToken) }));
+}
+
+/** IDs das Páginas que a pessoa marcou na tela de login (escopos granulares do token). */
+async function grantedPageIds(userToken) {
+  try {
+    const c = config();
+    const debug = await graph('/debug_token', { params: { input_token: userToken, access_token: `${c.appId}|${c.appSecret}` } });
+    const ids = new Set();
+    for (const scope of (debug.data && debug.data.granular_scopes) || []) {
+      if (PERMISSIONS.includes(scope.scope)) (scope.target_ids || []).forEach(id => ids.add(String(id)));
+    }
+    return [...ids];
+  } catch {
+    return [];
+  }
+}
+
+async function grantedPermissions(userToken) {
+  try {
+    const result = await graph('/me/permissions', { params: { access_token: userToken } });
+    return new Set((result.data || []).filter(p => p.status === 'granted').map(p => p.permission));
+  } catch {
+    return null;
+  }
+}
+
+/** Explica por que nenhuma Página serve, em vez de uma mensagem genérica. */
+function explainNoPages({ listed, granularIds, permissions }) {
+  const missing = permissions ? PERMISSIONS.filter(p => !permissions.has(p)) : [];
+  if (missing.length > 0) {
+    return `A Meta não liberou estas permissões: ${missing.join(', ')}. Conecte de novo, clique em "Editar configurações" e deixe todas ligadas.`;
+  }
+  if (listed > 0 || granularIds.length > 0) {
+    const count = Math.max(listed, granularIds.length);
+    return `A Meta reconheceu ${count} Página(s), mas não entregou o acesso para publicar nelas. Você precisa ser administrador com acesso total à Página (Página → Configurações → Acesso à Página).`;
+  }
+  return 'Nenhuma Página encontrada. Na tela de login do Facebook, clique em "Editar configurações", marque as Páginas que quer conectar (e confirme que você é administrador delas).';
 }
 
 /**

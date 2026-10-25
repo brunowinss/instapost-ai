@@ -129,3 +129,70 @@ test('Facebook errors are explained: expired token asks to reconnect, permission
   mockGraph(() => reply({ error: { code: 368, message: 'Bloqueado', error_user_msg: 'Conteúdo repetido' } }, 400));
   await assert.rejects(() => facebook.publishToFacebook({ accountId: 'PG1', mediaType: 'FB_TEXT', caption: 'oi' }), /\[Facebook 368\] Bloqueado — Conteúdo repetido/);
 });
+
+function oauthThen(accountsReply, extra = () => null) {
+  mockGraph((url) => {
+    const handled = extra(url);
+    if (handled) return handled;
+    if (url.pathname.endsWith('/oauth/access_token') && url.searchParams.get('grant_type') === 'fb_exchange_token') return reply({ access_token: 'LONG-USER' });
+    if (url.pathname.endsWith('/oauth/access_token')) return reply({ access_token: 'SHORT-USER' });
+    if (url.pathname.endsWith('/me/accounts')) return reply(accountsReply);
+    return reply({ error: { code: 100, message: 'inesperado' } }, 400);
+  });
+}
+
+test('empty /me/accounts falls back to the Pages granted in the login (granular scopes), fetched by ID', async () => {
+  oauthThen({ data: [] }, (url) => {
+    if (url.pathname.endsWith('/debug_token')) {
+      return reply({ data: { granular_scopes: [
+        { scope: 'pages_show_list', target_ids: ['246'] },
+        { scope: 'pages_manage_posts', target_ids: ['246'] },
+        { scope: 'instagram_basic', target_ids: ['999'] }
+      ] } });
+    }
+    if (url.pathname.endsWith('/246')) return reply({ id: '246', name: 'Amanda businns', access_token: 'PT-246', picture: { data: { url: 'https://cdn/a.jpg' } } });
+    return null;
+  });
+
+  const result = await facebook.exchangeCodeForPages('CODE');
+  assert.deepEqual(result.map(p => [p.id, p.name, p.accessToken]), [['246', 'Amanda businns', 'PT-246']]);
+
+  const debug = calls.find(c => c.path.endsWith('/debug_token'));
+  assert.equal(debug.params.input_token, 'LONG-USER');
+  assert.equal(debug.params.access_token, 'APP123|SECRET456', 'debug_token usa o token do app, não o da pessoa');
+  assert.ok(!calls.some(c => c.path.endsWith('/999')), 'só escopos de Página são consultados');
+});
+
+test('no usable Page: the error says whether a permission was declined, the Page has no access, or nothing was ticked', async () => {
+  // 1) Permissão recusada
+  oauthThen({ data: [] }, (url) => {
+    if (url.pathname.endsWith('/debug_token')) return reply({ data: { granular_scopes: [] } });
+    if (url.pathname.endsWith('/me/permissions')) return reply({ data: [
+      { permission: 'pages_show_list', status: 'declined' }, { permission: 'pages_read_engagement', status: 'granted' },
+      { permission: 'pages_manage_posts', status: 'granted' }, { permission: 'publish_video', status: 'granted' }
+    ] });
+    return null;
+  });
+  await assert.rejects(() => facebook.exchangeCodeForPages('C'), /não liberou estas permissões: pages_show_list.*Editar configurações/s);
+
+  // 2) A Meta reconhece a Página mas não entrega o token (sem acesso total)
+  const allGranted = { data: facebook.PERMISSIONS.map(permission => ({ permission, status: 'granted' })) };
+  oauthThen({ data: [{ id: '1', name: 'Sem token' }] }, (url) => {
+    if (url.pathname.endsWith('/debug_token')) return reply({ data: { granular_scopes: [] } });
+    if (url.pathname.endsWith('/me/permissions')) return reply(allGranted);
+    return null;
+  });
+  await assert.rejects(() => facebook.exchangeCodeForPages('C'), /reconheceu 1 Página\(s\).*acesso total/s);
+
+  // 3) Nada marcado
+  oauthThen({ data: [] }, (url) => {
+    if (url.pathname.endsWith('/debug_token')) return reply({ data: { granular_scopes: [] } });
+    if (url.pathname.endsWith('/me/permissions')) return reply(allGranted);
+    return null;
+  });
+  await assert.rejects(() => facebook.exchangeCodeForPages('C'), /Nenhuma Página encontrada.*Editar configurações/s);
+
+  // 4) Plano B falha nos diagnósticos (erro da Meta): ainda assim devolve a mensagem padrão, sem estourar outro erro
+  oauthThen({ data: [] });
+  await assert.rejects(() => facebook.exchangeCodeForPages('C'), /Nenhuma Página encontrada/);
+});
