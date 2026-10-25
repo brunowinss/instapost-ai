@@ -2562,6 +2562,106 @@ async function sendTelegramNotification(post, status, errorMsg) {
   }
 }
 
+/** Texto simples no Telegram (sem Markdown: motivos com "_" quebram a formatação). */
+async function sendTelegramText(text) {
+  try {
+    const db = await getDB();
+    const tokenRow = await db.get('SELECT value FROM global_config WHERE key = ?', ['telegramToken']);
+    const chatRow = await db.get('SELECT value FROM global_config WHERE key = ?', ['telegramChatId']);
+    if (!tokenRow || !chatRow) return;
+    const token = JSON.parse(tokenRow.value);
+    const chatId = JSON.parse(chatRow.value);
+    if (!token || !chatId) return;
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text })
+    });
+  } catch (e) {
+    console.error('Telegram text error:', e.message);
+  }
+}
+
+const accessAlertedAt = new Map(); // accountId -> quando avisamos pela última vez
+
+/** Avisa (Telegram + push) no máximo uma vez por dia por conta, para não virar spam. */
+async function alertAccessProblem(accountId, title, body) {
+  if (Date.now() - (accessAlertedAt.get(accountId) || 0) < 24 * 3600 * 1000) return false;
+  accessAlertedAt.set(accountId, Date.now());
+  await sendTelegramText(`⚠️ ${title}\n\n${body}\n\nInsta Post`);
+  await sendWebPushNotification(title, body);
+  return true;
+}
+
+const RENEW_WHEN_DAYS_LEFT = 30;
+
+/**
+ * Token do Instagram (login do Instagram) vale 60 dias e é renovável. Renovamos quando faltam
+ * menos de 30 dias — ou quando ainda não sabemos o vencimento — e guardamos a nova data.
+ */
+async function renewInstagramAccess(db, acc) {
+  const token = acc.accessToken || '';
+  if (!token) return { ok: false, note: 'sem token salvo' };
+  if (!token.startsWith('IG')) return { ok: true, note: 'token do login do Facebook (sem renovação automática)' };
+
+  const expiry = acc.tokenExpiry ? new Date(acc.tokenExpiry) : null;
+  const daysLeft = expiry && !isNaN(expiry) ? (expiry - Date.now()) / 86400000 : null;
+  if (daysLeft !== null && daysLeft > RENEW_WHEN_DAYS_LEFT) return { ok: true, note: `token vale por mais ${Math.floor(daysLeft)} dias` };
+
+  const query = new URLSearchParams({ grant_type: 'ig_refresh_token', access_token: token });
+  const res = await fetch(`https://graph.instagram.com/refresh_access_token?${query}`, { timeout: 10000 });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.error || !data.access_token) {
+    const message = (data.error && data.error.message) || `HTTP ${res.status}`;
+    // A Meta só renova tokens com mais de 24h: um token recém-conectado tenta de novo no próximo ciclo.
+    if (/24 hours/i.test(message)) return { ok: true, note: 'token novo; a renovação tenta de novo amanhã' };
+    return { ok: false, note: message };
+  }
+
+  const expiresAt = new Date(Date.now() + (data.expires_in || 5184000) * 1000).toISOString();
+  await db.run('UPDATE accounts SET "accessToken" = ?, "tokenExpiry" = ? WHERE "accountId" = ?', [data.access_token, expiresAt, acc.accountId]);
+  statsCache.delete(acc.accountId);
+  igMediaStatsCache.delete(acc.accountId);
+  return { ok: true, note: `token renovado até ${expiresAt.slice(0, 10)}` };
+}
+
+/** Confere (e renova, quando dá) o acesso de todas as contas das três redes; avisa quando alguma perdeu o acesso. */
+async function runAccessChecks({ notify = true } = {}) {
+  const db = await getDB();
+  const results = [];
+  for (const acc of await db.all('SELECT * FROM accounts')) {
+    const platform = acc.platform || 'instagram';
+    const label = accountLabel(acc, acc);
+    const result = { accountId: acc.accountId, account: label, platform, ok: true, note: '' };
+    try {
+      if (platform === 'instagram') Object.assign(result, await renewInstagramAccess(db, acc));
+      else if (platform === 'facebook') {
+        const check = await facebookService.checkPageToken(acc);
+        Object.assign(result, { ok: check.valid, note: check.valid ? 'acesso válido' : check.reason });
+      } else if (platform === 'youtube') {
+        const check = await youtubeService.checkChannelAccess(acc);
+        Object.assign(result, { ok: check.ok, note: check.ok ? 'acesso válido' : check.reason });
+      }
+    } catch (err) {
+      Object.assign(result, { ok: false, note: err.message });
+    }
+    if (!result.ok && notify) {
+      await alertAccessProblem(acc.accountId, `Reconecte ${label}`, `${label} perdeu o acesso: ${result.note}. Abra o painel e reconecte a conta.`);
+    }
+    results.push(result);
+  }
+  return results;
+}
+
+// Botão "Verificar acessos" do Diagnóstico: confere as três redes (sem mandar aviso).
+app.post('/api/accounts/access-check', requireAuth, async (req, res) => {
+  try {
+    res.json({ results: await runAccessChecks({ notify: req.query.notify === '1' }) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 async function notifyAll(post, status, errorMsg) {
   await sendTelegramNotification(post, status, errorMsg);
   
@@ -2679,10 +2779,17 @@ initDB()
     // criarem dois despertares separados. O import roda a cada 2 ticks.
     let tick = 0;
 
+    let lastAccessCheck = 0;
+
     const runScheduler = async () => {
       if (scheduler.running) return;
       scheduler.running = true;
       try {
+        // Uma vez por dia: renova token do Instagram e avisa se alguma conta perdeu o acesso.
+        if (Date.now() - lastAccessCheck > 24 * 3600 * 1000) {
+          lastAccessCheck = Date.now();
+          await runAccessChecks().catch(e => console.error('[ACCESS-CHECK]', e.message));
+        }
         await runStoryLoops();
         await cron();
         if (tick % 2 === 0) await runAutoImporter();

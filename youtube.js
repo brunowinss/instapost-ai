@@ -110,6 +110,17 @@ async function getYouTubeStats(account, videoIds = []) {
   }
 }
 
+/** O canal ainda consegue um token de acesso? Falha com invalid_grant quando a autorização expirou (app em modo de teste: 7 dias). */
+async function checkChannelAccess(account) {
+  try {
+    const { token } = await buildAuthorizedClient(account).getAccessToken();
+    return token ? { ok: true } : { ok: false, reason: 'o Google não devolveu um token' };
+  } catch (err) {
+    const data = err && err.response && err.response.data;
+    return { ok: false, reason: (data && (data.error_description || data.error)) || err.message };
+  }
+}
+
 function buildAuthorizedClient(account) {
   const client = getOAuthClient();
   if (!client) throw new Error('App do YouTube não configurado (faltam YOUTUBE_CLIENT_ID/SECRET/REDIRECT_URI).');
@@ -262,6 +273,7 @@ module.exports = {
   exchangeCode,
   getChannelInfo,
   getYouTubeStats,
+  checkChannelAccess,
   publishToYouTube,
   suggestTimes,
   resolveTimes,

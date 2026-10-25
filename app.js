@@ -3715,7 +3715,8 @@ async function runHealthCheck() {
     const accounts = data.accounts || [];
 
     if (accounts.length === 0) {
-      resultsContainer.innerHTML = '<p style="color:var(--text-dim); text-align:center; padding:1.5rem;">Nenhuma conta cadastrada para verificar.</p>';
+      resultsContainer.innerHTML = '<p style="color:var(--text-dim); text-align:center; padding:1.5rem;">Nenhuma conta do Instagram para verificar.</p>';
+      await appendOtherNetworkChecks(resultsContainer);
       return;
     }
 
@@ -3739,8 +3740,37 @@ async function runHealthCheck() {
         </div>
       </div>
     `).join('');
+    await appendOtherNetworkChecks(resultsContainer);
   } catch (err) {
     resultsContainer.innerHTML = `<p style="color:var(--error); text-align:center; padding:1rem;">Falha ao executar diagnóstico: ${err.message}</p>`;
+  }
+}
+
+/** Facebook e YouTube no mesmo Diagnóstico: o servidor confere o acesso de cada um com a rede. */
+async function appendOtherNetworkChecks(container) {
+  try {
+    const res = await fetch(`${API_BASE}/accounts/access-check`, { method: 'POST' });
+    const data = await res.json();
+    const others = (data.results || []).filter(r => r.platform !== 'instagram');
+    if (others.length === 0) return;
+
+    const icon = { facebook: 'fa-brands fa-facebook', youtube: 'fa-brands fa-youtube' };
+    const reconnect = { facebook: '/auth/facebook', youtube: '/auth/youtube' };
+    container.insertAdjacentHTML('beforeend', others.map(r => `
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:12px 14px; background:rgba(255,255,255,0.03); border:1px solid ${r.ok ? 'rgba(52,211,153,0.3)' : 'rgba(239,68,68,0.35)'}; border-radius:10px; margin-top:10px;">
+        <div style="display:flex; align-items:center; gap:12px; min-width:0;">
+          <div style="width:34px; height:34px; border-radius:50%; background:${r.ok ? 'rgba(52,211,153,0.15)' : 'rgba(239,68,68,0.15)'}; display:flex; align-items:center; justify-content:center; color:${r.ok ? 'var(--success)' : 'var(--error)'}; flex-shrink:0;">
+            <i class="${icon[r.platform] || 'fa-solid fa-plug'}"></i>
+          </div>
+          <div style="min-width:0;">
+            <div style="font-weight:700; font-size:0.9rem; color:var(--text-main);">${escapeHtml(r.account)}</div>
+            <div style="font-size:0.72rem; color:${r.ok ? 'var(--success)' : 'var(--error)'}; margin-top:2px; word-break:break-word;">${escapeHtml(r.note || (r.ok ? 'acesso válido' : 'sem acesso'))}</div>
+          </div>
+        </div>
+        ${r.ok ? '' : `<a href="${reconnect[r.platform] || '/'}" target="_blank" class="btn btn-sm btn-ghost" style="color:var(--error); border-color:rgba(239,68,68,0.3); font-size:0.72rem; flex-shrink:0;"><i class="fa-solid fa-arrows-rotate"></i> Reconectar</a>`}
+      </div>`).join(''));
+  } catch (err) {
+    console.error('Falha ao verificar outras redes:', err);
   }
 }
 

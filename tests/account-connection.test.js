@@ -60,6 +60,7 @@ function serverHarness(fetch, accounts = [], postgres = false, config = {}, publ
       getAuthUrl: () => null,
       exchangeCode: async () => ({ client: {}, tokens: {} }),
       getChannelInfo: async () => ({ channelId: '', title: '', thumbnail: '' }),
+      checkChannelAccess: async account => account.refreshToken === 'dead' ? { ok: false, reason: 'invalid_grant: Token has been expired or revoked.' } : { ok: true },
       getYouTubeStats: async (account, ids) => {
         youtubeCalls.push({ account, ids });
         if (account.username === 'broken') throw new Error('[YouTube] invalid_grant');
@@ -559,4 +560,84 @@ test('Facebook login shows no warning when every connected Page is in the new gr
   const state = stateFrom((await server.invoke('get', '/auth/facebook')).redirectUrl);
   const done = await server.invoke('get', '/auth/facebook/callback', { query: { code: 'good', state } });
   assert.ok(!/ficou sem acesso/.test(done.body));
+});
+
+const daysFromNow = (days) => new Date(Date.now() + days * 86400000).toISOString();
+
+test('access check renews expiring Instagram tokens, skips healthy ones and checks Facebook/YouTube', async () => {
+  const requests = [];
+  const server = serverHarness(async url => {
+    requests.push(new URL(url));
+    return response({ access_token: 'IGAA-renewed', token_type: 'bearer', expires_in: 5184000 });
+  }, [
+    { accountId: 'IG1', username: 'sem_data', platform: 'instagram', accessToken: 'IGAA-old', tokenExpiry: null },
+    { accountId: 'IG2', username: 'saudavel', platform: 'instagram', accessToken: 'IGAA-fresh', tokenExpiry: daysFromNow(50) },
+    { accountId: 'IG3', username: 'perto_de_vencer', platform: 'instagram', accessToken: 'IGAA-soon', tokenExpiry: daysFromNow(10) },
+    { accountId: 'IG4', username: 'via_facebook', platform: 'instagram', accessToken: 'EAA-fb-login' },
+    { accountId: 'PG1', username: 'Pagina Viva', platform: 'facebook', accessToken: 'EAA-live' },
+    { accountId: 'PG2', username: 'Pagina Morta', platform: 'facebook', accessToken: 'EAA-dead' },
+    { accountId: 'UC1', username: 'Canal Vivo', platform: 'youtube', refreshToken: 'ok' },
+    { accountId: 'UC2', username: 'Canal Morto', platform: 'youtube', refreshToken: 'dead' }
+  ]);
+
+  const res = await server.invoke('post', '/api/accounts/access-check');
+  const byId = Object.fromEntries(Array.from(res.body.results, r => [r.accountId, r]));
+
+  assert.equal(byId.IG1.ok, true);
+  assert.match(byId.IG1.note, /token renovado até/);
+  assert.match(byId.IG3.note, /token renovado até/);
+  assert.match(byId.IG2.note, /vale por mais 4\d dias/, 'token saudável não é renovado à toa');
+  assert.match(byId.IG4.note, /login do Facebook/);
+  assert.equal(byId.PG1.ok, true);
+  assert.equal(byId.PG2.ok, false);
+  assert.equal(byId.PG2.note, 'Session has expired');
+  assert.equal(byId.UC1.ok, true);
+  assert.equal(byId.UC2.ok, false);
+  assert.match(byId.UC2.note, /invalid_grant/);
+
+  assert.deepEqual(requests.map(r => r.hostname), ['graph.instagram.com', 'graph.instagram.com'], 'só IG1 e IG3 chamam a Meta');
+  assert.equal(requests[0].searchParams.get('grant_type'), 'ig_refresh_token');
+  assert.equal(requests[0].searchParams.get('access_token'), 'IGAA-old');
+
+  const updates = server.writes.filter(w => /UPDATE accounts SET "accessToken"/.test(w.sql));
+  assert.deepEqual(updates.map(w => w.params[2]), ['IG1', 'IG3']);
+  assert.equal(updates[0].params[0], 'IGAA-renewed');
+  const days = (Date.parse(updates[0].params[1]) - Date.now()) / 86400000;
+  assert.ok(days > 59 && days < 61, 'novo vencimento ≈ 60 dias');
+
+  assert.ok(!/IGAA-|EAA-/.test(JSON.stringify(res.body)), 'tokens nunca aparecem na resposta');
+});
+
+test('access check alerts once a day on Telegram when an account lost access, and ignores "token too new"', async () => {
+  const telegram = [];
+  const server = serverHarness(async url => {
+    const parsed = new URL(url);
+    if (parsed.hostname === 'api.telegram.org') { telegram.push(parsed.pathname); return response({ ok: true }); }
+    return response({ error: { message: 'Cannot refresh a token that is not at least 24 hours old.' } }, 400);
+  }, [
+    { accountId: 'IG1', username: 'recem_conectada', platform: 'instagram', accessToken: 'IGAA-new' },
+    { accountId: 'PG2', username: 'Pagina Morta', platform: 'facebook', accessToken: 'EAA-dead' }
+  ], false, { telegramToken: 'BOT123', telegramChatId: '42' });
+
+  const first = await server.invoke('post', '/api/accounts/access-check', { query: { notify: '1' } });
+  assert.equal(first.body.results.find(r => r.accountId === 'IG1').ok, true, 'conta recém-conectada não é alarme falso');
+  assert.equal(first.body.results.find(r => r.accountId === 'PG2').ok, false);
+  assert.deepEqual(telegram, ['/botBOT123/sendMessage'], 'um aviso, só para a Página sem acesso');
+
+  await server.invoke('post', '/api/accounts/access-check', { query: { notify: '1' } });
+  assert.equal(telegram.length, 1, 'no mesmo dia não repete o aviso');
+
+  const quiet = serverHarness(async () => response({}), [{ accountId: 'PG2', username: 'Morta', platform: 'facebook', accessToken: 'EAA-dead' }], false, { telegramToken: 'B', telegramChatId: '1' });
+  await quiet.invoke('post', '/api/accounts/access-check');
+  assert.equal(quiet.writes.length, 0);
+});
+
+test('access check reports an Instagram token that Meta refuses to renew (expired) as a problem', async () => {
+  const server = serverHarness(async () => response({ error: { message: 'Error validating access token: Session has expired' } }, 400), [
+    { accountId: 'IG1', username: 'vencida', platform: 'instagram', accessToken: 'IGAA-expired', tokenExpiry: daysFromNow(-3) }
+  ]);
+  const res = await server.invoke('post', '/api/accounts/access-check');
+  assert.equal(res.body.results[0].ok, false);
+  assert.match(res.body.results[0].note, /Session has expired/);
+  assert.equal(server.writes.filter(w => /UPDATE accounts/.test(w.sql)).length, 0, 'não troca o token quando a renovação falha');
 });
