@@ -5751,10 +5751,10 @@ function renderNetworkCalendar(net) {
   const months = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
   label.innerText = `${months[month]} ${year}`;
 
-  const firstDay = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
   const today = new Date();
+  const weekdays = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 
+  // Só entram os dias que têm publicação: dia vazio não ocupa espaço.
   const byDay = new Map();
   networkPosts(net).forEach(p => {
     const d = new Date(p.scheduledAt);
@@ -5764,37 +5764,45 @@ function renderNetworkCalendar(net) {
     }
   });
 
-  let html = '<div class="cal-header">';
-  ['DOM','SEG','TER','QUA','QUI','SEX','SÁB'].forEach(d => html += `<div class="cal-header-cell">${d}</div>`);
-  html += '</div><div class="cal-grid">';
-  for (let i = 0; i < firstDay; i++) html += '<div class="cal-day empty"></div>';
-
-  for (let day = 1; day <= daysInMonth; day++) {
-    const dayPosts = byDay.get(day) || [];
-    const classes = ['cal-day'];
-    if (today.getDate() === day && today.getMonth() === month && today.getFullYear() === year) classes.push('today');
-    if (dayPosts.length > 0) classes.push('has-posts');
-
-    let thumbs = '';
-    if (dayPosts.length > 0) {
-      const shown = dayPosts.slice(0, 2).map(p => {
-        const url = p.mediaType === 'FB_TEXT' ? '' : getThumbnailUrl(p.imageUrl);
-        return url
-          ? `<img class="cal-day-thumb" src="${escapeHtml(url)}" loading="lazy" onerror="this.style.display='none';" data-tip="${escapeHtml(p.status)}">`
-          : `<div class="cal-day-thumb" style="display:flex;align-items:center;justify-content:center;background:rgba(16,184,245,0.15);" data-tip="${escapeHtml(p.status)}"><i class="fa-solid ${ui.typeIcon(p)}" style="font-size:0.5rem;color:var(--accent);"></i></div>`;
-      }).join('');
-      const overflow = dayPosts.length > 2 ? `<div class="cal-day-thumb-overflow">+${dayPosts.length - 2}</div>` : '';
-      thumbs = `<div class="cal-day-thumbs">${shown}${overflow}</div><span class="cal-day-count" aria-label="${dayPosts.length} publicações">${dayPosts.length}</span>`;
-    }
-    html += `<div class="${classes.join(' ')}">${day}${thumbs}</div>`;
+  if (byDay.size === 0) {
+    grid.innerHTML = `<div style="text-align:center; padding:2.5rem 1rem; color:var(--text-dim);"><i class="fa-solid fa-calendar-xmark" style="font-size:2.2rem; opacity:0.3; display:block; margin-bottom:0.8rem;"></i>Nada agendado em ${months[month]}. Use as setas para ver outros meses.</div>`;
+    return;
   }
 
-  html += `</div><div class="cal-legend">
+  const statusDot = { pending: 'var(--warning)', processing: 'var(--warning)', success: 'var(--success)', error: 'var(--error)' };
+  const days = Array.from(byDay.keys()).sort((x, y) => x - y);
+  grid.innerHTML = `<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap:12px;">` + days.map(day => {
+    const posts = byDay.get(day).sort((x, y) => new Date(x.scheduledAt) - new Date(y.scheduledAt));
+    const date = new Date(year, month, day);
+    const isToday = today.getDate() === day && today.getMonth() === month && today.getFullYear() === year;
+    const rows = posts.map(p => {
+      const time = new Date(p.scheduledAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      const url = p.mediaType === 'FB_TEXT' ? '' : getThumbnailUrl(p.imageUrl);
+      const thumb = url
+        ? `<img src="${escapeHtml(url)}" loading="lazy" alt="" onerror="this.style.display='none';" style="width:34px; height:34px; border-radius:6px; object-fit:cover; flex-shrink:0;">`
+        : `<div style="width:34px; height:34px; border-radius:6px; background:rgba(16,184,245,0.15); display:flex; align-items:center; justify-content:center; flex-shrink:0;"><i class="fa-solid ${ui.typeIcon(p)}" style="font-size:0.8rem; color:var(--accent);"></i></div>`;
+      return `<div style="display:flex; align-items:center; gap:8px; min-width:0;">
+        ${thumb}
+        <div style="min-width:0; flex:1;">
+          <div style="font-size:0.78rem; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(ui.title(p))}</div>
+          <div style="font-size:0.7rem; color:var(--text-dim);"><span style="display:inline-block; width:7px; height:7px; border-radius:50%; background:${statusDot[p.status] || 'var(--text-dim)'}; margin-right:5px;"></span>${time}</div>
+        </div>
+      </div>`;
+    }).join('');
+    return `<div style="background:rgba(255,255,255,0.03); border:1px solid ${isToday ? 'var(--accent)' : 'var(--border-color)'}; border-radius:14px; padding:12px 14px;">
+      <div style="display:flex; align-items:baseline; gap:8px; margin-bottom:10px;">
+        <span style="font-size:1.4rem; font-weight:800;">${day}</span>
+        <span style="font-size:0.72rem; text-transform:uppercase; color:var(--text-dim); font-weight:600;">${weekdays[date.getDay()]}${isToday ? ' · hoje' : ''}</span>
+        <span style="margin-left:auto; font-size:0.72rem; color:var(--accent); font-weight:700;">${posts.length} ${posts.length === 1 ? 'post' : 'posts'}</span>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:8px;">${rows}</div>
+    </div>`;
+  }).join('') + `</div>
+  <div class="cal-legend" style="margin-top:1rem;">
     <span><span class="cal-legend-dot" style="background:var(--warning);"></span> Pendente</span>
     <span><span class="cal-legend-dot" style="background:var(--success);"></span> Sucesso</span>
     <span><span class="cal-legend-dot" style="background:var(--error);"></span> Falhou</span>
   </div>`;
-  grid.innerHTML = html;
 }
 
 
