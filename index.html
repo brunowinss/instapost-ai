@@ -326,7 +326,7 @@
             <!-- Caption -->
             <div class="form-group">
               <label class="label"><i class="fa-solid fa-pen-fancy"></i> Legenda</label>
-              <textarea class="textarea" id="post-caption" placeholder="Escreva sua legenda ou só as hashtags..."></textarea>
+              <textarea class="textarea" id="post-caption" placeholder="Escreva a legenda ou deixe em branco: ele usa o título que está no nome do arquivo do vídeo"></textarea>
             </div>
             <!-- Schedule Mode -->
             <div class="form-group" style="margin-bottom:0;">
@@ -682,7 +682,7 @@
                   <i class="fa-solid fa-shuffle"></i> Girar Legenda
                 </button>
               </div>
-              <textarea class="textarea" id="bulk-caption-input" rows="3" placeholder="Digite uma legenda base ou use legendas rotativas... Use {dia} e {hora} para personalizar"></textarea>
+              <textarea class="textarea" id="bulk-caption-input" rows="3" placeholder="Legenda base ou legendas rotativas ({dia} e {hora} funcionam). Em branco: usa o título do nome de cada arquivo"></textarea>
               
               <div style="display:flex; align-items:center; gap:10px; margin-top:8px;">
                 <input type="checkbox" id="bulk-use-rotating-captions" style="width:16px; height:16px; accent-color:var(--primary);">
@@ -1120,7 +1120,7 @@
 
             <div class="form-group">
               <label class="label"><i class="fa-solid fa-pen-nib"></i> Texto / legenda</label>
-              <textarea class="textarea" id="crosspost-caption" rows="4" placeholder="Vale para Instagram e Facebook (no YouTube vira a descrição)"></textarea>
+              <textarea class="textarea" id="crosspost-caption" rows="4" placeholder="Vale para Instagram e Facebook (no YouTube vira a descrição). Em branco: usa o título do nome de cada arquivo"></textarea>
             </div>
 
             <div class="form-group" id="crosspost-yt-group" style="display:none;">
@@ -1253,7 +1253,7 @@
 
             <div class="form-group">
               <label class="label"><i class="fa-solid fa-heading"></i> Título</label>
-              <input type="text" class="input" id="youtube-title-input" oninput="updateLivePreview('youtube')" maxlength="100" placeholder="Título do vídeo">
+              <input type="text" class="input" id="youtube-title-input" oninput="updateLivePreview('youtube')" maxlength="100" placeholder="Em branco: usa o título do nome do arquivo">
             </div>
             <div class="form-group">
               <label class="label"><i class="fa-solid fa-align-left"></i> Descrição</label>
@@ -1448,7 +1448,7 @@
 
             <div class="form-group">
               <label class="label"><i class="fa-solid fa-pen-nib"></i> Texto</label>
-              <textarea class="textarea" id="facebook-caption" oninput="updateLivePreview('facebook')" rows="4" placeholder="O que você quer publicar? (em vídeo, a primeira linha vira o título)"></textarea>
+              <textarea class="textarea" id="facebook-caption" oninput="updateLivePreview('facebook')" rows="4" placeholder="O que você quer publicar? Em branco: usa o título do nome do arquivo (em vídeo, a primeira linha vira o título)"></textarea>
             </div>
 
             <div class="form-group">
@@ -1496,7 +1496,7 @@
             </div>
             <div class="form-group">
               <label class="label"><i class="fa-solid fa-pen-nib"></i> Texto padrão (usado nos arquivos sem texto próprio)</label>
-              <textarea class="textarea" id="facebook-bulk-caption" rows="3" placeholder="Legenda comum a todos os posts (opcional)"></textarea>
+              <textarea class="textarea" id="facebook-bulk-caption" rows="3" placeholder="Legenda comum a todos os posts. Em branco: usa o título do nome de cada arquivo"></textarea>
             </div>
             <div class="form-group">
               <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">

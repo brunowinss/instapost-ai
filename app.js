@@ -1511,7 +1511,7 @@ function setupForms() {
           accountId,
           mediaType: type,
           imageUrl: url,
-          caption: pickVariation(captionVariations, i),
+          caption: pickVariation(captionVariations, i) || captionFromFilename(file.name),
           scheduledAt: scheduledAt.toISOString()
         };
         
@@ -2452,6 +2452,9 @@ async function generateBulkQueue() {
         .replace(/{hora}/gi, horaFormatada)
         .replace(/{data}/gi, dataFormatada);
     }
+
+    // Sem legenda digitada nem rotativa: usa a que já vem no nome do arquivo.
+    if (!itemCaption.trim()) itemCaption = captionFromFilename(file.name);
 
     STATE.bulkQueue.push({
       file,
@@ -4541,16 +4544,17 @@ function handleYoutubeFileSelect(file) {
 
 async function submitYoutubePost() {
   const accountId = document.getElementById('youtube-account-select')?.value;
-  const title = document.getElementById('youtube-title-input')?.value.trim();
-  const description = document.getElementById('youtube-description-input')?.value.trim();
+  const file = STATE.youtubeFile;
+  // Título e descrição em branco: vêm do nome do arquivo (texto vira título, #hashtags vão para a descrição).
+  const auto = file ? youtubeAutoText(file) : { title: '', hashtags: '' };
+  const title = document.getElementById('youtube-title-input')?.value.trim() || auto.title;
+  const description = document.getElementById('youtube-description-input')?.value.trim() || auto.hashtags;
   const when = document.getElementById('youtube-when')?.value || 'smart';
   const scheduleInput = document.getElementById('youtube-schedule-input')?.value;
   const mediaType = STATE.youtubePostType || 'YOUTUBE_SHORT';
-  const file = STATE.youtubeFile;
 
   if (!accountId) return showToast('Conecte e selecione um canal do YouTube primeiro.', 'warning');
   if (!file) return showToast('Selecione o arquivo de vídeo.', 'warning');
-  if (!title) return showToast('Digite um título.', 'warning');
 
   if (when === 'manual' && !scheduleInput) return showToast('Escolha a data e a hora.', 'warning');
   let scheduledAt = new Date().toISOString();
@@ -4669,7 +4673,7 @@ function handleYoutubeBulkFilesSelect(files) {
     showToast('Selecione arquivos de vídeo.', 'warning');
     return;
   }
-  STATE.youtubeBulkFiles = videoFiles.map(file => ({ file, title: guessTitleFromFilename(file.name), thumbnail: null }));
+  STATE.youtubeBulkFiles = videoFiles.map(file => ({ file, title: youtubeAutoText(file).title, hashtags: youtubeAutoText(file).hashtags, thumbnail: null }));
   const summaryEl = document.getElementById('youtube-bulk-files-summary');
   if (summaryEl) {
     summaryEl.style.display = 'block';
@@ -4759,7 +4763,7 @@ async function submitYoutubeBulk() {
 
   const videos = [];
   for (let i = 0; i < files.length; i++) {
-    const { file, title } = files[i];
+    const { file, title, hashtags } = files[i];
     const pct = Math.round((i / files.length) * 100);
     if (progressBar) progressBar.style.width = `${pct}%`;
     if (progressPct) progressPct.innerText = `${pct}%`;
@@ -4776,7 +4780,7 @@ async function submitYoutubeBulk() {
 
       videos.push({
         title: title || guessTitleFromFilename(file.name),
-        description: '',
+        description: hashtags || '',
         isShort: mediaType === 'YOUTUBE_SHORT',
         videoUrl: uploadData.secure_url,
         fileName: file.name
@@ -5066,7 +5070,7 @@ async function submitFacebookPost() {
           accountId,
           mediaType: type,
           imageUrl: url,
-          caption,
+          caption: caption || (file ? captionFromFilename(file.name) : ''),
           scheduledAt: scheduledAt.toISOString(),
           // Já nasce "processing" quando sai agora, para o agendador não publicar em duplicidade.
           status: publishNow ? 'processing' : 'pending',
@@ -5466,11 +5470,15 @@ function findPostById(id) {
 /** Como cada rede chama o mesmo arquivo: foto/vídeo no Instagram e no Facebook; só vídeo no YouTube. */
 function crosspostPostFor(networkKey, file, { caption, title, short }) {
   const isVideo = file.type.startsWith('video/');
-  if (networkKey === 'instagram') return { mediaType: isVideo ? 'REELS' : 'IMAGE', caption };
-  if (networkKey === 'facebook') return { mediaType: isVideo ? 'FB_VIDEO' : 'FB_PHOTO', caption, platform: 'facebook' };
+  // Sem texto digitado, cada arquivo usa a legenda que já vem no próprio nome.
+  const text = caption || captionFromFilename(file.name);
+  if (networkKey === 'instagram') return { mediaType: isVideo ? 'REELS' : 'IMAGE', caption: text };
+  if (networkKey === 'facebook') return { mediaType: isVideo ? 'FB_VIDEO' : 'FB_PHOTO', caption: text, platform: 'facebook' };
   if (networkKey === 'youtube' && isVideo) {
-    const finalTitle = title || guessTitleFromFilename(file.name);
-    return { mediaType: short ? 'YOUTUBE_SHORT' : 'YOUTUBE_VIDEO', caption: caption ? `${finalTitle}\n\n${caption}` : finalTitle, platform: 'youtube' };
+    const auto = youtubeAutoText(file);
+    const finalTitle = title || auto.title;
+    const description = caption || auto.hashtags;
+    return { mediaType: short ? 'YOUTUBE_SHORT' : 'YOUTUBE_VIDEO', caption: description ? `${finalTitle}\n\n${description}` : finalTitle, platform: 'youtube' };
   }
   return null;
 }
@@ -5878,7 +5886,7 @@ function renderFacebookBulkList() {
         ${item.thumb ? `<img src="${escapeHtml(item.thumb)}" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fa-solid fa-video"></i>'}
       </div>
       <div style="flex:1; min-width:0;">
-        <input type="text" class="input" style="padding:6px 10px; font-size:0.82rem;" placeholder="Texto deste post (opcional)" value="${escapeHtml(item.caption)}" oninput="updateFacebookBulkCaption(${idx}, this.value)">
+        <input type="text" class="input" style="padding:6px 10px; font-size:0.82rem;" placeholder="${escapeHtml(captionFromFilename(item.file.name) || 'Texto deste post (opcional)')}" value="${escapeHtml(item.caption)}" oninput="updateFacebookBulkCaption(${idx}, this.value)">
         <div style="font-size:0.68rem; color:var(--text-dim); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">#${idx + 1} · ${item.file.type.startsWith('video/') ? 'Vídeo' : 'Foto'} · ${escapeHtml(item.file.name)}</div>
       </div>
       <button type="button" class="btn btn-ghost btn-sm" onclick="removeFacebookBulkFile(${idx})" aria-label="Remover" style="padding:4px 8px; color:var(--error); flex-shrink:0;"><i class="fa-solid fa-trash"></i></button>
@@ -5960,7 +5968,7 @@ async function submitFacebookBulk() {
         accountId,
         mediaType: isVideo ? 'FB_VIDEO' : 'FB_PHOTO',
         imageUrl: url,
-        caption: caption.trim() || common,
+        caption: caption.trim() || common || captionFromFilename(file.name),
         scheduledAt: times[i].toISOString(),
         status: 'pending',
         platform: 'facebook'
@@ -6201,8 +6209,8 @@ function updateLivePreview(network) {
     const description = document.getElementById('youtube-description-input')?.value || '';
     box.innerHTML = realPreviewHtml({
       network, mediaType: STATE.youtubePostType || 'YOUTUBE_SHORT', src: rpUrlFor(file), isVideo: true,
-      title: document.getElementById('youtube-title-input')?.value || (file ? guessTitleFromFilename(file.name) : ''),
-      caption: description, ...rpAccountFor('youtube', 'youtube-account-select')
+      title: document.getElementById('youtube-title-input')?.value || (file ? youtubeAutoText(file).title : ''),
+      caption: description || (file ? youtubeAutoText(file).hashtags : ''), ...rpAccountFor('youtube', 'youtube-account-select')
     });
     return;
   }
@@ -6211,7 +6219,7 @@ function updateLivePreview(network) {
   const type = STATE.facebookPostType || 'FB_PHOTO';
   box.innerHTML = realPreviewHtml({
     network, mediaType: type, src: type === 'FB_TEXT' ? '' : rpUrlFor(first), isVideo: type === 'FB_VIDEO',
-    caption: document.getElementById('facebook-caption')?.value || '',
+    caption: document.getElementById('facebook-caption')?.value || (type !== 'FB_TEXT' && first ? captionFromFilename(first.name) : ''),
     note: files.length > 1 ? `Mostrando o 1º de ${files.length} arquivos — cada um vira um post.` : '',
     ...rpAccountFor('facebook', 'facebook-account-select')
   });
@@ -6234,7 +6242,7 @@ function previewFacebookBulk(index) {
   const common = document.getElementById('facebook-bulk-caption')?.value || '';
   openRealPreview([{
     network: 'facebook', mediaType: isVideo ? 'FB_VIDEO' : 'FB_PHOTO', src: rpUrlFor(item.file), isVideo,
-    caption: item.caption || common, ...rpAccountFor('facebook', 'facebook-bulk-account-select')
+    caption: item.caption || common || captionFromFilename(item.file.name), ...rpAccountFor('facebook', 'facebook-bulk-account-select')
   }], `Prévia · ${item.file.name}`);
 }
 
@@ -6244,7 +6252,7 @@ function previewCrosspost(index = 0) {
   if (!entry) return showToast('Escolha um arquivo primeiro.', 'warning');
   const selected = crosspostSelection();
   const caption = document.getElementById('crosspost-caption')?.value || '';
-  const title = document.getElementById('crosspost-yt-title')?.value.trim() || guessTitleFromFilename(entry.file.name);
+  const title = document.getElementById('crosspost-yt-title')?.value.trim() || '';
   const short = document.getElementById('crosspost-yt-short')?.checked !== false;
   const isVideo = entry.file.type.startsWith('video/');
   const panels = [];
@@ -6257,7 +6265,8 @@ function previewCrosspost(index = 0) {
     panels.push({
       network: network.key, mediaType: post.mediaType, src: rpUrlFor(entry.file), isVideo,
       username: network.key === 'instagram' ? `@${account.username}` : account.username, avatar: account.profilePictureUrl,
-      title, caption
+      title: network.key === 'youtube' ? post.caption.split('\n')[0] : title,
+      caption: network.key === 'youtube' ? post.caption.split('\n').slice(2).join('\n') : post.caption
     });
   });
   if (panels.length === 0) return showToast('Marque pelo menos uma conta para ver a prévia.', 'warning');
@@ -6285,7 +6294,7 @@ function updateInstagramLivePreview() {
     isVideo: !!media.isVideo,
     username: account ? `@${account.username}` : '',
     avatar,
-    caption: document.getElementById('post-caption')?.value || '',
+    caption: document.getElementById('post-caption')?.value || captionFromFilename(((STATE.queuedFiles || [])[0] || {}).name),
     note: STATE.igPreviewNote || ''
   });
 }
@@ -6335,4 +6344,37 @@ function applyPublishWhenUI(net) {
   }
   const btn = document.getElementById(cfg.button);
   if (btn) btn.innerHTML = `<i class="fa-solid ${value === 'now' ? 'fa-paper-plane' : 'fa-calendar-check'}"></i> ${cfg[value]}`;
+}
+
+
+// ============================================================
+// 🏷️ LEGENDA QUE JÁ VEM NO NOME DO ARQUIVO
+// ============================================================
+
+/**
+ * "⚡ Como o para-raios protege a casa #pararaios #raio.mp4" → legenda pronta.
+ * Serve quando o usuário não digita nada. Nomes de câmera/celular (IMG_1234, VID_2024...) não viram legenda.
+ */
+function captionFromFilename(name) {
+  let text = String(name || '').replace(/\.[^./\\]+$/, '');
+  if (!/\s/.test(text)) text = text.replace(/_+/g, ' '); // como_o_para_raios → com espaços
+  text = text.replace(/\s*\(\d+\)\s*$/, '').replace(/\s+/g, ' ').trim(); // tira o " (1)" das cópias
+  if (/^(IMG|VID|DSC|PXL|MOV|MVI|WhatsApp|Screenshot|Captura|video|vídeo)[\s_-]*\d/i.test(text)) return '';
+  const words = text.split(' ').filter(Boolean).length;
+  return words >= 2 || text.includes('#') ? text : '';
+}
+
+/** Separa o texto das #hashtags: o texto vira título do YouTube e as hashtags vão para a descrição. */
+function splitCaptionHashtags(caption) {
+  const tags = caption.match(/#[\p{L}\p{N}_]+/gu) || [];
+  const title = caption.replace(/#[\p{L}\p{N}_]+/gu, '').replace(/\s+/g, ' ').trim();
+  return { title, hashtags: tags.join(' ') };
+}
+
+/** Título e descrição automáticos do YouTube a partir do nome do arquivo. */
+function youtubeAutoText(file) {
+  const caption = captionFromFilename(file.name);
+  if (!caption) return { title: guessTitleFromFilename(file.name).slice(0, 100), hashtags: '' };
+  const { title, hashtags } = splitCaptionHashtags(caption);
+  return { title: (title || guessTitleFromFilename(file.name)).slice(0, 100), hashtags };
 }
