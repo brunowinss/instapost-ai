@@ -299,7 +299,7 @@
             <!-- Account Selector -->
             <div class="form-group">
               <label class="label"><i class="fa-solid fa-user-circle"></i> Postar na Conta</label>
-              <select id="post-account-select" class="input" onchange="updateInstagramLivePreview()">
+              <select id="post-account-select" class="input" onchange="updateInstagramLivePreview(); refreshNewPostPlan()">
                 <option>Carregando contas...</option>
               </select>
             </div>
@@ -346,11 +346,21 @@
                   <div style="flex:1;">
                     <div style="font-size:0.78rem; font-weight:600; color:var(--text-main);">Horários automáticos</div>
                     <div style="font-size:0.72rem; color:var(--text-dim); margin-top:2px;">
-                      Distribuídos entre 10h e 20h conforme a quantidade diária em Configurações.
+                      Nos horários em que sua audiência mais responde. Sem dia de início, continua no dia seguinte ao último agendado.
                     </div>
                   </div>
                 </div>
-                <input type="date" class="input" id="post-date" style="margin-top:0.8rem;">
+                <div class="col-2" style="gap:12px; margin-top:0.8rem;">
+                  <div>
+                    <label class="label" style="font-size:0.7rem;">Dia de início (opcional)</label>
+                    <input type="date" class="input" id="post-date" onchange="refreshNewPostPlan()">
+                  </div>
+                  <div>
+                    <label class="label" style="font-size:0.7rem;">Posts por dia</label>
+                    <input type="number" min="1" max="24" step="1" value="3" class="input" id="post-per-day" oninput="this.dataset.touched='1'; refreshNewPostPlan()">
+                  </div>
+                </div>
+                <div id="post-plan" style="margin-top:0.8rem;"></div>
               </div>
               <!-- Manual Mode -->
               <div id="schedule-manual" style="display:none;">
@@ -640,13 +650,19 @@
               </div>
               <div class="col-2" style="gap:12px; margin-bottom:10px;">
                 <div>
-                  <label class="label" style="font-size:0.7rem;">Data de Início</label>
+                  <label class="label" style="font-size:0.7rem;">Dia de início (opcional)</label>
                   <input type="date" class="input" id="bulk-start-date">
                 </div>
                 <div>
                   <label class="label" style="font-size:0.7rem;">Horário Inicial</label>
                   <input type="time" class="input" id="bulk-start-time" value="10:00">
                 </div>
+              </div>
+
+              <div style="margin-bottom:10px;">
+                <label class="label" style="font-size:0.7rem;">Vídeos por dia (modo inteligente)</label>
+                <input type="number" min="1" max="24" step="1" value="3" class="input" id="bulk-per-day">
+                <p style="font-size:0.7rem; color:var(--text-dim); margin-top:4px;">Sem dia de início, a fila começa no dia seguinte ao último já agendado. Se você escolher um dia, ela entra nesse dia mesmo que já tenha posts.</p>
               </div>
 
               <div class="col-2" style="gap:12px;">
@@ -1140,6 +1156,17 @@
                 <option value="manual">Escolher data e hora</option>
               </select>
               <input type="datetime-local" id="crosspost-datetime" class="input" style="display:none; margin-top:8px;">
+              <div id="crosspost-smart-options" class="col-2" style="gap:12px; margin-top:8px;">
+                <div>
+                  <label class="label" style="font-size:0.7rem;">Posts por dia (cada conta)</label>
+                  <input type="number" min="1" max="24" step="1" value="2" class="input" id="crosspost-per-day">
+                </div>
+                <div>
+                  <label class="label" style="font-size:0.7rem;">Dia de início (opcional)</label>
+                  <input type="date" class="input" id="crosspost-start-date">
+                </div>
+              </div>
+              <p style="font-size:0.7rem; color:var(--text-dim); margin-top:4px;">Sem dia de início, cada conta continua no dia seguinte ao último já agendado nela.</p>
             </div>
           </form>
         </div>
@@ -1317,15 +1344,8 @@
               </div>
               <div class="col-2" style="gap:12px;">
                 <div>
-                  <label class="label" style="font-size:0.7rem;">Por dia (se automático)</label>
-                  <select class="input" id="youtube-bulk-per-day" onchange="refreshBulkPlan('youtube')">
-                    <option value="1">1 por dia</option>
-                    <option value="2">2 por dia</option>
-                    <option value="3" selected>3 por dia</option>
-                    <option value="4">4 por dia</option>
-                    <option value="5">5 por dia</option>
-                    <option value="6">6 por dia</option>
-                  </select>
+                  <label class="label" style="font-size:0.7rem;">Vídeos por dia</label>
+                  <input type="number" min="1" max="24" step="1" value="3" class="input" id="youtube-bulk-per-day" oninput="refreshBulkPlan('youtube')">
                 </div>
                 <div>
                   <label class="label" style="font-size:0.7rem;">Horários manuais (se desmarcado)</label>
@@ -1333,7 +1353,7 @@
                 </div>
               </div>
               <div style="margin-top:10px;">
-                <label class="label" style="font-size:0.7rem;">Começar em (opcional — padrão: continua depois do que já está agendado)</label>
+                <label class="label" style="font-size:0.7rem;">Dia de início (em branco = dia seguinte ao último já agendado)</label>
                 <input type="date" class="input" id="youtube-bulk-start-date" onchange="refreshBulkPlan('youtube')">
               </div>
             </div>
@@ -1506,15 +1526,8 @@
               </div>
               <div class="col-2" style="gap:12px;">
                 <div>
-                  <label class="label" style="font-size:0.7rem;">Por dia (se automático)</label>
-                  <select class="input" id="facebook-bulk-per-day" onchange="refreshBulkPlan('facebook')">
-                    <option value="1">1 por dia</option>
-                    <option value="2" selected>2 por dia</option>
-                    <option value="3">3 por dia</option>
-                    <option value="4">4 por dia</option>
-                    <option value="5">5 por dia</option>
-                    <option value="6">6 por dia</option>
-                  </select>
+                  <label class="label" style="font-size:0.7rem;">Publicações por dia</label>
+                  <input type="number" min="1" max="24" step="1" value="2" class="input" id="facebook-bulk-per-day" oninput="refreshBulkPlan('facebook')">
                 </div>
                 <div>
                   <label class="label" style="font-size:0.7rem;">Horários manuais (se desmarcado)</label>
@@ -1522,7 +1535,7 @@
                 </div>
               </div>
               <div style="margin-top:10px;">
-                <label class="label" style="font-size:0.7rem;">Começar em (opcional — padrão: a partir de agora)</label>
+                <label class="label" style="font-size:0.7rem;">Dia de início (em branco = dia seguinte ao último já agendado)</label>
                 <input type="date" class="input" id="facebook-bulk-start-date" onchange="refreshBulkPlan('facebook')">
               </div>
             </div>

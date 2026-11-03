@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { generateSmartTimes, learnHourlyEngagement, makeWeightFn, priorScore } = require('../smart-schedule');
+const { generateSmartTimes, dayAfterLast, learnHourlyEngagement, makeWeightFn, priorScore } = require('../smart-schedule');
 const { planStoryLoopPosts, slotKey } = require('../story-loop');
 const { localParts, dayKey } = require('../time-utils');
 
@@ -138,4 +138,30 @@ test('story loop jitter stays within the configured variance and needs media and
   assert.deepEqual(planStoryLoopPosts({ loop: { ...LOOP, activeMedia: '[]' }, now, timeZone: TZ }), []);
   assert.deepEqual(planStoryLoopPosts({ loop: { ...LOOP, times: '[]' }, now, timeZone: TZ }), []);
   assert.deepEqual(planStoryLoopPosts({ loop: { ...LOOP, times: '["25:99","abc"]' }, now, timeZone: TZ }), []);
+});
+
+
+test('dayAfterLast continues the day after the last scheduled post, never in the past', () => {
+  const now = new Date('2026-10-08T12:00:00.000Z'); // 08/10 em São Paulo
+  assert.equal(dayAfterLast([], { now }), null);
+  // último agendado amanhã (09/10) → próximo lote começa em 10/10
+  assert.equal(dayAfterLast(['2026-10-09T18:00:00.000Z'], { now }), '2026-10-10');
+  // agendou hoje à noite → começa amanhã
+  assert.equal(dayAfterLast(['2026-10-08T23:00:00.000Z'], { now }), '2026-10-09');
+  // pega o MAIOR dia, na ordem que vier
+  assert.equal(dayAfterLast(['2026-10-12T15:00:00.000Z', '2026-10-09T15:00:00.000Z'], { now }), '2026-10-13');
+  // fila velha (já passou): começa de hoje
+  assert.equal(dayAfterLast(['2026-10-01T15:00:00.000Z'], { now }), null);
+  // 23:30 em São Paulo ainda é o mesmo dia local, mesmo já sendo o dia seguinte em UTC
+  assert.equal(dayAfterLast(['2026-10-10T02:30:00.000Z'], { now }), '2026-10-10');
+});
+
+test('a start day chosen by hand fills that day even when it already has posts', () => {
+  const existing = ['2026-10-09T15:00:00.000Z'];
+  const common = { count: 3, perDay: 3, from: FROM, existing, startDate: '2026-10-09', rng: seeded(5) };
+  const counted = generateSmartTimes({ ...common });
+  const forced = generateSmartTimes({ ...common, countExisting: false });
+  const sameDay = (list) => list.filter(d => dayKey(d, TZ) === '2026-10-09').length;
+  assert.equal(sameDay(counted), 2, 'with the quota counted, only the 2 free slots are used that day');
+  assert.equal(sameDay(forced), 3, 'a manually chosen day takes all 3 new posts');
 });

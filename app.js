@@ -619,7 +619,7 @@ function renderActiveSection() {
   if (n === 'youtube' || n.startsWith('youtube-')) renderYoutubeSection();
   if (n === 'facebook' || n.startsWith('facebook-')) renderFacebookSection();
   if (n === 'crosspost') renderCrosspostSection();
-  if (n === 'new-post') updateInstagramLivePreview();
+  if (n === 'new-post') { initNewPostPerDay(); updateInstagramLivePreview(); refreshNewPostPlan(); }
 }
 
 /** Ícone de marca por plataforma da conta — tudo aqui era hardcoded pro Instagram. */
@@ -1403,6 +1403,7 @@ function setupForms() {
     const localUrl = URL.createObjectURL(first);
     STATE.igPreviewNote = files.length > 1 ? `Mostrando o 1º de ${files.length} arquivos — cada um vira um post.` : '';
     setInstagramPreviewMedia(localUrl, isVideo);
+    refreshNewPostPlan();
     
     const submitBtn = document.querySelector('#post-form button[type="submit"]');
     if (files.length > 1) {
@@ -1464,7 +1465,7 @@ function setupForms() {
       }
       
       // Horários inteligentes para todos os arquivos de uma vez (o servidor já considera a fila da conta).
-      smartTimes = await fetchSmartTimes(accountId, files.length, startDateInput);
+      smartTimes = await newPostPlanTimes();
 
       // Continue from latest existing post for this account
       const accountPosts = STATE.scheduledPosts.filter(p => p.accountId === accountId);
@@ -2383,14 +2384,17 @@ async function generateBulkQueue() {
   }
 
   const accountId = document.getElementById('bulk-account-select')?.value || STATE.activeAccountId;
-  const startDateStr = document.getElementById('bulk-start-date')?.value || new Date().toISOString().split('T')[0];
+  const startDateInput = document.getElementById('bulk-start-date')?.value || '';
+  const startDateStr = startDateInput || new Date().toISOString().split('T')[0];
+  const bulkPerDay = Math.max(1, Math.min(24, parseInt(document.getElementById('bulk-per-day')?.value, 10) || 3));
   const startTimeStr = document.getElementById('bulk-start-time')?.value || '10:00';
   let intervalMode = document.getElementById('bulk-interval-mode')?.value || 'smart';
 
   // Modo inteligente: o servidor sorteia os horários nos picos de engajamento da conta.
   let smartTimes = null;
   if (intervalMode === 'smart') {
-    smartTimes = await fetchSmartTimes(accountId, STATE.bulkFiles.length, startDateStr);
+    // Dia de início em branco: o servidor começa no dia seguinte ao último já agendado.
+    smartTimes = await fetchSmartTimes(accountId, STATE.bulkFiles.length, startDateInput, { perDay: bulkPerDay });
     if (!smartTimes) {
       showToast('Não consegui calcular os horários inteligentes agora; usando os horários fixos das Configurações.', 'warning');
       intervalMode = 'slots';
@@ -5355,6 +5359,7 @@ const CROSSPOST_NETWORKS = [
 ];
 
 function renderCrosspostSection() {
+  onCrosspostWhenChange();
   setupCrosspostDropzone();
   renderCrosspostPreview();
   renderCrosspostDestinations();
@@ -5414,9 +5419,11 @@ function renderCrosspostPreview() {
 }
 
 function onCrosspostWhenChange() {
-  const manual = document.getElementById('crosspost-when')?.value === 'manual';
+  const when = document.getElementById('crosspost-when')?.value;
   const input = document.getElementById('crosspost-datetime');
-  if (input) input.style.display = manual ? 'block' : 'none';
+  if (input) input.style.display = when === 'manual' ? 'block' : 'none';
+  const smart = document.getElementById('crosspost-smart-options');
+  if (smart) { smart.style.display = when === 'smart' ? 'grid' : 'none'; if (smart.nextElementSibling) smart.nextElementSibling.style.display = when === 'smart' ? 'block' : 'none'; }
 }
 
 /** Contas marcadas. Na primeira vez, todas as conectadas com acesso já vêm marcadas. */
@@ -5548,7 +5555,7 @@ async function submitCrosspost() {
 
       let times = null;
       if (when === 'smart') {
-        times = await fetchSmartTimes(account.accountId, applicable.length);
+        times = await fetchSmartTimes(account.accountId, applicable.length, document.getElementById('crosspost-start-date')?.value || '', { perDay: Math.max(1, Math.min(24, parseInt(document.getElementById('crosspost-per-day')?.value, 10) || 2)) });
         if (!times) { failures.push(`${network.name(account)}: não consegui calcular o horário inteligente.`); continue; }
       }
 
@@ -6405,7 +6412,7 @@ const BULK_PLAN_CFG = {
 };
 
 /** Agrupa os horários por dia e escreve o resumo: total, dias, média por dia, primeiro e último dia. */
-function schedulePlanHtml(times, noun) {
+function schedulePlanHtml(times, noun, note = '') {
   const sorted = times.filter(d => d instanceof Date && !isNaN(d)).sort((a, b) => a - b);
   if (sorted.length === 0) return '';
   const dayKey = (d) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
@@ -6426,6 +6433,7 @@ function schedulePlanHtml(times, noun) {
 
   return `
     <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-color); border-radius:12px; padding:12px 14px;">
+      ${note ? `<div style="font-size:0.75rem; color:var(--accent); margin-bottom:8px;"><i class="fa-solid fa-circle-info"></i> ${escapeHtml(note)}</div>` : ''}
       <div style="font-size:0.85rem; line-height:1.6;"><i class="fa-solid fa-calendar-check" style="color:var(--accent);"></i>
         <b>${sorted.length} ${noun}</b> em <b>${days.size} ${days.size === 1 ? 'dia' : 'dias'}</b>
         · média de <b>${perDay % 1 === 0 ? perDay : perDay.toFixed(1).replace('.', ',')} por dia</b><br>
@@ -6494,7 +6502,67 @@ function refreshBulkPlan(net) {
     const plan = await bulkPlanTimes(net);
     if (STATE.bulkPlanToken !== token) return;
     box.innerHTML = plan.times
-      ? schedulePlanHtml(plan.times, BULK_PLAN_CFG[net].noun)
+      ? schedulePlanHtml(plan.times, BULK_PLAN_CFG[net].noun, queueNote(BULK_PLAN_CFG[net].pending(), bulkPlanInputs(net)))
       : `<div style="font-size:0.8rem; color:var(--warning);"><i class="fa-solid fa-triangle-exclamation"></i> ${escapeHtml(plan.reason || 'Não foi possível calcular o plano.')}</div>`;
+  }, 350);
+}
+
+
+// ---- O que já está agendado: aviso do plano ----
+
+/** Frase sobre a fila atual da conta: o lote começa depois do último agendado, ou entra num dia que você escolheu. */
+function queueNote(pendingPosts, { accountId, startDate }) {
+  const dates = pendingPosts
+    .filter(p => p.accountId === accountId && (p.status === 'pending' || p.status === 'processing'))
+    .map(p => new Date(p.scheduledAt)).filter(d => !isNaN(d) && d.getTime() > Date.now());
+  if (dates.length === 0) return '';
+  const label = (d) => d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
+  if (!startDate) return `Você já tem ${dates.length} agendado(s) até ${label(new Date(Math.max(...dates)))}: este lote começa no dia seguinte.`;
+  const chosen = dates.filter(d => d.toLocaleDateString('en-CA') === startDate).length;
+  return chosen ? `O dia escolhido já tem ${chosen} post(s) agendado(s): o lote entra nele mesmo assim.` : '';
+}
+
+// ---- Instagram "Nova publicação": plano dos horários automáticos ----
+
+function initNewPostPerDay() {
+  const input = document.getElementById('post-per-day');
+  if (input && input.dataset.touched !== '1') input.value = String(Math.max(1, Math.min(24, parseInt(STATE.globalConfig?.postsPerDay, 10) || 3)));
+}
+
+function newPostPlanInputs() {
+  return {
+    accountId: document.getElementById('post-account-select')?.value || STATE.activeAccountId || '',
+    perDay: Math.max(1, Math.min(24, parseInt(document.getElementById('post-per-day')?.value, 10) || 3)),
+    startDate: document.getElementById('post-date')?.value || '',
+    count: (STATE.queuedFiles || []).length
+  };
+}
+
+/** Horários do modo automático. O que a tela mostra é o que o envio usa (fica guardado enquanto nada muda). */
+async function newPostPlanTimes() {
+  const inputs = newPostPlanInputs();
+  if (!inputs.accountId || inputs.count === 0) return null;
+  const sig = JSON.stringify(inputs);
+  if (STATE.newPostPlan && STATE.newPostPlan.sig === sig) return STATE.newPostPlan.times;
+  const times = await fetchSmartTimes(inputs.accountId, inputs.count, inputs.startDate, { perDay: inputs.perDay });
+  if (times) STATE.newPostPlan = { sig, times };
+  return times;
+}
+
+let newPostPlanTimer = null;
+function refreshNewPostPlan() {
+  clearTimeout(newPostPlanTimer);
+  newPostPlanTimer = setTimeout(async () => {
+    const box = document.getElementById('post-plan');
+    if (!box) return;
+    const inputs = newPostPlanInputs();
+    if (STATE.scheduleMode === 'manual' || inputs.count === 0) { box.innerHTML = ''; return; }
+    const token = (STATE.newPostPlanToken = Date.now());
+    box.innerHTML = '<div style="font-size:0.8rem; color:var(--text-dim);"><i class="fa-solid fa-spinner fa-spin"></i> Calculando os dias e horários…</div>';
+    const times = await newPostPlanTimes();
+    if (STATE.newPostPlanToken !== token) return;
+    box.innerHTML = times
+      ? schedulePlanHtml(times, inputs.count === 1 ? 'publicação' : 'publicações', queueNote(STATE.scheduledPosts, inputs))
+      : '<div style="font-size:0.8rem; color:var(--warning);"><i class="fa-solid fa-triangle-exclamation"></i> Não consegui calcular os horários agora.</div>';
   }, 350);
 }

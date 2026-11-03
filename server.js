@@ -11,7 +11,7 @@ const { runAutoImporter } = require('./auto_importer');
 const youtubeService = require('./youtube');
 const facebookService = require('./facebook');
 const { DEFAULT_TIMEZONE, isValidTimeZone, localParts } = require('./time-utils');
-const { generateSmartTimes, learnHourlyEngagement, makeWeightFn } = require('./smart-schedule');
+const { generateSmartTimes, dayAfterLast, learnHourlyEngagement, makeWeightFn } = require('./smart-schedule');
 const { planStoryLoopPosts } = require('./story-loop');
 require('dotenv').config();
 
@@ -2099,11 +2099,20 @@ app.post('/api/schedule/smart-times', requireAuth, async (req, res) => {
       : [];
     const { weightFn, basedOn } = await getWeightFnForAccount(account, timeZone);
 
+    // Dia de início escolhido à mão vale exatamente (mesmo que já tenha posts). Sem escolha, o lote
+    // continua no dia seguinte ao último já agendado. Stories têm regra própria e mantêm a cota por dia.
+    const explicitStart = typeof startDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(startDate);
+    let firstDay = explicitStart ? startDate : null;
+    if (!explicitStart && !storiesOnly) {
+      firstDay = dayAfterLast(pending.map(p => p.scheduledAt), { timeZone });
+    }
+
     const times = generateSmartTimes({
-      count, perDay, startDate, timeZone, weightFn,
+      count, perDay, startDate: firstDay, timeZone, weightFn,
+      countExisting: !explicitStart,
       existing: pending.map(p => p.scheduledAt)
     });
-    res.json({ times: times.map(d => d.toISOString()), basedOn, timeZone, perDay });
+    res.json({ times: times.map(d => d.toISOString()), basedOn, timeZone, perDay, startedOn: firstDay });
   } catch (err) {
     console.error('[SMART-TIMES]', err.message);
     res.status(500).json({ error: err.message });

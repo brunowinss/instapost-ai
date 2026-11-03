@@ -107,6 +107,7 @@ function generateSmartTimes({
   timeZone = DEFAULT_TIMEZONE,
   rng = Math.random,
   startDate = null,
+  countExisting = true,
   windowStart = 7 * 60,
   windowEnd = 22 * 60,
   stepMinutes = 5,
@@ -120,9 +121,13 @@ function generateSmartTimes({
 
   const taken = existing.map(d => new Date(d)).filter(d => !isNaN(d));
   const takenPerDay = new Map();
-  for (const d of taken) {
-    const key = dayKey(d, timeZone);
-    takenPerDay.set(key, (takenPerDay.get(key) || 0) + 1);
+  // Com dia de início escolhido à mão, o que já está agendado não ocupa a cota: o lote entra nesse dia.
+  // (Os horários já ocupados continuam sendo evitados pelo intervalo mínimo.)
+  if (countExisting) {
+    for (const d of taken) {
+      const key = dayKey(d, timeZone);
+      takenPerDay.set(key, (takenPerDay.get(key) || 0) + 1);
+    }
   }
 
   let day = { year: 0, month: 0, day: 0 };
@@ -179,7 +184,21 @@ function generateSmartTimes({
   return chosen.sort((a, b) => a - b);
 }
 
+/**
+ * Dia seguinte ao último horário já agendado (AAAA-MM-DD no fuso do usuário).
+ * Devolve null quando não há nada agendado para o futuro: aí o lote começa hoje.
+ */
+function dayAfterLast(dates, { timeZone = DEFAULT_TIMEZONE, now = new Date() } = {}) {
+  const valid = dates.map(d => new Date(d)).filter(d => !isNaN(d));
+  if (valid.length === 0) return null;
+  const last = localParts(new Date(Math.max(...valid)), timeZone);
+  const next = addDays({ year: last.year, month: last.month, day: last.day }, 1);
+  const nextKey = `${next.year}-${String(next.month).padStart(2, '0')}-${String(next.day).padStart(2, '0')}`;
+  return nextKey > dayKey(now, timeZone) ? nextKey : null;
+}
+
 module.exports = {
+  dayAfterLast,
   priorScore,
   parseTimestamp,
   learnHourlyEngagement,
