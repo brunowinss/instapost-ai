@@ -682,3 +682,23 @@ test('run-now answers immediately and publishes the queue in the background', as
   await new Promise(resolve => setImmediate(resolve));
   assert.ok(server.reads.some(sql => /FROM posts WHERE "status" = 'pending'/.test(sql)), 'o cron consultou a fila');
 });
+
+
+test('youtube bulk-schedule saves exactly the times the screen showed', async () => {
+  const server = serverHarness(async () => ({ ok: true, json: async () => ({}) }), [
+    { accountId: 'UC1', username: 'Canal', platform: 'youtube', refreshToken: 'r' }
+  ]);
+  const times = ['2026-11-05T12:00:00.000Z', '2026-11-06T22:30:00.000Z'];
+  const res = await server.invoke('post', '/api/youtube/bulk-schedule', {
+    body: {
+      accountId: 'UC1',
+      videos: [{ title: 'Primeiro', description: '#a', isShort: true, videoUrl: 'https://v/1.mp4' }, { title: 'Segundo', videoUrl: 'https://v/2.mp4' }],
+      scheduledTimes: times
+    }
+  });
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.count, 2);
+  const inserts = server.writes.filter(w => w.sql.includes('INTO posts'));
+  assert.deepEqual(inserts.map(w => w.params[5]), times);
+  assert.deepEqual(inserts.map(w => w.params[2]), ['YOUTUBE_SHORT', 'YOUTUBE_VIDEO']);
+});

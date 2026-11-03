@@ -2479,6 +2479,15 @@ function renderBulkQueueList() {
 
   if (!container) return;
 
+  let planBox = document.getElementById('bulk-queue-summary');
+  if (!planBox) {
+    planBox = document.createElement('div');
+    planBox.id = 'bulk-queue-summary';
+    planBox.style.marginBottom = '1rem';
+    container.parentNode.insertBefore(planBox, container);
+  }
+  planBox.innerHTML = STATE.bulkQueue.length ? schedulePlanHtml(STATE.bulkQueue.map(item => new Date(item.scheduledAt)), 'Reels') : '';
+
   if (STATE.bulkQueue.length === 0) {
     if (emptyEl) emptyEl.style.display = 'flex';
     container.style.display = 'none';
@@ -4295,6 +4304,7 @@ function getYoutubeAccounts() {
 }
 
 function renderYoutubeSection() {
+  if (STATE.activeSection === 'youtube-bulk') refreshBulkPlan('youtube');
   updateLivePreview('youtube');
   applyPublishWhenUI('youtube');
   renderYoutubeChannelsList();
@@ -4680,6 +4690,7 @@ function handleYoutubeBulkFilesSelect(files) {
     summaryEl.innerHTML = `<i class="fa-solid fa-check-circle"></i> ${videoFiles.length} vídeos selecionados`;
   }
   renderYoutubeBulkPreviewList();
+  refreshBulkPlan('youtube');
 
   STATE.youtubeBulkFiles.forEach((item) => {
     generateVideoThumbnail(item.file).then(thumb => {
@@ -4725,6 +4736,7 @@ function updateYoutubeBulkFileTitle(index, value) {
 function removeYoutubeBulkFile(index) {
   STATE.youtubeBulkFiles.splice(index, 1);
   renderYoutubeBulkPreviewList();
+  refreshBulkPlan('youtube');
   const summaryEl = document.getElementById('youtube-bulk-files-summary');
   if (summaryEl) {
     if (STATE.youtubeBulkFiles.length === 0) summaryEl.style.display = 'none';
@@ -4744,6 +4756,9 @@ async function submitYoutubeBulk() {
   if (!accountId) return showToast('Conecte e selecione um canal do YouTube primeiro.', 'warning');
   if (files.length === 0) return showToast('Selecione os vídeos primeiro.', 'warning');
   if (!autoTimes && !manualTimes) return showToast('Informe os horários manuais ou marque "Escolher por mim".', 'warning');
+
+  const plan = await bulkPlanTimes('youtube');
+  if (!plan.times) return showToast(plan.reason || 'Não consegui calcular os horários.', 'error');
 
   const cloudName = STATE.globalConfig.cloudinaryName;
   const cloudPreset = STATE.globalConfig.cloudinaryPreset;
@@ -4802,7 +4817,8 @@ async function submitYoutubeBulk() {
           automatic: autoTimes,
           porDia,
           horarios: autoTimes ? undefined : manualTimes,
-          comecarEm: startDate || undefined
+          comecarEm: startDate || undefined,
+          scheduledTimes: videos.length === files.length ? plan.times.map(d => d.toISOString()) : undefined
         })
       });
       const data = await res.json();
@@ -4882,6 +4898,7 @@ function getFacebookAccounts() {
 }
 
 function renderFacebookSection() {
+  if (STATE.activeSection === 'facebook-bulk') refreshBulkPlan('facebook');
   updateLivePreview('facebook');
   applyPublishWhenUI('facebook');
   renderFacebookPagesList();
@@ -5864,6 +5881,7 @@ function handleFacebookBulkFiles(files) {
   const added = valid.map(file => ({ file, caption: '', thumb: file.type.startsWith('image/') ? URL.createObjectURL(file) : null }));
   STATE.facebookBulkFiles = [...(STATE.facebookBulkFiles || []), ...added];
   renderFacebookBulkList();
+  refreshBulkPlan('facebook');
   added.forEach((item) => {
     if (item.thumb) return;
     generateVideoThumbnail(item.file).then(thumb => {
@@ -5900,16 +5918,18 @@ function updateFacebookBulkCaption(index, value) {
 function removeFacebookBulkFile(index) {
   STATE.facebookBulkFiles.splice(index, 1);
   renderFacebookBulkList();
+  refreshBulkPlan('facebook');
 }
 
 /** "12:00,18:30" → horários dos próximos dias, um por arquivo, pulando o que já passou. Devolve null se algo estiver inválido. */
-function manualSlotsFor(count, timesText, startDate) {
+function manualSlotsFor(count, timesText, startDate, after) {
   const times = timesText.split(/[,\s;]+/).filter(Boolean).map(t => t.match(/^(\d{1,2}):(\d{2})$/));
   if (times.length === 0 || times.some(m => !m || +m[1] > 23 || +m[2] > 59)) return null;
   const slots = [];
-  const start = startDate ? new Date(`${startDate}T00:00:00`) : new Date();
+  const floor = Math.max(Date.now(), after ? after.getTime() : 0);
+  const start = startDate ? new Date(`${startDate}T00:00:00`) : new Date(floor);
   start.setHours(0, 0, 0, 0);
-  const now = Date.now();
+  const now = floor;
   for (let day = 0; slots.length < count && day < 400; day++) {
     for (const m of times) {
       const slot = new Date(start);
@@ -5935,14 +5955,9 @@ async function submitFacebookBulk() {
   if (files.length === 0) return showToast('Escolha as fotos e vídeos primeiro.', 'warning');
   if (!auto && !manual) return showToast('Informe os horários manuais ou marque "Escolher por mim".', 'warning');
 
-  let times;
-  if (auto) {
-    times = await fetchSmartTimes(accountId, files.length, startDate, { perDay });
-    if (!times) return showToast('Não consegui calcular os horários agora. Tente de novo ou use horários manuais.', 'error');
-  } else {
-    times = manualSlotsFor(files.length, manual, startDate);
-    if (!times) return showToast('Horários inválidos. Use o formato 12:00,18:30.', 'warning');
-  }
+  const plan = await bulkPlanTimes('facebook');
+  if (!plan.times) return showToast(plan.reason || 'Não consegui calcular os horários.', 'error');
+  const times = plan.times;
 
   const btn = document.getElementById('btn-submit-facebook-bulk');
   const box = document.getElementById('facebook-bulk-progress-box');
@@ -6377,4 +6392,109 @@ function youtubeAutoText(file) {
   if (!caption) return { title: guessTitleFromFilename(file.name).slice(0, 100), hashtags: '' };
   const { title, hashtags } = splitCaptionHashtags(caption);
   return { title: (title || guessTitleFromFilename(file.name)).slice(0, 100), hashtags };
+}
+
+
+// ============================================================
+// 🗓️ PLANO DO LOTE: quantos por dia e até quando
+// ============================================================
+
+const BULK_PLAN_CFG = {
+  facebook: { prefix: 'facebook-bulk', files: () => STATE.facebookBulkFiles || [], noun: 'publicações', pending: () => STATE.facebookScheduled || [] },
+  youtube: { prefix: 'youtube-bulk', files: () => STATE.youtubeBulkFiles || [], noun: 'vídeos', pending: () => STATE.youtubeScheduled || [] }
+};
+
+/** Agrupa os horários por dia e escreve o resumo: total, dias, média por dia, primeiro e último dia. */
+function schedulePlanHtml(times, noun) {
+  const sorted = times.filter(d => d instanceof Date && !isNaN(d)).sort((a, b) => a - b);
+  if (sorted.length === 0) return '';
+  const dayKey = (d) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  const days = new Map();
+  sorted.forEach(d => { const k = dayKey(d); if (!days.has(k)) days.set(k, []); days.get(k).push(d); });
+  const dayLabel = (d) => d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
+  const timeLabel = (d) => d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const perDay = sorted.length / days.size;
+  const first = sorted[0];
+  const last = sorted[sorted.length - 1];
+
+  const rows = Array.from(days.values()).map(list => `
+    <div style="display:flex; align-items:center; gap:10px; padding:6px 0; border-top:1px solid var(--border-color); font-size:0.78rem;">
+      <span style="min-width:92px; font-weight:700;">${escapeHtml(dayLabel(list[0]))}</span>
+      <span style="display:flex; gap:6px; flex-wrap:wrap; flex:1;">${list.map(d => `<span style="background:var(--primary-bg); color:var(--primary); border-radius:6px; padding:2px 8px; font-weight:600;">${timeLabel(d)}</span>`).join('')}</span>
+      <span style="color:var(--text-dim); white-space:nowrap;">${list.length}</span>
+    </div>`).join('');
+
+  return `
+    <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-color); border-radius:12px; padding:12px 14px;">
+      <div style="font-size:0.85rem; line-height:1.6;"><i class="fa-solid fa-calendar-check" style="color:var(--accent);"></i>
+        <b>${sorted.length} ${noun}</b> em <b>${days.size} ${days.size === 1 ? 'dia' : 'dias'}</b>
+        · média de <b>${perDay % 1 === 0 ? perDay : perDay.toFixed(1).replace('.', ',')} por dia</b><br>
+        <span style="color:var(--text-dim);">de</span> <b>${escapeHtml(dayLabel(first))}</b> <span style="color:var(--text-dim);">até</span> <b>${escapeHtml(dayLabel(last))}</b> <span style="color:var(--text-dim);">(último às ${timeLabel(last)})</span>
+      </div>
+      <details style="margin-top:8px;">
+        <summary style="cursor:pointer; font-size:0.75rem; color:var(--accent); font-weight:600;">Ver dia por dia</summary>
+        <div style="margin-top:6px; max-height:260px; overflow-y:auto;">${rows}</div>
+      </details>
+    </div>`;
+}
+
+function bulkPlanInputs(net) {
+  const cfg = BULK_PLAN_CFG[net];
+  const value = (suffix) => document.getElementById(`${cfg.prefix}-${suffix}`);
+  return {
+    accountId: value('account-select')?.value || '',
+    auto: !!value('auto-times')?.checked,
+    perDay: parseInt(value('per-day')?.value, 10) || 2,
+    manual: (value('manual-times')?.value || '').trim(),
+    startDate: value('start-date')?.value || '',
+    count: cfg.files().length
+  };
+}
+
+/** Horários do lote: os mesmos que a tela mostra são os que vão ser salvos (ficam em cache enquanto nada muda). */
+async function bulkPlanTimes(net) {
+  const cfg = BULK_PLAN_CFG[net];
+  const inputs = bulkPlanInputs(net);
+  if (!inputs.accountId) return { times: null, reason: 'Conecte e escolha a conta de destino.' };
+  if (inputs.count === 0) return { times: null, reason: '' };
+  if (!inputs.auto && !inputs.manual) return { times: null, reason: 'Informe os horários manuais ou marque "Escolher por mim".' };
+
+  const sig = JSON.stringify(inputs);
+  const cached = (STATE.bulkPlan || {})[net];
+  if (cached && cached.sig === sig && cached.times) return cached;
+
+  let times;
+  if (inputs.auto) {
+    times = await fetchSmartTimes(inputs.accountId, inputs.count, inputs.startDate, { perDay: inputs.perDay });
+  } else {
+    // Sem data de início, continua depois do último agendado da conta.
+    let after = null;
+    if (!inputs.startDate) {
+      const dates = cfg.pending().filter(p => p.accountId === inputs.accountId && p.status === 'pending').map(p => new Date(p.scheduledAt)).filter(d => !isNaN(d));
+      if (dates.length) after = new Date(Math.max(...dates));
+    }
+    times = manualSlotsFor(inputs.count, inputs.manual, inputs.startDate, after);
+  }
+  if (!times) return { times: null, reason: inputs.auto ? 'Não consegui calcular os horários agora. Tente de novo.' : 'Horários inválidos. Use o formato 12:00,18:30.' };
+  const plan = { sig, times };
+  STATE.bulkPlan = Object.assign({}, STATE.bulkPlan, { [net]: plan });
+  return plan;
+}
+
+let bulkPlanTimer = null;
+/** Atualiza (com uma pequena espera) o quadro "quantos por dia e até quando" do lote. */
+function refreshBulkPlan(net) {
+  clearTimeout(bulkPlanTimer);
+  bulkPlanTimer = setTimeout(async () => {
+    const box = document.getElementById(`${BULK_PLAN_CFG[net].prefix}-plan`);
+    if (!box) return;
+    const token = (STATE.bulkPlanToken = Date.now());
+    if (BULK_PLAN_CFG[net].files().length === 0) { box.innerHTML = ''; return; }
+    box.innerHTML = '<div style="font-size:0.8rem; color:var(--text-dim);"><i class="fa-solid fa-spinner fa-spin"></i> Calculando os dias e horários…</div>';
+    const plan = await bulkPlanTimes(net);
+    if (STATE.bulkPlanToken !== token) return;
+    box.innerHTML = plan.times
+      ? schedulePlanHtml(plan.times, BULK_PLAN_CFG[net].noun)
+      : `<div style="font-size:0.8rem; color:var(--warning);"><i class="fa-solid fa-triangle-exclamation"></i> ${escapeHtml(plan.reason || 'Não foi possível calcular o plano.')}</div>`;
+  }, 350);
 }

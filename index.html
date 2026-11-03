@@ -1290,7 +1290,7 @@
           <form id="youtube-bulk-form" style="margin-top:1rem;" onsubmit="return false;">
             <div class="form-group">
               <label class="label"><i class="fa-solid fa-user-circle"></i> Canal de Destino</label>
-              <select id="youtube-bulk-account-select" class="input"><option>Carregando canais...</option></select>
+              <select id="youtube-bulk-account-select" class="input" onchange="refreshBulkPlan('youtube')"><option>Carregando canais...</option></select>
             </div>
             <div class="form-group">
               <label class="label"><i class="fa-solid fa-film"></i> Tipo dos vídeos</label>
@@ -1312,32 +1312,33 @@
             </div>
             <div class="form-group">
               <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
-                <input type="checkbox" id="youtube-bulk-auto-times" checked style="width:16px; height:16px; accent-color:var(--primary);">
+                <input type="checkbox" id="youtube-bulk-auto-times" onchange="refreshBulkPlan('youtube')" checked style="width:16px; height:16px; accent-color:var(--primary);">
                 <label for="youtube-bulk-auto-times" style="font-size:0.82rem; color:var(--text-secondary); cursor:pointer;">Escolher os horários por mim (picos de audiência)</label>
               </div>
               <div class="col-2" style="gap:12px;">
                 <div>
                   <label class="label" style="font-size:0.7rem;">Por dia (se automático)</label>
-                  <select class="input" id="youtube-bulk-per-day">
-                    <option value="1">1 — 19:00</option>
-                    <option value="2">2 — 12:00 · 19:00</option>
-                    <option value="3" selected>3 — 09:00 · 13:00 · 20:00</option>
-                    <option value="4">4 — 08:00 · 12:00 · 17:00 · 21:00</option>
-                    <option value="5">5 — 08:00 · 11:00 · 14:00 · 18:00 · 21:00</option>
-                    <option value="6">6 — 07:30 · 10:00 · 12:30 · 16:00 · 19:00 · 21:30</option>
+                  <select class="input" id="youtube-bulk-per-day" onchange="refreshBulkPlan('youtube')">
+                    <option value="1">1 por dia</option>
+                    <option value="2">2 por dia</option>
+                    <option value="3" selected>3 por dia</option>
+                    <option value="4">4 por dia</option>
+                    <option value="5">5 por dia</option>
+                    <option value="6">6 por dia</option>
                   </select>
                 </div>
                 <div>
                   <label class="label" style="font-size:0.7rem;">Horários manuais (se desmarcado)</label>
-                  <input type="text" class="input" id="youtube-bulk-manual-times" placeholder="12:00,18:30">
+                  <input type="text" class="input" id="youtube-bulk-manual-times" oninput="refreshBulkPlan('youtube')" placeholder="12:00,18:30">
                 </div>
               </div>
               <div style="margin-top:10px;">
                 <label class="label" style="font-size:0.7rem;">Começar em (opcional — padrão: continua depois do que já está agendado)</label>
-                <input type="date" class="input" id="youtube-bulk-start-date">
+                <input type="date" class="input" id="youtube-bulk-start-date" onchange="refreshBulkPlan('youtube')">
               </div>
             </div>
 
+            <div id="youtube-bulk-plan" style="margin-bottom:1rem;"></div>
             <div id="youtube-bulk-progress-box" style="display:none; margin-bottom:1rem;">
               <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-bottom:4px;">
                 <span id="youtube-bulk-progress-status" style="color:var(--accent);">Enviando vídeos...</span>
@@ -1482,7 +1483,7 @@
           <form id="facebook-bulk-form" style="margin-top:1rem;" onsubmit="return false;">
             <div class="form-group">
               <label class="label"><i class="fa-solid fa-flag"></i> Página de Destino</label>
-              <select id="facebook-bulk-account-select" class="input"><option>Carregando Páginas...</option></select>
+              <select id="facebook-bulk-account-select" class="input" onchange="refreshBulkPlan('facebook')"><option>Carregando Páginas...</option></select>
             </div>
             <div class="form-group">
               <label class="label"><i class="fa-solid fa-photo-film"></i> Fotos e vídeos (selecione vários — um post para cada)</label>
@@ -1500,13 +1501,13 @@
             </div>
             <div class="form-group">
               <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
-                <input type="checkbox" id="facebook-bulk-auto-times" checked style="width:16px; height:16px; accent-color:var(--primary);">
+                <input type="checkbox" id="facebook-bulk-auto-times" onchange="refreshBulkPlan('facebook')" checked style="width:16px; height:16px; accent-color:var(--primary);">
                 <label for="facebook-bulk-auto-times" style="font-size:0.82rem; color:var(--text-secondary); cursor:pointer;">Escolher os horários por mim (picos de audiência)</label>
               </div>
               <div class="col-2" style="gap:12px;">
                 <div>
                   <label class="label" style="font-size:0.7rem;">Por dia (se automático)</label>
-                  <select class="input" id="facebook-bulk-per-day">
+                  <select class="input" id="facebook-bulk-per-day" onchange="refreshBulkPlan('facebook')">
                     <option value="1">1 por dia</option>
                     <option value="2" selected>2 por dia</option>
                     <option value="3">3 por dia</option>
@@ -1517,14 +1518,15 @@
                 </div>
                 <div>
                   <label class="label" style="font-size:0.7rem;">Horários manuais (se desmarcado)</label>
-                  <input type="text" class="input" id="facebook-bulk-manual-times" placeholder="12:00,18:30">
+                  <input type="text" class="input" id="facebook-bulk-manual-times" oninput="refreshBulkPlan('facebook')" placeholder="12:00,18:30">
                 </div>
               </div>
               <div style="margin-top:10px;">
                 <label class="label" style="font-size:0.7rem;">Começar em (opcional — padrão: a partir de agora)</label>
-                <input type="date" class="input" id="facebook-bulk-start-date">
+                <input type="date" class="input" id="facebook-bulk-start-date" onchange="refreshBulkPlan('facebook')">
               </div>
             </div>
+            <div id="facebook-bulk-plan" style="margin-bottom:1rem;"></div>
             <div id="facebook-bulk-progress-box" style="display:none; margin-bottom:1rem;">
               <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-bottom:4px;">
                 <span id="facebook-bulk-progress-status" style="color:var(--accent);">Enviando arquivos...</span>

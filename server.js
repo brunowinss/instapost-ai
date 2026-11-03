@@ -1480,7 +1480,7 @@ app.post('/api/posts/bulk', requireAuth, async (req, res) => {
  * agendado pra mesma conta — pra um lote novo não cair em cima do anterior.
  */
 app.post('/api/youtube/bulk-schedule', requireAuth, async (req, res) => {
-  const { accountId, videos, horarios, porDia, comecarEm, automatic } = req.body;
+  const { accountId, videos, horarios, porDia, comecarEm, automatic, scheduledTimes } = req.body;
   if (!accountId) return res.status(400).json({ error: 'accountId é obrigatório.' });
   if (!videos || !Array.isArray(videos) || videos.length === 0) {
     return res.status(400).json({ error: 'Nenhum vídeo fornecido para agendamento em massa.' });
@@ -1490,20 +1490,29 @@ app.post('/api/youtube/bulk-schedule', requireAuth, async (req, res) => {
   const isPostgres = !!process.env.DATABASE_URL;
 
   try {
-    const resolvedTimes = youtubeService.resolveTimes({ horarios, porDia, automatic });
+    // A tela já mostrou ao usuário o plano (dias e horários): se mandou os horários, são exatamente esses.
+    const sentTimes = Array.isArray(scheduledTimes) && scheduledTimes.length === videos.length
+      ? scheduledTimes.map(value => new Date(value))
+      : null;
+    let times;
+    if (sentTimes && sentTimes.every(d => !isNaN(d))) {
+      times = sentTimes;
+    } else {
+      const resolvedTimes = youtubeService.resolveTimes({ horarios, porDia, automatic });
 
-    const existing = await db.all('SELECT "scheduledAt" FROM posts WHERE "accountId" = ? AND "status" = \'pending\'', [accountId]);
-    const lastScheduled = existing.reduce((max, p) => {
-      const d = new Date(p.scheduledAt);
-      return (!isNaN(d) && (!max || d > max)) ? d : max;
-    }, null);
+      const existing = await db.all('SELECT "scheduledAt" FROM posts WHERE "accountId" = ? AND "status" = \'pending\'', [accountId]);
+      const lastScheduled = existing.reduce((max, p) => {
+        const d = new Date(p.scheduledAt);
+        return (!isNaN(d) && (!max || d > max)) ? d : max;
+      }, null);
 
-    const times = youtubeService.buildSchedule({
-      quantidade: videos.length,
-      horarios: resolvedTimes,
-      comecarEm,
-      after: lastScheduled
-    });
+      times = youtubeService.buildSchedule({
+        quantidade: videos.length,
+        horarios: resolvedTimes,
+        comecarEm,
+        after: lastScheduled
+      });
+    }
 
     const created = [];
     for (let i = 0; i < videos.length; i++) {
