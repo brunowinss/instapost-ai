@@ -4533,6 +4533,7 @@ function handleYoutubeFileSelect(file) {
   }
   STATE.youtubeFile = file;
   setTimeout(() => updateLivePreview('youtube'), 0);
+  refreshNewPlan('youtube');
   const summaryEl = document.getElementById('youtube-file-summary');
   if (summaryEl) {
     summaryEl.style.display = 'flex';
@@ -4574,7 +4575,7 @@ async function submitYoutubePost() {
   let scheduledAt = new Date().toISOString();
   if (when === 'manual') scheduledAt = new Date(scheduleInput).toISOString();
   if (when === 'smart') {
-    const [slot] = (await fetchSmartTimes(accountId, 1)) || [];
+    const [slot] = (await newPlanTimes('youtube')) || [];
     if (!slot) return showToast('Não consegui calcular o melhor horário agora. Tente "Agora" ou escolha uma data.', 'error');
     scheduledAt = slot.toISOString();
   }
@@ -5020,6 +5021,7 @@ function handleFacebookFiles(files) {
 }
 
 function renderFacebookPreview() {
+  refreshNewPlan('facebook');
   updateLivePreview('facebook');
   const box = document.getElementById('facebook-preview');
   if (!box) return;
@@ -5070,7 +5072,7 @@ async function submitFacebookPost() {
     let smartTimes = null;
     if (when === 'smart') {
       showLoading(true, 'CALCULANDO O MELHOR HORÁRIO...');
-      smartTimes = await fetchSmartTimes(accountId, items.length, undefined, { perDay: 2 });
+      smartTimes = await newPlanTimes('facebook');
       if (!smartTimes) throw new Error('Não consegui calcular os horários agora. Tente "Agora" ou escolha uma data.');
     }
 
@@ -6352,6 +6354,12 @@ function applyPublishWhenUI(net) {
   });
   const hint = document.getElementById(`${net}-when-hint`);
   if (hint) hint.textContent = PUBLISH_WHEN_HINTS[value];
+  const smartBox = document.getElementById(`${net}-smart-options`);
+  if (smartBox) {
+    smartBox.style.display = value === 'smart' ? '' : 'none';
+    if (smartBox.nextElementSibling && smartBox.nextElementSibling.tagName === 'P') smartBox.nextElementSibling.style.display = value === 'smart' ? '' : 'none';
+  }
+  refreshNewPlan(net);
 
   const input = document.getElementById(cfg.input);
   if (input) {
@@ -6563,6 +6571,66 @@ function refreshNewPostPlan() {
     if (STATE.newPostPlanToken !== token) return;
     box.innerHTML = times
       ? schedulePlanHtml(times, inputs.count === 1 ? 'publicação' : 'publicações', queueNote(STATE.scheduledPosts, inputs))
+      : '<div style="font-size:0.8rem; color:var(--warning);"><i class="fa-solid fa-triangle-exclamation"></i> Não consegui calcular os horários agora.</div>';
+  }, 350);
+}
+
+
+// ============================================================
+// 🗓️ PLANO NA "NOVA PUBLICAÇÃO" (Facebook e YouTube): dias e horários antes de confirmar
+// ============================================================
+
+const NEW_PLAN_CFG = {
+  facebook: {
+    select: 'facebook-account-select', perDay: 'facebook-per-day', start: 'facebook-start-date',
+    count: () => (STATE.facebookPostType === 'FB_TEXT' ? 1 : (STATE.facebookFiles || []).length),
+    noun: (n) => (n === 1 ? 'publicação' : 'publicações'), pending: () => STATE.facebookScheduled || []
+  },
+  youtube: {
+    select: 'youtube-account-select', perDay: null, start: 'youtube-start-date',
+    count: () => (STATE.youtubeFile ? 1 : 0),
+    noun: () => 'vídeo', pending: () => STATE.youtubeScheduled || []
+  }
+};
+
+function newPlanInputs(net) {
+  const cfg = NEW_PLAN_CFG[net];
+  return {
+    accountId: document.getElementById(cfg.select)?.value || '',
+    perDay: cfg.perDay ? Math.max(1, Math.min(24, parseInt(document.getElementById(cfg.perDay)?.value, 10) || 2)) : 1,
+    startDate: document.getElementById(cfg.start)?.value || '',
+    count: cfg.count()
+  };
+}
+
+/** Horários do "melhor horário": os mesmos que a tela mostra são os que o envio usa (ficam guardados enquanto nada muda). */
+async function newPlanTimes(net) {
+  const inputs = newPlanInputs(net);
+  if (!inputs.accountId || inputs.count === 0) return null;
+  const sig = JSON.stringify(inputs);
+  const cached = (STATE.newPlan || {})[net];
+  if (cached && cached.sig === sig) return cached.times;
+  const times = await fetchSmartTimes(inputs.accountId, inputs.count, inputs.startDate, { perDay: inputs.perDay });
+  if (times) STATE.newPlan = Object.assign({}, STATE.newPlan, { [net]: { sig, times } });
+  return times;
+}
+
+const newPlanTimers = {};
+function refreshNewPlan(net) {
+  clearTimeout(newPlanTimers[net]);
+  newPlanTimers[net] = setTimeout(async () => {
+    const box = document.getElementById(`${net}-plan`);
+    if (!box) return;
+    const cfg = NEW_PLAN_CFG[net];
+    const inputs = newPlanInputs(net);
+    const smart = (document.getElementById(`${net}-when`)?.value || 'smart') === 'smart';
+    if (!smart || inputs.count === 0) { box.innerHTML = ''; return; }
+    const token = (STATE.newPlanTokens = Object.assign({}, STATE.newPlanTokens, { [net]: Date.now() }))[net];
+    box.innerHTML = '<div style="font-size:0.8rem; color:var(--text-dim);"><i class="fa-solid fa-spinner fa-spin"></i> Calculando os dias e horários…</div>';
+    const times = await newPlanTimes(net);
+    if (STATE.newPlanTokens[net] !== token) return;
+    box.innerHTML = times
+      ? schedulePlanHtml(times, cfg.noun(inputs.count), queueNote(cfg.pending(), inputs))
       : '<div style="font-size:0.8rem; color:var(--warning);"><i class="fa-solid fa-triangle-exclamation"></i> Não consegui calcular os horários agora.</div>';
   }, 350);
 }

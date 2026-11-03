@@ -1257,7 +1257,7 @@
           <form id="youtube-post-form" style="margin-top:1rem;" onsubmit="return false;">
             <div class="form-group">
               <label class="label"><i class="fa-solid fa-user-circle"></i> Canal de Destino</label>
-              <select id="youtube-account-select" class="input" onchange="updateLivePreview('youtube')"><option>Carregando canais...</option></select>
+              <select id="youtube-account-select" class="input" onchange="updateLivePreview('youtube'); refreshNewPlan('youtube')"><option>Carregando canais...</option></select>
             </div>
 
             <div class="form-group">
@@ -1295,6 +1295,11 @@
                 <button type="button" class="btn btn-ghost btn-tab" data-when="manual" onclick="setPublishWhen('youtube', 'manual')" style="flex:1 1 150px;"><i class="fa-solid fa-calendar-days"></i> Escolher data e hora</button>
               </div>
               <p id="youtube-when-hint" style="font-size:0.75rem; color:var(--text-dim); margin-top:8px;"></p>
+              <div id="youtube-smart-options" style="margin-top:10px;">
+                <label class="label" style="font-size:0.7rem;">Dia de início (opcional — em branco: dia seguinte ao último agendado)</label>
+                <input type="date" class="input" id="youtube-start-date" onchange="refreshNewPlan('youtube')">
+              </div>
+              <div id="youtube-plan" style="margin-top:10px;"></div>
               <input type="datetime-local" class="input" id="youtube-schedule-input" style="display:none; margin-top:8px;">
             </div>
 
@@ -1445,7 +1450,7 @@
           <form id="facebook-post-form" style="margin-top:1rem;" onsubmit="return false;">
             <div class="form-group">
               <label class="label"><i class="fa-solid fa-flag"></i> Página de Destino</label>
-              <select id="facebook-account-select" class="input" onchange="updateLivePreview('facebook')"><option>Carregando Páginas...</option></select>
+              <select id="facebook-account-select" class="input" onchange="updateLivePreview('facebook'); refreshNewPlan('facebook')"><option>Carregando Páginas...</option></select>
             </div>
 
             <div class="form-group">
@@ -1481,6 +1486,18 @@
                 <button type="button" class="btn btn-ghost btn-tab" data-when="manual" onclick="setPublishWhen('facebook', 'manual')" style="flex:1 1 150px;"><i class="fa-solid fa-calendar-days"></i> Escolher data e hora</button>
               </div>
               <p id="facebook-when-hint" style="font-size:0.75rem; color:var(--text-dim); margin-top:8px;"></p>
+              <div id="facebook-smart-options" class="col-2" style="gap:12px; margin-top:10px;">
+                <div>
+                  <label class="label" style="font-size:0.7rem;">Publicações por dia</label>
+                  <input type="number" min="1" max="24" step="1" value="2" class="input" id="facebook-per-day" oninput="refreshNewPlan('facebook')">
+                </div>
+                <div>
+                  <label class="label" style="font-size:0.7rem;">Dia de início (opcional)</label>
+                  <input type="date" class="input" id="facebook-start-date" onchange="refreshNewPlan('facebook')">
+                </div>
+              </div>
+              <p style="font-size:0.7rem; color:var(--text-dim); margin-top:4px;">Sem dia de início, começa no dia seguinte ao último já agendado nesta Página.</p>
+              <div id="facebook-plan" style="margin-top:10px;"></div>
               <input type="datetime-local" id="facebook-datetime" class="input" style="display:none; margin-top:8px;">
             </div>
 
