@@ -43,6 +43,7 @@ function serverHarness(fetch, accounts = [], postgres = false, config = {}, publ
     './time-utils': require('../time-utils'),
     './smart-schedule': require('../smart-schedule'),
     './story-loop': require('../story-loop'),
+    './retention': require('../retention'),
     './facebook': {
       isConfigured: () => true,
       getAuthUrl: state => `https://www.facebook.com/dialog/oauth?state=${state}`,

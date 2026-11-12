@@ -5764,6 +5764,11 @@ function setNetworkFilter(net, accountId) {
   NETWORK_UI[net].render();
 }
 
+function setNetworkStatus(net, status) {
+  STATE.netStatus = Object.assign({}, STATE.netStatus, { [net]: status });
+  renderNetworkCalendar(net);
+}
+
 function shiftNetworkMonth(net, delta) {
   const current = (STATE.netCalendar || {})[net] || new Date();
   const next = new Date(current.getFullYear(), current.getMonth() + delta, 1);
@@ -5785,14 +5790,22 @@ function renderNetworkCalendar(net) {
 
   const weekdays = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
   const today = new Date();
-  const monthPosts = networkPosts(net)
+  const allMonthPosts = networkPosts(net)
     .filter(p => { const d = new Date(p.scheduledAt); return d.getMonth() === month && d.getFullYear() === year; })
     .sort((x, y) => new Date(x.scheduledAt) - new Date(y.scheduledAt));
 
-  if (monthPosts.length === 0) {
+  if (allMonthPosts.length === 0) {
     grid.innerHTML = `<div style="text-align:center; padding:2.5rem 1rem; color:var(--text-dim);"><i class="fa-solid fa-calendar-xmark" style="font-size:2.2rem; opacity:0.3; display:block; margin-bottom:0.8rem;"></i>Nada agendado em ${months[month]}. Use as setas para ver outros meses.</div>`;
     return;
   }
+
+  // Agendado e publicado nunca ficam misturados: o filtro começa em "Agendados" (quando há) e o usuário troca pelos botões.
+  const group = (p) => (p.status === 'pending' || p.status === 'processing') ? 'pending' : p.status === 'success' ? 'success' : 'error';
+  const countGroup = (g) => allMonthPosts.filter(p => group(p) === g).length;
+  let statusFilter = (STATE.netStatus || {})[net];
+  if (!statusFilter) statusFilter = countGroup('pending') ? 'pending' : 'all';
+  if (statusFilter !== 'all' && countGroup(statusFilter) === 0) statusFilter = 'all';
+  const monthPosts = statusFilter === 'all' ? allMonthPosts : allMonthPosts.filter(p => group(p) === statusFilter);
 
   const status = {
     pending: { label: 'Agendado', color: 'var(--accent)', icon: 'fa-clock' },
@@ -5800,12 +5813,15 @@ function renderNetworkCalendar(net) {
     success: { label: 'Publicado', color: 'var(--success)', icon: 'fa-circle-check' },
     error: { label: 'Erro', color: 'var(--error)', icon: 'fa-circle-xmark' }
   };
-  const count = (s) => monthPosts.filter(p => p.status === s).length;
-  const chip = (text, color) => `<span style="font-size:0.72rem; font-weight:700; color:${color}; background:rgba(255,255,255,0.05); border-radius:100px; padding:4px 12px;">${text}</span>`;
+  const chip = (id, text, n, color) => {
+    const active = statusFilter === id;
+    return `<button type="button" aria-pressed="${active}" onclick="setNetworkStatus('${net}', '${id}')" style="cursor:pointer; font-family:inherit; font-size:0.78rem; font-weight:700; color:${active ? '#fff' : color}; background:${active ? color : 'rgba(255,255,255,0.05)'}; border:1px solid ${active ? color : 'var(--border-color)'}; border-radius:100px; padding:6px 14px;">${text} (${n})</button>`;
+  };
   const summary = [
-    chip(`${count('pending') + count('processing')} agendados`, 'var(--accent)'),
-    chip(`${count('success')} publicados`, 'var(--success)'),
-    count('error') ? chip(`${count('error')} com erro`, 'var(--error)') : ''
+    chip('pending', 'Agendados', countGroup('pending'), 'var(--accent)'),
+    chip('success', 'Publicados', countGroup('success'), 'var(--success)'),
+    countGroup('error') ? chip('error', 'Com erro', countGroup('error'), 'var(--error)') : '',
+    chip('all', 'Todos', allMonthPosts.length, 'var(--text-dim)')
   ].join('');
 
   const byDay = new Map();
@@ -5833,13 +5849,15 @@ function renderNetworkCalendar(net) {
         ${net === 'facebook' ? `<button class="btn btn-ghost btn-sm" onclick="publishFacebookNow('${escapeHtml(p.id)}')" title="Publicar agora" style="padding:4px 10px;"><i class="fa-solid fa-paper-plane"></i> Agora</button>` : ''}
         <button class="btn btn-ghost btn-sm" onclick="deletePost('${escapeHtml(p.id)}')" title="Remover da fila" style="padding:4px 10px; color:var(--error);"><i class="fa-solid fa-trash"></i></button>
       </div>` : '';
+    const isDone = p.status === 'success';
+    const pill = `<span style="font-size:0.68rem; color:${st.color}; font-weight:800; background:rgba(255,255,255,0.06); border-radius:100px; padding:2px 9px; text-transform:uppercase; letter-spacing:0.03em;"><i class="fa-solid ${st.icon}"></i> ${st.label}</span>`;
     return `
-    <div style="display:flex; gap:12px; background:rgba(255,255,255,0.03); border:1px solid var(--border-color); border-left:3px solid ${st.color}; border-radius:12px; padding:10px;">
+    <div style="display:flex; gap:12px; background:${isDone ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)'}; border:1px solid var(--border-color); border-left:4px solid ${st.color}; border-radius:12px; padding:10px; ${isDone ? 'opacity:0.6;' : ''}">
       <div style="width:58px; height:74px; border-radius:8px; overflow:hidden; background:var(--primary-bg); display:flex; align-items:center; justify-content:center; flex-shrink:0;">${thumb}</div>
       <div style="min-width:0; flex:1;">
         <div style="display:flex; align-items:baseline; gap:8px;">
           <span style="font-size:1.1rem; font-weight:800;">${time}</span>
-          <span style="font-size:0.7rem; color:${st.color}; font-weight:700;"><i class="fa-solid ${st.icon}"></i> ${st.label}</span>
+          ${pill}
         </div>
         <div style="font-size:0.85rem; font-weight:600; margin-top:2px; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; word-break:break-word;">${titleHtml}</div>
         <div style="font-size:0.72rem; color:var(--text-dim); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><i class="${ui.icon}" style="color:${ui.color};"></i> ${escapeHtml(account ? account.username : p.accountId)} · ${ui.typeLabel(p)}</div>
@@ -5851,13 +5869,22 @@ function renderNetworkCalendar(net) {
   grid.innerHTML = `<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:1.2rem;">${summary}</div>` +
     Array.from(byDay.keys()).sort((x, y) => x - y).map(day => {
       const date = new Date(year, month, day);
+      const dayPosts = byDay.get(day);
+      const nPending = dayPosts.filter(p => group(p) === 'pending').length;
+      const nDone = dayPosts.filter(p => group(p) === 'success').length;
+      const nError = dayPosts.length - nPending - nDone;
+      const dayCount = [
+        nPending ? `<span style="color:var(--accent); font-weight:700;">${nPending} ${nPending === 1 ? 'agendada' : 'agendadas'}</span>` : '',
+        nDone ? `<span style="color:var(--success);">${nDone} ${nDone === 1 ? 'publicada' : 'publicadas'}</span>` : '',
+        nError ? `<span style="color:var(--error);">${nError} com erro</span>` : ''
+      ].filter(Boolean).join(' · ');
       const isToday = today.getDate() === day && today.getMonth() === month && today.getFullYear() === year;
       return `
       <div style="margin-bottom:1.5rem;">
         <div style="display:flex; align-items:center; gap:10px; margin-bottom:0.7rem; padding-bottom:0.5rem; border-bottom:1px solid var(--border-color);">
           <span style="font-size:1.5rem; font-weight:800; ${isToday ? 'color:var(--accent);' : ''}">${String(day).padStart(2, '0')}</span>
           <span style="font-size:0.85rem; font-weight:600;">${weekdays[date.getDay()]}${isToday ? ' · hoje' : ''}</span>
-          <span style="margin-left:auto; font-size:0.75rem; color:var(--text-dim);">${byDay.get(day).length} ${byDay.get(day).length === 1 ? 'publicação' : 'publicações'}</span>
+          <span style="margin-left:auto; font-size:0.75rem; color:var(--text-dim);">${dayCount}</span>
         </div>
         <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap:10px;">${cards(byDay.get(day))}</div>
       </div>`;

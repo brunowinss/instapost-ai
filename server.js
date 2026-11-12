@@ -11,6 +11,7 @@ const { runAutoImporter } = require('./auto_importer');
 const youtubeService = require('./youtube');
 const facebookService = require('./facebook');
 const { DEFAULT_TIMEZONE, isValidTimeZone, localParts } = require('./time-utils');
+const { purgeOldPosts } = require('./retention');
 const { generateSmartTimes, dayAfterLast, learnHourlyEngagement, makeWeightFn } = require('./smart-schedule');
 const { planStoryLoopPosts } = require('./story-loop');
 require('dotenv').config();
@@ -2857,6 +2858,7 @@ initDB()
     let tick = 0;
 
     let lastAccessCheck = 0;
+    let lastPurge = 0;
 
     const runScheduler = async () => {
       if (scheduler.running) return;
@@ -2866,6 +2868,13 @@ initDB()
         if (Date.now() - lastAccessCheck > 24 * 3600 * 1000) {
           lastAccessCheck = Date.now();
           await runAccessChecks().catch(e => console.error('[ACCESS-CHECK]', e.message));
+        }
+        // Uma vez por dia: tira do banco o que já foi publicado há tempo.
+        if (Date.now() - lastPurge > 24 * 3600 * 1000) {
+          lastPurge = Date.now();
+          await purgeOldPosts(await getDB())
+            .then(n => { if (n) console.log(`🧹 [RETENÇÃO] ${n} post(s) já publicados removidos do banco.`); })
+            .catch(e => console.error('[RETENÇÃO]', e.message));
         }
         await runStoryLoops();
         await cron();
