@@ -321,6 +321,8 @@ function initApp() {
   loadData();
   setupPushNotifications();
   checkInstagramConfig();
+  openSectionFromHash();
+  window.addEventListener('hashchange', openSectionFromHash);
   setInterval(loadData, 30000);
 
   // Detecta retorno do OAuth
@@ -468,6 +470,7 @@ async function loadData() {
     STATE.youtubeHistory = data.youtubeHistory || [];
     STATE.facebookHistory = data.facebookHistory || [];
     STATE.globalConfig = data.globalConfig || STATE.globalConfig;
+    STATE.configLoaded = true;
     
     if (STATE.accounts.length > 0 && !STATE.activeAccountId) {
       STATE.activeAccountId = STATE.accounts[0].accountId;
@@ -616,6 +619,7 @@ function renderActiveSection() {
     renderSettings();
     renderSettingsAccounts();
   }
+  if (n === 'settings') renderNotifyPrefs();
   if (n === 'youtube' || n.startsWith('youtube-')) renderYoutubeSection();
   if (n === 'facebook' || n.startsWith('facebook-')) renderFacebookSection();
   if (n === 'crosspost') renderCrosspostSection();
@@ -6923,4 +6927,107 @@ function openCrosspostPicker() {
       <button type="button" id="crosspost-picker-ok" class="btn btn-primary" disabled onclick="confirmCrosspostPicker()" style="margin-top:12px; width:100%;">Escolha os posts</button>
     </div>`;
   document.body.appendChild(overlay);
+}
+
+
+// ============================================================
+// 🔔 NOTIFICAÇÕES DO APP: o que avisar e quando
+// ============================================================
+
+/** Notificação tocada abre o app em /#secao: vai direto para essa tela. */
+function openSectionFromHash() {
+  const name = decodeURIComponent((location.hash || '').slice(1));
+  if (!name || !document.getElementById(`section-${name}`)) return;
+  history.replaceState(null, '', location.pathname + location.search);
+  switchSection(name);
+}
+
+const NOTIFY_DEFAULTS = {
+  publishSuccess: true, publishError: true, dailySummary: true, summaryTime: '08:00',
+  queueLow: true, queueDays: 2, reminder: false, reminderTime: '19:00',
+  reminderDays: [0, 1, 2, 3, 4, 5, 6], reminderText: 'Hora de agendar os vídeos dos próximos dias!'
+};
+
+function notifyPrefs() {
+  return Object.assign({}, NOTIFY_DEFAULTS, (STATE.globalConfig || {}).notifyPrefs || {});
+}
+
+/** Preenche o formulário uma vez (o loadData a cada 30 s não apaga o que a pessoa está editando). */
+function renderNotifyPrefs() {
+  const box = document.getElementById('notify-prefs');
+  if (!box || box.dataset.filled === '1' || !STATE.configLoaded) return;
+  box.dataset.filled = '1';
+  const p = notifyPrefs();
+  const days = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
+  const dayNames = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+  const row = (id, checked, label, extra = '') => `
+    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.05);">
+      <label style="display:flex; flex-wrap:nowrap; align-items:center; gap:10px; cursor:pointer; flex:1 1 200px; min-width:0; font-size:0.88rem;">
+        <input type="checkbox" id="${id}" ${checked ? 'checked' : ''} style="width:18px; height:18px; accent-color:var(--primary); flex-shrink:0;">
+        <span style="flex:1; min-width:0;">${label}</span>
+      </label>
+      ${extra}
+    </div>`;
+  box.innerHTML = `
+    <div style="font-weight:700; font-size:0.9rem; margin-bottom:4px;"><i class="fa-solid fa-sliders"></i> O que avisar</div>
+    ${row('np-success', p.publishSuccess, 'Post publicado')}
+    ${row('np-error', p.publishError, 'Erro ao publicar')}
+    ${row('np-summary', p.dailySummary, 'Resumo do dia (quantos posts saem hoje e o primeiro horário)',
+      `<label style="font-size:0.78rem; color:var(--text-dim); display:flex; align-items:center; gap:6px;">às <input type="time" id="np-summary-time" class="input" value="${p.summaryTime}" style="width:auto; padding:6px 8px;"></label>`)}
+    ${row('np-queue', p.queueLow, 'Avisar quando a fila de alguma conta estiver acabando',
+      `<label style="font-size:0.78rem; color:var(--text-dim); display:flex; align-items:center; gap:6px;">menos de <input type="number" id="np-queue-days" class="input" min="1" max="30" value="${p.queueDays}" style="width:64px; padding:6px 8px;"> dia(s)</label>`)}
+    ${row('np-reminder', p.reminder, 'Lembrete para agendar vídeos',
+      `<label style="font-size:0.78rem; color:var(--text-dim); display:flex; align-items:center; gap:6px;">às <input type="time" id="np-reminder-time" class="input" value="${p.reminderTime}" style="width:auto; padding:6px 8px;"></label>`)}
+    <div style="padding:10px 0 4px;">
+      <input type="text" id="np-reminder-text" class="input" maxlength="200" value="${escapeHtml(p.reminderText)}" placeholder="Texto do lembrete">
+      <div style="display:flex; gap:6px; margin-top:8px; flex-wrap:wrap;" role="group" aria-label="Dias do lembrete">
+        ${days.map((d, i) => `<label title="${dayNames[i]}" style="display:inline-flex; align-items:center; justify-content:center; gap:4px; font-size:0.78rem; font-weight:700; padding:6px 10px; border-radius:100px; border:1px solid var(--border-color); cursor:pointer;">
+          <input type="checkbox" class="np-day" value="${i}" ${p.reminderDays.includes(i) ? 'checked' : ''} style="accent-color:var(--primary);"> ${d}</label>`).join('')}
+      </div>
+    </div>
+    <p style="font-size:0.72rem; color:var(--text-dim); margin:10px 0 0;">O aviso de fila acabando sai junto com o resumo do dia. Cada aviso sai no máximo uma vez por dia.</p>
+    <div style="display:flex; gap:10px; margin-top:12px; flex-wrap:wrap;">
+      <button type="button" class="btn btn-primary" style="flex:1; min-width:160px;" onclick="saveNotifyPrefs()"><i class="fa-solid fa-floppy-disk"></i> Salvar avisos</button>
+      <button type="button" class="btn btn-ghost" onclick="sendRemindersNow()"><i class="fa-solid fa-bolt"></i> Enviar resumo agora</button>
+    </div>`;
+}
+
+function readNotifyPrefsForm() {
+  const val = (id) => document.getElementById(id);
+  return {
+    publishSuccess: val('np-success').checked,
+    publishError: val('np-error').checked,
+    dailySummary: val('np-summary').checked,
+    summaryTime: val('np-summary-time').value || NOTIFY_DEFAULTS.summaryTime,
+    queueLow: val('np-queue').checked,
+    queueDays: Math.max(1, Math.min(30, parseInt(val('np-queue-days').value, 10) || NOTIFY_DEFAULTS.queueDays)),
+    reminder: val('np-reminder').checked,
+    reminderTime: val('np-reminder-time').value || NOTIFY_DEFAULTS.reminderTime,
+    reminderText: val('np-reminder-text').value.trim() || NOTIFY_DEFAULTS.reminderText,
+    reminderDays: Array.from(document.querySelectorAll('#notify-prefs .np-day:checked')).map(box => Number(box.value))
+  };
+}
+
+async function saveNotifyPrefs() {
+  const prefs = readNotifyPrefsForm();
+  if (prefs.reminder && prefs.reminderDays.length === 0) return showToast('Escolha pelo menos um dia para o lembrete.', 'warning');
+  try {
+    const res = await fetch(`${API_BASE}/save-config`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notifyPrefs: prefs }) });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Não foi possível salvar.');
+    STATE.globalConfig = Object.assign({}, STATE.globalConfig, { notifyPrefs: prefs });
+    showToast('Avisos salvos!', 'success');
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+async function sendRemindersNow() {
+  try {
+    const res = await fetch(`${API_BASE}/push/reminders-now`, { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Não foi possível enviar.');
+    showToast(data.count ? `${data.count} aviso(s) enviado(s). Se não chegar, ative as notificações neste aparelho.` : 'Nenhum aviso ligado para enviar.', data.count ? 'success' : 'warning');
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
 }

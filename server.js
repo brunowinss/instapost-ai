@@ -12,6 +12,7 @@ const youtubeService = require('./youtube');
 const facebookService = require('./facebook');
 const { DEFAULT_TIMEZONE, isValidTimeZone, localParts } = require('./time-utils');
 const { purgeOldPosts } = require('./retention');
+const { dueReminders, normalizePrefs } = require('./reminders');
 const { generateSmartTimes, dayAfterLast, learnHourlyEngagement, makeWeightFn } = require('./smart-schedule');
 const { planStoryLoopPosts } = require('./story-loop');
 require('dotenv').config();
@@ -1260,7 +1261,8 @@ app.post('/api/save-config', requireAuth, async (req, res) => {
   
   try {
     // Accept any config keys that are sent
-    const allowedKeys = ['imgbbKey', 'cloudinaryName', 'cloudinaryPreset', 'telegramToken', 'telegramChatId', 'loginUser', 'loginPass', 'postsPerDay'];
+    const allowedKeys = ['imgbbKey', 'cloudinaryName', 'cloudinaryPreset', 'telegramToken', 'telegramChatId', 'loginUser', 'loginPass', 'postsPerDay', 'notifyPrefs'];
+    if (req.body.notifyPrefs !== undefined) req.body.notifyPrefs = normalizePrefs(req.body.notifyPrefs);
     const configs = [];
     for (const key of allowedKeys) {
       if (req.body[key] !== undefined) {
@@ -2319,11 +2321,12 @@ app.post('/api/push/test', requireAuth, async (req, res) => {
   }
 });
 
-async function sendWebPushNotification(title, body) {
+/** extra: { url, tag } — url abre a tela certa ao tocar; tag faz a notificação nova substituir a antiga do mesmo tipo. */
+async function sendWebPushNotification(title, body, extra = {}) {
   const db = await getDB();
   try {
     const subscriptions = await db.all('SELECT * FROM push_subscriptions');
-    const payload = JSON.stringify({ title, body, icon: '/icon-192.png' });
+    const payload = JSON.stringify({ title, body, icon: '/icon-192.png', url: extra.url || '/', tag: extra.tag || undefined });
     
     for (const subRow of subscriptions) {
       const sub = JSON.parse(subRow.subscription);
@@ -2733,13 +2736,59 @@ async function notifyAll(post, status, errorMsg) {
   const acc = await db.get('SELECT username, platform FROM accounts WHERE "accountId" = ?', [post.accountId]);
   const accName = accountLabel(acc, post);
 
+  const prefs = await loadNotifyPrefs(db);
+  if (status === 'success' && !prefs.publishSuccess) return;
+  if (status !== 'success' && !prefs.publishError) return;
+
   let title = status === 'success' ? 'Post Publicado!' : 'Erro na Publicação';
-  let body = status === 'success' 
-    ? `O post na conta ${accName} foi publicado com sucesso!` 
+  let body = status === 'success'
+    ? `O post na conta ${accName} foi publicado com sucesso!`
     : `O post na conta ${accName} falhou: ${errorMsg}`;
-    
-  await sendWebPushNotification(title, body);
+  const section = post.platform === 'facebook' ? 'facebook-calendar' : post.platform === 'youtube' ? 'youtube-calendar' : 'schedule';
+  await sendWebPushNotification(title, body, { url: `/#${section}` });
 }
+
+async function loadNotifyPrefs(db) {
+  const row = await db.get('SELECT value FROM global_config WHERE key = ?', ['notifyPrefs']);
+  let raw = null;
+  try { raw = row ? JSON.parse(row.value) : null; } catch { raw = null; }
+  return normalizePrefs(raw);
+}
+
+/**
+ * Lembretes do app: resumo do dia, fila acabando e lembrete livre (ver reminders.js).
+ * Roda a cada ciclo do agendador; o dia em que cada tipo saiu fica salvo para não repetir.
+ */
+async function runReminders({ force = false } = {}) {
+  const db = await getDB();
+  const prefs = await loadNotifyPrefs(db);
+  const sentRow = await db.get('SELECT value FROM global_config WHERE key = ?', ['reminderSent']);
+  let sent = {};
+  try { sent = sentRow ? JSON.parse(sentRow.value) || {} : {}; } catch { sent = {}; }
+
+  const accounts = await db.all('SELECT * FROM accounts');
+  const pending = await db.all('SELECT "accountId", "scheduledAt", "platform" FROM posts WHERE "status" = \'pending\'');
+  const { today, items } = dueReminders({ prefs, accounts, pending, sent, force });
+  if (items.length === 0) return [];
+
+  for (const item of items) {
+    if (!item.skip) await sendWebPushNotification(item.title, item.body, { url: item.url, tag: item.tag });
+    sent[item.kind] = today;
+  }
+  // O envio de teste não conta: o resumo do horário marcado continua saindo normalmente.
+  if (!force) await db.run('INSERT INTO global_config ("key", "value") VALUES (?, ?) ON CONFLICT ("key") DO UPDATE SET "value"=EXCLUDED."value"', ['reminderSent', JSON.stringify(sent)]);
+  return items.filter(i => !i.skip);
+}
+
+// "Enviar agora" das configurações: manda os lembretes ligados na hora, para ver como chegam.
+app.post('/api/push/reminders-now', requireAuth, async (req, res) => {
+  try {
+    const sentItems = await runReminders({ force: true });
+    res.json({ success: true, count: sentItems.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 
 // Publica já o que está na fila (sem esperar o próximo ciclo de 5 min). Responde na hora: o envio roda
@@ -2872,6 +2921,7 @@ initDB()
         }
         await runStoryLoops();
         await cron();
+        await runReminders().catch(e => console.error('[LEMBRETES]', e.message));
         if (tick % 2 === 0) await runAutoImporter();
         scheduler.lastError = null;
       } catch (e) {
