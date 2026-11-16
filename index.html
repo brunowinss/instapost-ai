@@ -1132,6 +1132,7 @@
               </div>
               <div id="crosspost-preview" style="display:none; grid-template-columns:repeat(auto-fill, minmax(84px, 1fr)); gap:10px; margin-top:0.8rem;"></div>
               <button type="button" class="btn btn-ghost btn-sm" id="crosspost-preview-btn" style="display:none; margin-top:0.8rem;" onclick="previewCrosspost(0)"><i class="fa-solid fa-eye"></i> Ver prévia real em cada rede</button>
+              <button type="button" class="btn btn-ghost btn-sm" style="margin-top:0.8rem;" onclick="openCrosspostPicker()"><i class="fa-solid fa-clock-rotate-left"></i> Usar posts já agendados (sem enviar de novo)</button>
             </div>
 
             <div class="form-group">
@@ -1155,6 +1156,7 @@
                 <option value="now">Agora em todas</option>
                 <option value="manual">Escolher data e hora</option>
               </select>
+              <p id="crosspost-same-hint" style="display:none; font-size:0.72rem; color:var(--text-dim); margin-top:6px;">Cada cópia sai no mesmo horário do post original (os formatos do mesmo vídeo com 2 min de diferença).</p>
               <input type="datetime-local" id="crosspost-datetime" class="input" style="display:none; margin-top:8px;">
               <div id="crosspost-smart-options" class="col-2" style="gap:12px; margin-top:8px;">
                 <div>
@@ -2050,6 +2052,9 @@
     <div id="selection-count" class="selection-count">0 selecionados</div>
     <div style="display:flex; gap:12px; flex-wrap:wrap;">
       <button class="btn btn-ghost btn-sm" onclick="selectAllPosts()">Selecionar Tudo</button>
+      <button class="btn btn-ghost btn-sm" onclick="sendToCrosspost(STATE.selectedPostIds)" style="color:#22d3ee; border-color:#22d3ee;">
+        <i class="fa-solid fa-share-nodes"></i> Levar para outras redes
+      </button>
       <button class="btn btn-ghost btn-sm" onclick="copySelectedToAccount()" style="color:#a78bfa; border-color:#a78bfa;">
         <i class="fa-solid fa-copy"></i> Copiar para conta
       </button>

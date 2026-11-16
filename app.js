@@ -5413,6 +5413,7 @@ function renderCrosspostPreview() {
   const items = STATE.crosspostFiles || [];
   const previewBtn = document.getElementById('crosspost-preview-btn');
   if (previewBtn) previewBtn.style.display = items.length ? 'inline-flex' : 'none';
+  updateCrosspostWhenOptions();
   if (items.length === 0) { box.style.display = 'none'; box.innerHTML = ''; return; }
   box.style.display = 'grid';
   box.innerHTML = items.map((item, idx) => `
@@ -5423,8 +5424,26 @@ function renderCrosspostPreview() {
     </div>`).join('');
 }
 
+function updateCrosspostWhenOptions() {
+  const select = document.getElementById('crosspost-when');
+  if (!select) return;
+  const existing = (STATE.crosspostFiles || []).length > 0 && STATE.crosspostFiles.every(item => item.url);
+  let option = select.querySelector('option[value="same"]');
+  if (existing && !option) {
+    option = new Option('Mesmo horário do post original', 'same');
+    select.insertBefore(option, select.firstChild);
+    select.value = 'same';
+  } else if (!existing && option) {
+    if (select.value === 'same') select.value = 'smart';
+    option.remove();
+  }
+  onCrosspostWhenChange();
+}
+
 function onCrosspostWhenChange() {
   const when = document.getElementById('crosspost-when')?.value;
+  const sameHint = document.getElementById('crosspost-same-hint');
+  if (sameHint) sameHint.style.display = when === 'same' ? 'block' : 'none';
   const input = document.getElementById('crosspost-datetime');
   if (input) input.style.display = when === 'manual' ? 'block' : 'none';
   const smart = document.getElementById('crosspost-smart-options');
@@ -5565,16 +5584,15 @@ function renderCrosspostSummary() {
   CROSSPOST_NETWORKS.forEach(network => {
     const accounts = network.accounts().filter(a => a.hasToken && selected.has(a.accountId));
     if (accounts.length === 0) return;
-    const perFile = files.reduce((sum, f) => sum + crosspostPostsFor(network.key, f.file, opts).length, 0);
-    if (perFile === 0) return;
-    const n = perFile * accounts.length;
+    const n = accounts.reduce((sum, account) => sum + files.reduce((s, f) => s + crosspostPostsForAccount(network.key, account, f.file, opts).length, 0), 0);
+    if (n === 0) return;
     total += n;
     lines.push(`<span style="color:${network.color}; font-weight:700;"><i class="${network.icon}"></i> ${n}</span>`);
   });
   box.innerHTML = `
     <div style="margin-bottom:1rem; padding:10px 12px; border-radius:10px; background:rgba(255,255,255,0.04); border:1px solid var(--border-color); font-size:0.8rem;">
       <div style="display:flex; flex-wrap:wrap; align-items:center; gap:10px;">
-        <span><b>${files.length}</b> ${files.length === 1 ? 'arquivo enviado' : 'arquivos enviados'} uma vez → <b style="color:var(--accent);">${total}</b> ${total === 1 ? 'publicação' : 'publicações'}</span>
+        <span><b>${files.length}</b> ${files[0].url ? (files.length === 1 ? 'post já agendado (sem novo envio)' : 'posts já agendados (sem novo envio)') : (files.length === 1 ? 'arquivo enviado' : 'arquivos enviados') + ' uma vez'} → <b style="color:var(--accent);">${total}</b> ${total === 1 ? 'publicação nova' : 'publicações novas'}</span>
         ${lines.join(' ')}
       </div>
       <div style="margin-top:8px;">${toggleAll}</div>
@@ -5597,7 +5615,7 @@ function findPostById(id) {
 function crosspostPostsFor(networkKey, file, { caption, title, short }) {
   const isVideo = file.type.startsWith('video/');
   // Sem texto digitado, cada arquivo usa a legenda que já vem no próprio nome.
-  const text = caption || captionFromFilename(file.name);
+  const text = caption || file.sourceCaption || captionFromFilename(file.name);
   const formats = crosspostFormats(networkKey);
   const posts = [];
   if (networkKey === 'instagram') {
@@ -5610,12 +5628,27 @@ function crosspostPostsFor(networkKey, file, { caption, title, short }) {
     if (formats.has('story')) posts.push({ format: 'Story', mediaType: 'FB_STORY', caption: '', platform: 'facebook' });
   }
   if (networkKey === 'youtube' && isVideo) {
-    const auto = youtubeAutoText(file);
+    const auto = file.sourceCaption ? youtubeTextFromCaption(file.sourceCaption) : youtubeAutoText(file);
     const finalTitle = title || auto.title;
     const description = caption || auto.hashtags;
     posts.push({ format: short ? 'Short' : 'Vídeo', mediaType: short ? 'YOUTUBE_SHORT' : 'YOUTUBE_VIDEO', caption: description ? `${finalTitle}\n\n${description}` : finalTitle, platform: 'youtube' });
   }
   return posts;
+}
+
+/** Igual a crosspostPostsFor, mas não repete o post original (mesma conta e mesmo formato). */
+function crosspostPostsForAccount(networkKey, account, file, opts) {
+  const source = file.sourcePost;
+  return crosspostPostsFor(networkKey, file, opts)
+    .filter(p => !(source && source.accountId === account.accountId && source.mediaType === p.mediaType));
+}
+
+/** Título e descrição do YouTube a partir de uma legenda já escrita (1ª linha sem hashtags vira o título). */
+function youtubeTextFromCaption(caption) {
+  const lines = String(caption || '').split('\n');
+  const first = splitCaptionHashtags(lines[0] || '');
+  const rest = lines.slice(1).join('\n').trim();
+  return { title: (first.title || 'Vídeo').slice(0, 100), hashtags: [first.hashtags, rest].filter(Boolean).join('\n') };
 }
 
 async function submitCrosspost() {
@@ -5650,6 +5683,7 @@ async function submitCrosspost() {
     // 1) Cada arquivo sobe uma vez só e a mesma URL serve para todas as redes.
     const uploaded = [];
     for (let i = 0; i < files.length; i++) {
+      if (files[i].url) { uploaded.push({ file: files[i].file, url: files[i].url }); continue; }
       showLoading(true, `ENVIANDO ${i + 1}/${files.length}...`);
       try {
         uploaded.push({ file: files[i].file, url: await uploadStoryMedia(files[i].file) });
@@ -5661,7 +5695,7 @@ async function submitCrosspost() {
     // 2) Um post por conta e por arquivo (YouTube pula foto), cada conta no seu próprio horário.
     showLoading(true, 'AGENDANDO...');
     for (const { network, account } of destinations) {
-      const applicable = uploaded.filter(u => crosspostPostsFor(network.key, u.file, { caption, title, short }).length > 0);
+      const applicable = uploaded.filter(u => crosspostPostsForAccount(network.key, account, u.file, { caption, title, short }).length > 0);
       if (applicable.length === 0) continue;
 
       let times = null;
@@ -5674,12 +5708,20 @@ async function submitCrosspost() {
       for (let i = 0; i < applicable.length; i++) {
         const { file, url } = applicable[i];
         // Os formatos do mesmo arquivo saem juntos, com 2 min entre eles (Reels, depois Story...).
-        const formats = crosspostPostsFor(network.key, file, { caption, title, short });
+        const formats = crosspostPostsForAccount(network.key, account, file, { caption, title, short });
+        const source = file.sourcePost;
         for (let j = 0; j < formats.length; j++) {
           const { format, ...fields } = formats[j];
-          const scheduledAt = when === 'now' ? new Date()
-            : times ? new Date(times[i].getTime() + j * 120000)
-            : new Date(manualDate.getTime() + (manualOffset++) * 60000);
+          let scheduledAt;
+          if (when === 'same' && source) {
+            // Mesmo horário do original; na própria conta do original o formato novo sai 2 min depois.
+            const base = Math.max(new Date(source.scheduledAt).getTime(), Date.now() + 60000);
+            scheduledAt = new Date(base + (j + (source.accountId === account.accountId ? 1 : 0)) * 120000);
+          } else {
+            scheduledAt = when === 'now' ? new Date()
+              : times ? new Date(times[i].getTime() + j * 120000)
+              : new Date(manualDate.getTime() + (manualOffset++) * 60000);
+          }
           const post = {
             id: `x_${Date.now()}_${created.length}_${Math.random().toString(36).slice(2, 6)}`,
             accountId: account.accountId,
@@ -5691,7 +5733,7 @@ async function submitCrosspost() {
           try {
             const res = await fetch(`${API_BASE}/save-post`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(post) });
             if (!res.ok) throw new Error('não foi possível salvar');
-            created.push({ id: post.id, network, account, format, fileName: file.name, scheduledAt });
+            created.push({ id: post.id, network, account, format, fileName: file.label || file.name, scheduledAt });
           } catch (err) {
             failures.push(`${network.name(account)} · ${format} · ${file.name}: ${err.message}`);
           }
@@ -5964,6 +6006,7 @@ function renderNetworkCalendar(net) {
     const actions = p.status === 'pending' ? `
       <div style="display:flex; gap:6px; margin-top:8px;">
         ${net === 'facebook' ? `<button class="btn btn-ghost btn-sm" onclick="publishFacebookNow('${escapeHtml(p.id)}')" title="Publicar agora" style="padding:4px 10px;"><i class="fa-solid fa-paper-plane"></i> Agora</button>` : ''}
+        ${p.imageUrl ? `<button class="btn btn-ghost btn-sm" onclick="sendToCrosspost(['${escapeHtml(p.id)}'])" title="Levar para outras redes" style="padding:4px 10px;"><i class="fa-solid fa-share-nodes"></i> Outras redes</button>` : ''}
         <button class="btn btn-ghost btn-sm" onclick="deletePost('${escapeHtml(p.id)}')" title="Remover da fila" style="padding:4px 10px; color:var(--error);"><i class="fa-solid fa-trash"></i></button>
       </div>` : '';
     const isDone = p.status === 'success';
@@ -6195,6 +6238,7 @@ const RP_URLS = new WeakMap();
 /** URL local do arquivo escolhido (uma só por arquivo, para não recriar a cada tecla digitada). */
 function rpUrlFor(file) {
   if (!file) return '';
+  if (file.url) return file.url; // post já agendado: o arquivo já está online
   if (!RP_URLS.has(file)) RP_URLS.set(file, URL.createObjectURL(file));
   return RP_URLS.get(file);
 }
@@ -6777,4 +6821,106 @@ function refreshNewPlan(net) {
       ? schedulePlanHtml(times, cfg.noun(inputs.count), queueNote(cfg.pending(), inputs))
       : '<div style="font-size:0.8rem; color:var(--warning);"><i class="fa-solid fa-triangle-exclamation"></i> Não consegui calcular os horários agora.</div>';
   }, 350);
+}
+
+
+// ============================================================
+// ♻️ LEVAR POSTS JÁ AGENDADOS PARA OUTRAS REDES (reusa o arquivo já enviado)
+// ============================================================
+
+const VIDEO_TYPES = ['REELS', 'FB_VIDEO', 'FB_REEL', 'YOUTUBE_SHORT', 'YOUTUBE_VIDEO'];
+
+/** Posts agendados que têm arquivo (texto puro e carrossel ficam de fora). */
+function reusablePendingPosts() {
+  return [...(STATE.scheduledPosts || []), ...(STATE.facebookScheduled || []), ...(STATE.youtubeScheduled || [])]
+    .filter(p => p.status === 'pending' && p.imageUrl && p.mediaType !== 'FB_TEXT' && p.mediaType !== 'CAROUSEL')
+    .sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt));
+}
+
+function crosspostItemFromPost(post) {
+  const isVideo = VIDEO_TYPES.includes(post.mediaType) || isVideoUrl(post.imageUrl);
+  const label = (post.caption || '').split('\n')[0].slice(0, 80) || 'Post sem legenda';
+  const file = { name: '', type: isVideo ? 'video/mp4' : 'image/jpeg', url: post.imageUrl, sourceCaption: post.caption || '', sourcePost: post, label };
+  return { file, url: post.imageUrl, thumb: getThumbnailUrl(post.imageUrl) };
+}
+
+/** Abre "Publicar em várias redes" já com esses posts no lugar dos arquivos. */
+function sendToCrosspost(ids) {
+  const wanted = new Set(ids || []);
+  const posts = reusablePendingPosts().filter(p => wanted.has(p.id));
+  if (posts.length === 0) return showToast('Escolha posts agendados com foto ou vídeo.', 'warning');
+  if (STATE.selectionMode) toggleSelectionMode();
+  STATE.crosspostFiles = posts.map(crosspostItemFromPost);
+  closeCrosspostPicker();
+  switchSection('crosspost');
+  renderCrosspostPreview();
+  renderCrosspostDestinations();
+  showToast(`${posts.length} post(s) prontos. Marque as contas e os formatos de destino.`, 'success');
+}
+
+function closeCrosspostPicker() {
+  document.getElementById('crosspost-picker')?.remove();
+}
+
+function crosspostPickerToggleGroup(groupId, checked) {
+  document.querySelectorAll(`#crosspost-picker input[data-group="${groupId}"]`).forEach(box => { box.checked = checked; });
+  crosspostPickerCount();
+}
+
+function crosspostPickerCount() {
+  const n = document.querySelectorAll('#crosspost-picker input[data-post]:checked').length;
+  const btn = document.getElementById('crosspost-picker-ok');
+  if (btn) { btn.disabled = n === 0; btn.textContent = n ? `Usar ${n} post(s)` : 'Escolha os posts'; }
+}
+
+function confirmCrosspostPicker() {
+  sendToCrosspost(Array.from(document.querySelectorAll('#crosspost-picker input[data-post]:checked')).map(box => box.dataset.post));
+}
+
+/** Lista dos agendados de todas as redes, por conta, para escolher o que levar para outras redes. */
+function openCrosspostPicker() {
+  closeCrosspostPicker();
+  const posts = reusablePendingPosts();
+  const groups = [];
+  CROSSPOST_NETWORKS.forEach(network => network.accounts().forEach(account => {
+    const mine = posts.filter(p => p.accountId === account.accountId);
+    if (mine.length) groups.push({ network, account, posts: mine });
+  }));
+
+  const fmt = (d) => new Date(d).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  const body = groups.length === 0
+    ? '<p style="color:var(--text-dim); padding:1rem 0;">Nenhum post agendado com foto ou vídeo.</p>'
+    : groups.map((g, gi) => `
+      <div style="margin-bottom:1rem;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+          <span style="font-weight:700; font-size:0.85rem; color:${g.network.color};"><i class="${g.network.icon}"></i> ${escapeHtml(g.network.name(g.account))}</span>
+          <span style="font-size:0.72rem; color:var(--text-dim);">${g.posts.length} agendado(s)</span>
+          <label style="margin-left:auto; font-size:0.72rem; display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" onchange="crosspostPickerToggleGroup('g${gi}', this.checked)"> Todos</label>
+        </div>
+        ${g.posts.map(p => `
+          <label style="display:flex; align-items:center; gap:10px; padding:6px 8px; border-radius:8px; background:rgba(255,255,255,0.03); margin-top:4px; cursor:pointer;">
+            <input type="checkbox" data-post="${escapeHtml(p.id)}" data-group="g${gi}" onchange="crosspostPickerCount()" style="width:16px; height:16px; accent-color:var(--primary); flex-shrink:0;">
+            <img src="${escapeHtml(getThumbnailUrl(p.imageUrl))}" alt="" loading="lazy" onerror="this.style.visibility='hidden'" style="width:40px; height:40px; object-fit:cover; border-radius:6px; flex-shrink:0; background:var(--primary-bg);">
+            <span style="min-width:0; flex:1;">
+              <span style="display:block; font-size:0.8rem; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml((p.caption || '').split('\n')[0] || 'Sem legenda')}</span>
+              <span style="font-size:0.7rem; color:var(--text-dim);">${fmt(p.scheduledAt)} · ${escapeHtml(p.mediaType)}</span>
+            </span>
+          </label>`).join('')}
+      </div>`).join('');
+
+  const overlay = document.createElement('div');
+  overlay.id = 'crosspost-picker';
+  overlay.style.cssText = 'position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.7); display:flex; align-items:center; justify-content:center; padding:16px;';
+  overlay.onclick = (e) => { if (e.target === overlay) closeCrosspostPicker(); };
+  overlay.innerHTML = `
+    <div class="card" style="width:100%; max-width:560px; max-height:85vh; display:flex; flex-direction:column;">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <div class="card-title" style="margin:0;"><i class="fa-solid fa-clock-rotate-left"></i> Posts já agendados</div>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="closeCrosspostPicker()" aria-label="Fechar" style="margin-left:auto;"><i class="fa-solid fa-times"></i></button>
+      </div>
+      <p style="font-size:0.78rem; color:var(--text-dim); margin:6px 0 10px;">Escolha os posts que quer levar para outras redes. O arquivo já está online: nada é enviado de novo.</p>
+      <div style="overflow-y:auto; flex:1; padding-right:4px;">${body}</div>
+      <button type="button" id="crosspost-picker-ok" class="btn btn-primary" disabled onclick="confirmCrosspostPicker()" style="margin-top:12px; width:100%;">Escolha os posts</button>
+    </div>`;
+  document.body.appendChild(overlay);
 }

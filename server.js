@@ -1357,22 +1357,16 @@ app.post('/api/posts/copy-selected', requireAuth, async (req, res) => {
   if (!postIds?.length || !toAccountId) return res.status(400).json({ error: 'postIds e toAccountId são obrigatórios.' });
   const db = await getDB();
   try {
-    const isPostgres = !!process.env.DATABASE_URL;
     let count = 0;
     for (const id of postIds) {
       const post = await db.get('SELECT * FROM posts WHERE id = ?', [id]);
       if (!post) continue;
-      if (isPostgres) {
-        await db.run(
-          'INSERT INTO posts ("accountId","mediaUrl","caption","scheduledTime","status","mediaType","thumbnailUrl") VALUES (?,?,?,?,?,?,?)',
-          [toAccountId, post.mediaUrl, post.caption, post.scheduledTime, 'pending', post.mediaType || 'IMAGE', post.thumbnailUrl || '']
-        );
-      } else {
-        await db.run(
-          'INSERT INTO posts (accountId, mediaUrl, caption, scheduledTime, status, mediaType, thumbnailUrl) VALUES (?,?,?,?,?,?,?)',
-          [toAccountId, post.mediaUrl, post.caption, post.scheduledTime, 'pending', post.mediaType || 'IMAGE', post.thumbnailUrl || '']
-        );
-      }
+      // A cópia reusa o mesmo arquivo já enviado (imageUrl): nada é enviado de novo.
+      await db.run(
+        'INSERT INTO posts ("id", "accountId", "mediaType", "imageUrl", "caption", "scheduledAt", "status", "mediaId", "publishedAt", "createdAt", "sourceFile", "mediaItems", "varianceMinutes", "platform") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [`${post.id}_c${Date.now().toString(36)}${count}`, toAccountId, post.mediaType || 'IMAGE', post.imageUrl || '', post.caption || '', post.scheduledAt,
+          'pending', '', '', new Date().toISOString(), '', post.mediaItems || null, post.varianceMinutes || 0, post.platform || 'instagram']
+      );
       count++;
     }
     res.json({ success: true, count });

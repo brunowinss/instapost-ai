@@ -703,3 +703,16 @@ test('youtube bulk-schedule saves exactly the times the screen showed', async ()
   assert.deepEqual(inserts.map(w => w.params[5]), times);
   assert.deepEqual(inserts.map(w => w.params[2]), ['YOUTUBE_SHORT', 'YOUTUBE_VIDEO']);
 });
+
+test('copiar para outra conta grava um post novo com o mesmo arquivo (colunas certas, id novo)', async () => {
+  const original = { accountId: 'p1', id: 'p1', mediaType: 'REELS', imageUrl: 'https://cdn/v.mp4', caption: 'Oi', scheduledAt: '2026-11-20T15:00:00.000Z', status: 'pending', platform: 'instagram' };
+  const server = serverHarness(async () => ({ ok: true, json: async () => ({}) }), [original]);
+  const res = await server.invoke('post', '/api/posts/copy-selected', { body: { postIds: ['p1'], toAccountId: 'IG2' } });
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.count, 1);
+  const insert = server.writes.find(w => w.sql.includes('INTO posts'));
+  assert.match(insert.sql, /"imageUrl"/);
+  assert.doesNotMatch(insert.sql, /mediaUrl|scheduledTime/);
+  assert.notEqual(insert.params[0], 'p1');
+  assert.deepEqual(Array.from(insert.params.slice(1, 7)), ['IG2', 'REELS', 'https://cdn/v.mp4', 'Oi', '2026-11-20T15:00:00.000Z', 'pending']);
+});
