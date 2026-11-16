@@ -1143,7 +1143,7 @@
               <label class="label"><i class="fa-brands fa-youtube" style="color:#ff0000;"></i> Título no YouTube</label>
               <input type="text" class="input" id="crosspost-yt-title" maxlength="100" placeholder="Em branco = nome do arquivo">
               <div style="display:flex; align-items:center; gap:10px; margin-top:8px;">
-                <input type="checkbox" id="crosspost-yt-short" checked style="width:16px; height:16px; accent-color:var(--primary);">
+                <input type="checkbox" id="crosspost-yt-short" checked onchange="renderCrosspostDestinations()" style="width:16px; height:16px; accent-color:var(--primary);">
                 <label for="crosspost-yt-short" style="font-size:0.82rem; color:var(--text-secondary); cursor:pointer;">É um Short (vídeo vertical)</label>
               </div>
             </div>
@@ -1174,7 +1174,8 @@
         <!-- Destinos -->
         <div class="card">
           <div class="card-title"><i class="fa-solid fa-bullseye"></i> Onde publicar</div>
-          <p style="font-size:0.8rem; color:var(--text-dim); margin:0.4rem 0 1rem;">Marque as contas. Foto não vai para o YouTube; Reels e vídeos vão para as três redes.</p>
+          <p style="font-size:0.8rem; color:var(--text-dim); margin:0.4rem 0 1rem;">Marque as contas e os formatos. Cada arquivo é enviado <b>uma vez só</b>: Reels, Story, vídeo e Short usam o mesmo envio, sem ocupar espaço a mais.</p>
+          <div id="crosspost-summary"></div>
           <div id="crosspost-destinations"></div>
 
           <button type="button" class="btn btn-primary" id="btn-crosspost" style="width:100%; padding:1rem; margin-top:1rem;" onclick="submitCrosspost()">

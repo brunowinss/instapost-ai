@@ -100,7 +100,7 @@ async function getFacebookStats(account, posts = []) {
   const total = (node) => (node && node.summary && typeof node.summary.total_count === 'number') ? node.summary.total_count : null;
   const fetchOne = async (post) => {
     try {
-      if (post.mediaType === 'FB_VIDEO') {
+      if (post.mediaType === 'FB_VIDEO' || post.mediaType === 'FB_REEL') {
         const v = await graph(`/${encodeURIComponent(post.mediaId)}`, {
           params: { fields: 'views,likes.summary(true).limit(0),comments.summary(true).limit(0)', access_token: token }
         });
@@ -229,11 +229,36 @@ function explainNoPages({ listed, granularIds, permissions }) {
   return 'Nenhuma Página encontrada. Na tela de login do Facebook, clique em "Editar configurações", marque as Páginas que quer conectar (e confirme que você é administrador delas).';
 }
 
+function isVideoUrl(url) {
+  const u = String(url).toLowerCase();
+  return u.includes('/video/') || /\.(mp4|mov|m4v|webm)(\?|$)/.test(u);
+}
+
+/**
+ * Reels e Stories de vídeo sobem em etapas: abre o envio, a Meta baixa o arquivo pelo link
+ * (o mesmo link já usado nas outras redes, sem reenviar nada) e depois o post é finalizado.
+ */
+async function uploadVideoByUrl(pageId, edge, fileUrl, token) {
+  const start = await graph(`/${pageId}/${edge}`, { method: 'POST', params: { upload_phase: 'start', access_token: token } });
+  if (!start.video_id) throw new Error('A Meta não abriu o envio do vídeo.');
+  const res = await http(start.upload_url || `https://rupload.facebook.com/video-upload/${GRAPH_VERSION}/${start.video_id}`, {
+    method: 'POST', timeout: 120000, headers: { Authorization: `OAuth ${token}`, file_url: fileUrl }
+  });
+  const text = await res.text();
+  let data;
+  try { data = JSON.parse(text); } catch { data = null; }
+  if (!res.ok || !data || data.error || data.success === false) {
+    throw new Error(describeError(data && data.error ? data.error : { message: `A Meta não conseguiu baixar o vídeo (HTTP ${res.status})` }));
+  }
+  return start.video_id;
+}
+
 /**
  * Publica um post numa Página. Espelha publishToInstagram/publishToYouTube:
  * resolve a Página sozinho, publica e devolve o ID do post/vídeo.
  *
- * mediaType: FB_TEXT (só texto), FB_PHOTO (imageUrl) ou FB_VIDEO (imageUrl).
+ * mediaType: FB_TEXT (só texto), FB_PHOTO (imageUrl), FB_VIDEO (imageUrl), FB_REEL (vídeo vertical)
+ * ou FB_STORY (foto ou vídeo, decidido pelo link).
  * No vídeo, a primeira linha da legenda vira o título e o resto a descrição.
  */
 async function publishToFacebook(post) {
@@ -253,6 +278,28 @@ async function publishToFacebook(post) {
       method: 'POST', params: { url: post.imageUrl, caption, published: 'true', access_token: token }
     });
     return String(result.post_id || result.id);
+  }
+
+  if (post.mediaType === 'FB_REEL') {
+    if (!post.imageUrl) throw new Error('Post sem vídeo.');
+    const videoId = await uploadVideoByUrl(pageId, 'video_reels', post.imageUrl, token);
+    await graph(`/${pageId}/video_reels`, {
+      method: 'POST', params: { upload_phase: 'finish', video_id: videoId, video_state: 'PUBLISHED', description: caption, access_token: token }
+    });
+    return String(videoId);
+  }
+
+  if (post.mediaType === 'FB_STORY') {
+    if (!post.imageUrl) throw new Error('Story sem foto ou vídeo.');
+    if (isVideoUrl(post.imageUrl)) {
+      const videoId = await uploadVideoByUrl(pageId, 'video_stories', post.imageUrl, token);
+      const result = await graph(`/${pageId}/video_stories`, { method: 'POST', params: { upload_phase: 'finish', video_id: videoId, access_token: token } });
+      return String(result.post_id || videoId);
+    }
+    // Story de foto: a foto sobe sem aparecer no feed e depois vira Story.
+    const photo = await graph(`/${pageId}/photos`, { method: 'POST', params: { url: post.imageUrl, published: 'false', access_token: token } });
+    const result = await graph(`/${pageId}/photo_stories`, { method: 'POST', params: { photo_id: photo.id, access_token: token } });
+    return String(result.post_id || photo.id);
   }
 
   if (post.mediaType === 'FB_VIDEO') {

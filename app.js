@@ -4895,7 +4895,10 @@ function renderYoutubeQueueList() {
 const FACEBOOK_TYPES = {
   FB_TEXT: { label: 'Texto', button: 'fb-type-text', accept: '' },
   FB_PHOTO: { label: 'Foto', button: 'fb-type-photo', accept: 'image/*' },
-  FB_VIDEO: { label: 'Vídeo', button: 'fb-type-video', accept: 'video/*' }
+  FB_VIDEO: { label: 'Vídeo', button: 'fb-type-video', accept: 'video/*' },
+  // Só pelo Publicar em várias redes (sem botão próprio na Nova publicação).
+  FB_REEL: { label: 'Reels', button: null, accept: 'video/*' },
+  FB_STORY: { label: 'Story', button: null, accept: 'image/*,video/*' }
 };
 
 function getFacebookAccounts() {
@@ -5302,7 +5305,7 @@ async function renderFacebookMetricsView(force = false) {
       <div class="stat-value">${value}</div>
       <p class="stat-desc">${desc}</p>
     </div>`;
-  const typeLabel = { FB_TEXT: 'Texto', FB_PHOTO: 'Foto', FB_VIDEO: 'Vídeo' };
+  const typeLabel = { FB_TEXT: 'Texto', FB_PHOTO: 'Foto', FB_VIDEO: 'Vídeo', FB_REEL: 'Reels', FB_STORY: 'Story' };
 
   const rows = posts.map(p => {
     const date = p.publishedAt ? new Date(p.publishedAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—';
@@ -5440,7 +5443,50 @@ function crosspostSelection() {
 function toggleCrosspostAccount(accountId, checked) {
   const selected = crosspostSelection();
   if (checked) selected.add(accountId); else selected.delete(accountId);
-  updateCrosspostYoutubeFields();
+  renderCrosspostDestinations();
+}
+
+/** Marca (ou desmarca) de uma vez todas as contas com acesso; networkKey limita a uma rede. */
+function setAllCrosspostAccounts(checked, networkKey) {
+  const selected = crosspostSelection();
+  CROSSPOST_NETWORKS.filter(n => !networkKey || n.key === networkKey).forEach(n => n.accounts().filter(a => a.hasToken).forEach(a => {
+    if (checked) selected.add(a.accountId); else selected.delete(a.accountId);
+  }));
+  renderCrosspostDestinations();
+}
+
+/** Formatos de cada rede. O mesmo arquivo enviado vira um post por formato marcado. */
+const CROSSPOST_FORMATS = {
+  instagram: [
+    { key: 'feed', label: 'Reels / Feed', on: true },
+    { key: 'story', label: 'Story', on: false }
+  ],
+  facebook: [
+    { key: 'feed', label: 'Vídeo / Foto no feed', on: true },
+    { key: 'reel', label: 'Reels', on: false, videoOnly: true },
+    { key: 'story', label: 'Story', on: false }
+  ]
+};
+
+function crosspostFormats(networkKey) {
+  if (!STATE.crosspostFormats) {
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem('crosspost_formats') || '{}') || {}; } catch { saved = {}; }
+    STATE.crosspostFormats = {};
+    Object.entries(CROSSPOST_FORMATS).forEach(([net, list]) => {
+      STATE.crosspostFormats[net] = new Set(Array.isArray(saved[net]) ? saved[net] : list.filter(x => x.on).map(x => x.key));
+    });
+  }
+  return STATE.crosspostFormats[networkKey] || new Set();
+}
+
+function toggleCrosspostFormat(networkKey, key, checked) {
+  const formats = crosspostFormats(networkKey);
+  if (checked) formats.add(key); else formats.delete(key);
+  try {
+    localStorage.setItem('crosspost_formats', JSON.stringify(Object.fromEntries(Object.entries(STATE.crosspostFormats).map(([k, v]) => [k, [...v]]))));
+  } catch {}
+  renderCrosspostDestinations();
 }
 
 /** O campo de título do YouTube só aparece quando há conta do YouTube marcada e algum vídeo escolhido. */
@@ -5462,6 +5508,19 @@ function renderCrosspostDestinations() {
 
   const groups = CROSSPOST_NETWORKS.map(network => {
     const accounts = network.accounts();
+    const formats = crosspostFormats(network.key);
+    const formatChips = (CROSSPOST_FORMATS[network.key] || []).map(fmt => {
+      const off = fmt.videoOnly && onlyPhotos;
+      return `<label style="display:inline-flex; align-items:center; gap:6px; font-size:0.75rem; font-weight:600; padding:5px 10px; border-radius:100px; border:1px solid var(--border-color); background:rgba(255,255,255,0.04); ${off ? 'opacity:0.5;' : 'cursor:pointer;'}">
+          <input type="checkbox" ${formats.has(fmt.key) ? 'checked' : ''} ${off ? 'disabled' : ''} onchange="toggleCrosspostFormat('${network.key}', '${fmt.key}', this.checked)" style="width:14px; height:14px; accent-color:${network.color};">
+          ${fmt.label}${off ? ' <span style="color:var(--text-dim); font-weight:400;">(só vídeo)</span>' : ''}
+        </label>`;
+    }).join('');
+    const ytFormat = network.key === 'youtube'
+      ? `<span style="font-size:0.72rem; color:var(--text-dim);">Formato: ${document.getElementById('crosspost-yt-short')?.checked !== false ? 'Short' : 'Vídeo longo'} (troque no campo do YouTube)</span>`
+      : '';
+    const usable = accounts.filter(a => a.hasToken);
+    const allOn = usable.length > 0 && usable.every(a => selected.has(a.accountId));
     const rows = accounts.length === 0
       ? `<p style="color:var(--text-dim); font-size:0.8rem; margin:4px 0 0;">Nenhuma conta conectada.</p>`
       : accounts.map(a => {
@@ -5475,13 +5534,51 @@ function renderCrosspostDestinations() {
         </label>`;
       }).join('');
     return `
-      <div style="margin-bottom:1rem;">
-        <div style="font-weight:700; font-size:0.85rem; color:${network.color};"><i class="${network.icon}"></i> ${network.label}</div>
+      <div style="margin-bottom:1.2rem;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <div style="font-weight:700; font-size:0.85rem; color:${network.color};"><i class="${network.icon}"></i> ${network.label}</div>
+          ${usable.length > 1 ? `<button type="button" class="btn btn-ghost btn-sm" onclick="setAllCrosspostAccounts(${!allOn}, '${network.key}')" style="margin-left:auto; padding:3px 10px; font-size:0.7rem;">${allOn ? 'Desmarcar todas' : 'Marcar todas'}</button>` : ''}
+        </div>
+        ${formatChips || ytFormat ? `<div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;">${formatChips}${ytFormat}</div>` : ''}
         ${rows}
       </div>`;
   });
   box.innerHTML = groups.join('');
   updateCrosspostYoutubeFields();
+  renderCrosspostSummary();
+}
+
+/** Quantas publicações saem do envio: arquivos × contas × formatos, mas cada arquivo sobe uma vez só. */
+function renderCrosspostSummary() {
+  const box = document.getElementById('crosspost-summary');
+  if (!box) return;
+  const files = STATE.crosspostFiles || [];
+  const selected = crosspostSelection();
+  const opts = { caption: '', title: '', short: document.getElementById('crosspost-yt-short')?.checked !== false };
+  const allUsable = CROSSPOST_NETWORKS.flatMap(n => n.accounts().filter(a => a.hasToken));
+  const allOn = allUsable.length > 0 && allUsable.every(a => selected.has(a.accountId));
+  const toggleAll = `<button type="button" class="btn btn-ghost btn-sm" onclick="setAllCrosspostAccounts(${!allOn})" style="padding:5px 12px; font-size:0.75rem;"><i class="fa-solid ${allOn ? 'fa-square-minus' : 'fa-square-check'}"></i> ${allOn ? 'Desmarcar todas as contas' : 'Marcar todas as contas'}</button>`;
+  if (files.length === 0) { box.innerHTML = `<div style="margin-bottom:1rem;">${toggleAll}</div>`; return; }
+
+  const lines = [];
+  let total = 0;
+  CROSSPOST_NETWORKS.forEach(network => {
+    const accounts = network.accounts().filter(a => a.hasToken && selected.has(a.accountId));
+    if (accounts.length === 0) return;
+    const perFile = files.reduce((sum, f) => sum + crosspostPostsFor(network.key, f.file, opts).length, 0);
+    if (perFile === 0) return;
+    const n = perFile * accounts.length;
+    total += n;
+    lines.push(`<span style="color:${network.color}; font-weight:700;"><i class="${network.icon}"></i> ${n}</span>`);
+  });
+  box.innerHTML = `
+    <div style="margin-bottom:1rem; padding:10px 12px; border-radius:10px; background:rgba(255,255,255,0.04); border:1px solid var(--border-color); font-size:0.8rem;">
+      <div style="display:flex; flex-wrap:wrap; align-items:center; gap:10px;">
+        <span><b>${files.length}</b> ${files.length === 1 ? 'arquivo enviado' : 'arquivos enviados'} uma vez → <b style="color:var(--accent);">${total}</b> ${total === 1 ? 'publicação' : 'publicações'}</span>
+        ${lines.join(' ')}
+      </div>
+      <div style="margin-top:8px;">${toggleAll}</div>
+    </div>`;
 }
 
 function findPostById(id) {
@@ -5493,20 +5590,32 @@ function findPostById(id) {
   return null;
 }
 
-/** Como cada rede chama o mesmo arquivo: foto/vídeo no Instagram e no Facebook; só vídeo no YouTube. */
-function crosspostPostFor(networkKey, file, { caption, title, short }) {
+/**
+ * Os posts que um arquivo vira numa rede, um por formato marcado (todos com o mesmo arquivo já enviado).
+ * Foto/vídeo no Instagram e no Facebook; Reels do Facebook só com vídeo; YouTube só vídeo.
+ */
+function crosspostPostsFor(networkKey, file, { caption, title, short }) {
   const isVideo = file.type.startsWith('video/');
   // Sem texto digitado, cada arquivo usa a legenda que já vem no próprio nome.
   const text = caption || captionFromFilename(file.name);
-  if (networkKey === 'instagram') return { mediaType: isVideo ? 'REELS' : 'IMAGE', caption: text };
-  if (networkKey === 'facebook') return { mediaType: isVideo ? 'FB_VIDEO' : 'FB_PHOTO', caption: text, platform: 'facebook' };
+  const formats = crosspostFormats(networkKey);
+  const posts = [];
+  if (networkKey === 'instagram') {
+    if (formats.has('feed')) posts.push({ format: isVideo ? 'Reels' : 'Feed', mediaType: isVideo ? 'REELS' : 'IMAGE', caption: text });
+    if (formats.has('story')) posts.push({ format: 'Story', mediaType: 'STORIES', caption: '' });
+  }
+  if (networkKey === 'facebook') {
+    if (formats.has('feed')) posts.push({ format: isVideo ? 'Vídeo' : 'Foto', mediaType: isVideo ? 'FB_VIDEO' : 'FB_PHOTO', caption: text, platform: 'facebook' });
+    if (formats.has('reel') && isVideo) posts.push({ format: 'Reels', mediaType: 'FB_REEL', caption: text, platform: 'facebook' });
+    if (formats.has('story')) posts.push({ format: 'Story', mediaType: 'FB_STORY', caption: '', platform: 'facebook' });
+  }
   if (networkKey === 'youtube' && isVideo) {
     const auto = youtubeAutoText(file);
     const finalTitle = title || auto.title;
     const description = caption || auto.hashtags;
-    return { mediaType: short ? 'YOUTUBE_SHORT' : 'YOUTUBE_VIDEO', caption: description ? `${finalTitle}\n\n${description}` : finalTitle, platform: 'youtube' };
+    posts.push({ format: short ? 'Short' : 'Vídeo', mediaType: short ? 'YOUTUBE_SHORT' : 'YOUTUBE_VIDEO', caption: description ? `${finalTitle}\n\n${description}` : finalTitle, platform: 'youtube' });
   }
-  return null;
+  return posts;
 }
 
 async function submitCrosspost() {
@@ -5552,7 +5661,7 @@ async function submitCrosspost() {
     // 2) Um post por conta e por arquivo (YouTube pula foto), cada conta no seu próprio horário.
     showLoading(true, 'AGENDANDO...');
     for (const { network, account } of destinations) {
-      const applicable = uploaded.filter(u => crosspostPostFor(network.key, u.file, { caption, title, short }));
+      const applicable = uploaded.filter(u => crosspostPostsFor(network.key, u.file, { caption, title, short }).length > 0);
       if (applicable.length === 0) continue;
 
       let times = null;
@@ -5561,23 +5670,31 @@ async function submitCrosspost() {
         if (!times) { failures.push(`${network.name(account)}: não consegui calcular o horário inteligente.`); continue; }
       }
 
+      let manualOffset = 0;
       for (let i = 0; i < applicable.length; i++) {
         const { file, url } = applicable[i];
-        const scheduledAt = when === 'now' ? new Date() : times ? times[i] : new Date(manualDate.getTime() + i * 60000);
-        const post = {
-          id: `x_${Date.now()}_${created.length}_${Math.random().toString(36).slice(2, 6)}`,
-          accountId: account.accountId,
-          imageUrl: url,
-          scheduledAt: scheduledAt.toISOString(),
-          status: 'pending',
-          ...crosspostPostFor(network.key, file, { caption, title, short })
-        };
-        try {
-          const res = await fetch(`${API_BASE}/save-post`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(post) });
-          if (!res.ok) throw new Error('não foi possível salvar');
-          created.push({ id: post.id, network, account, fileName: file.name, scheduledAt });
-        } catch (err) {
-          failures.push(`${network.name(account)} · ${file.name}: ${err.message}`);
+        // Os formatos do mesmo arquivo saem juntos, com 2 min entre eles (Reels, depois Story...).
+        const formats = crosspostPostsFor(network.key, file, { caption, title, short });
+        for (let j = 0; j < formats.length; j++) {
+          const { format, ...fields } = formats[j];
+          const scheduledAt = when === 'now' ? new Date()
+            : times ? new Date(times[i].getTime() + j * 120000)
+            : new Date(manualDate.getTime() + (manualOffset++) * 60000);
+          const post = {
+            id: `x_${Date.now()}_${created.length}_${Math.random().toString(36).slice(2, 6)}`,
+            accountId: account.accountId,
+            imageUrl: url,
+            scheduledAt: scheduledAt.toISOString(),
+            status: 'pending',
+            ...fields
+          };
+          try {
+            const res = await fetch(`${API_BASE}/save-post`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(post) });
+            if (!res.ok) throw new Error('não foi possível salvar');
+            created.push({ id: post.id, network, account, format, fileName: file.name, scheduledAt });
+          } catch (err) {
+            failures.push(`${network.name(account)} · ${format} · ${file.name}: ${err.message}`);
+          }
         }
       }
     }
@@ -5627,7 +5744,7 @@ async function trackCrosspost(entries, publishNow) {
     box.innerHTML = entries.map(entry => `
       <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 12px; background:rgba(255,255,255,0.03); border:1px solid var(--border-color); border-radius:10px; font-size:0.8rem;">
         <div style="min-width:0;">
-          <div style="font-weight:600; color:${entry.network.color};"><i class="${entry.network.icon}"></i> ${escapeHtml(entry.network.name(entry.account))}</div>
+          <div style="font-weight:600; color:${entry.network.color};"><i class="${entry.network.icon}"></i> ${escapeHtml(entry.network.name(entry.account))}${entry.format ? ` <span style="color:var(--text-dim); font-weight:500;">· ${escapeHtml(entry.format)}</span>` : ''}</div>
           <div style="color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(entry.fileName)}</div>
         </div>
         <div style="text-align:right; flex-shrink:0;">${crosspostStatusHtml(findPostById(entry.id), entry, publishNow)}</div>
@@ -5668,7 +5785,7 @@ const NETWORK_UI = {
     title: (p) => (p.caption || '').split('\n')[0] || `${(FACEBOOK_TYPES[p.mediaType] || {}).label || 'Post'} sem texto`,
     typeLabel: (p) => (FACEBOOK_TYPES[p.mediaType] || {}).label || 'Post',
     link: (p) => `https://www.facebook.com/${encodeURIComponent(p.mediaId)}`,
-    typeIcon: (p) => p.mediaType === 'FB_TEXT' ? 'fa-align-left' : p.mediaType === 'FB_VIDEO' ? 'fa-video' : 'fa-image',
+    typeIcon: (p) => p.mediaType === 'FB_TEXT' ? 'fa-align-left' : p.mediaType === 'FB_VIDEO' || p.mediaType === 'FB_REEL' ? 'fa-video' : p.mediaType === 'FB_STORY' ? 'fa-circle-play' : 'fa-image',
     render: () => renderFacebookQueue()
   }
 };
@@ -6311,14 +6428,14 @@ function previewCrosspost(index = 0) {
   CROSSPOST_NETWORKS.forEach(network => {
     const account = network.accounts().find(a => a.hasToken && selected.has(a.accountId));
     if (!account) return;
-    const post = crosspostPostFor(network.key, entry.file, { caption, title, short });
-    if (!post) return;
-    panels.push({
+    crosspostPostsFor(network.key, entry.file, { caption, title, short })
+      .filter(post => post.mediaType !== 'FB_REEL' && post.mediaType !== 'FB_STORY')
+      .forEach(post => panels.push({
       network: network.key, mediaType: post.mediaType, src: rpUrlFor(entry.file), isVideo,
       username: network.key === 'instagram' ? `@${account.username}` : account.username, avatar: account.profilePictureUrl,
       title: network.key === 'youtube' ? post.caption.split('\n')[0] : title,
       caption: network.key === 'youtube' ? post.caption.split('\n').slice(2).join('\n') : post.caption
-    });
+    }));
   });
   if (panels.length === 0) return showToast('Marque pelo menos uma conta para ver a prévia.', 'warning');
   openRealPreview(panels, `Prévia · ${entry.file.name}`);

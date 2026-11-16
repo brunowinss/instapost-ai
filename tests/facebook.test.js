@@ -249,3 +249,41 @@ test('page stats: followers/likes plus per-post reactions, comments, shares and 
   assert.match(photoCall.params.fields, /reactions\.summary\(true\)/);
   assert.match(calls.find(c => c.path.endsWith('/777')).params.fields, /^views,/);
 });
+
+test('Reels e Stories da Página: o vídeo sobe pelo link (start → rupload → finish); Story de foto vira photo_story', async () => {
+  const seen = [];
+  facebook._setFetch(async (url, options = {}) => {
+    const parsed = new URL(url);
+    const params = options.body ? Object.fromEntries(new URLSearchParams(options.body)) : {};
+    seen.push({ host: parsed.hostname, path: parsed.pathname, params, headers: options.headers || {} });
+    if (parsed.hostname === 'rupload.facebook.com') return reply({ success: true });
+    if (params.upload_phase === 'start') return reply({ video_id: 'V9', upload_url: 'https://rupload.facebook.com/video-upload/v22.0/V9' });
+    if (parsed.pathname.endsWith('/photos')) return reply({ id: 'PH7' });
+    return reply({ success: true, post_id: 'PG1_story' });
+  });
+
+  assert.equal(await facebook.publishToFacebook({ accountId: 'PG1', mediaType: 'FB_REEL', imageUrl: 'https://res.cloudinary.com/x/video/upload/a.mp4', caption: 'Meu reel' }), 'V9');
+  assert.deepEqual(seen.map(s => s.path), ['/v22.0/PG1/video_reels', '/video-upload/v22.0/V9', '/v22.0/PG1/video_reels']);
+  assert.equal(seen[1].headers.file_url, 'https://res.cloudinary.com/x/video/upload/a.mp4');
+  assert.equal(seen[1].headers.Authorization, 'OAuth PAGE-TOKEN');
+  assert.deepEqual([seen[2].params.upload_phase, seen[2].params.video_id, seen[2].params.video_state, seen[2].params.description], ['finish', 'V9', 'PUBLISHED', 'Meu reel']);
+
+  seen.length = 0;
+  assert.equal(await facebook.publishToFacebook({ accountId: 'PG1', mediaType: 'FB_STORY', imageUrl: 'https://res.cloudinary.com/x/video/upload/a.mp4' }), 'PG1_story');
+  assert.deepEqual(seen.map(s => s.path), ['/v22.0/PG1/video_stories', '/video-upload/v22.0/V9', '/v22.0/PG1/video_stories']);
+
+  seen.length = 0;
+  assert.equal(await facebook.publishToFacebook({ accountId: 'PG1', mediaType: 'FB_STORY', imageUrl: 'https://i.ibb.co/x/foto.jpg' }), 'PG1_story');
+  assert.deepEqual(seen.map(s => s.path), ['/v22.0/PG1/photos', '/v22.0/PG1/photo_stories']);
+  assert.equal(seen[0].params.published, 'false');
+  assert.equal(seen[1].params.photo_id, 'PH7');
+});
+
+test('Reels: se a Meta não consegue baixar o vídeo, o erro diz isso', async () => {
+  facebook._setFetch(async (url, options = {}) => {
+    const parsed = new URL(url);
+    if (parsed.hostname === 'rupload.facebook.com') return reply({ success: false }, 500);
+    return reply({ video_id: 'V1' });
+  });
+  await assert.rejects(() => facebook.publishToFacebook({ accountId: 'PG1', mediaType: 'FB_REEL', imageUrl: 'https://cdn/v.mp4' }), /não conseguiu baixar o vídeo/);
+});
