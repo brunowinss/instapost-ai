@@ -256,27 +256,27 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     };
   }
-  
+
   // Login form handler
   document.getElementById('login-form').onsubmit = async (e) => {
     e.preventDefault();
     const user = document.getElementById('login-user').value.trim();
     const pass = document.getElementById('login-pass').value.trim();
     const errorEl = document.getElementById('login-error');
-    
+
     const btn = e.target.querySelector('button[type="submit"]');
     btn.innerHTML = '<div class="spinner" style="width:20px;height:20px;border-width:2px;margin:0 auto;"></div>';
     btn.disabled = true;
-    
+
     try {
       const res = await fetch(`${API_BASE}/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: user, password: pass })
       });
-      
+
       const data = await res.json();
-      
+
       if (res.ok && data.token) {
         localStorage.setItem('insta_auth_token', data.token);
         loginScreen.style.opacity = '0';
@@ -380,7 +380,7 @@ function setupNavigation() {
 function switchSection(name) {
   STATE.activeSection = name;
   if (document.body.classList.contains('nav-open')) setMobileNavigation(false);
-  
+
   // Update UI Navigation state
   document.querySelectorAll('.nav-item').forEach(n => { n.classList.remove('active'); n.removeAttribute('aria-current'); });
   const activeNavItem = document.querySelector(`.nav-item[data-section="${name}"]`);
@@ -390,7 +390,7 @@ function switchSection(name) {
     const group = activeNavItem.closest('.nav-group');
     if (group) openNavGroup(group);
   }
-  
+
   // Update Header
   const titles = {
     'dashboard': { t: 'Visão geral', s: 'Tudo o que você precisa para manter seu conteúdo em dia.' },
@@ -418,7 +418,7 @@ function switchSection(name) {
     'facebook-bulk': { t: 'Fotos e vídeos em massa', s: 'Suba vários arquivos e deixe os horários por conta do painel.' },
     'crosspost': { t: 'Publicar em várias redes', s: 'Um conteúdo, cada rede no melhor horário.' }
   };
-  
+
   if (titles[name]) {
     const brand = ['dashboard','instagram-accounts','schedule','analytics','new-post','bulk-reels','bulk-carousel','stories-loop'].includes(name) ? 'instagram' : (name.startsWith('youtube') ? 'youtube' : name.startsWith('facebook') ? 'facebook' : null);
     const titleEl = document.getElementById('page-title');
@@ -432,12 +432,12 @@ function switchSection(name) {
     }
     document.getElementById('page-subtitle').innerText = titles[name].s;
   }
-  
+
   // Show/Hide Sections
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   const targetSection = document.getElementById(`section-${name}`);
   if (targetSection) targetSection.classList.add('active');
-  
+
   renderActiveSection();
 
   // Sugestão de horário inteligente ao abrir a tela (não a cada recarga, para não apagar o que o usuário digitou).
@@ -452,7 +452,7 @@ async function loadData() {
   try {
     const res = await fetch(`${API_BASE}/data`);
     const data = await res.json();
-    
+
     // Instagram e YouTube ficam em listas separadas: todas as telas antigas
     // (painel, calendário, resultados, diagnóstico) continuam só com Instagram.
     const isYoutube = (item) => item.platform === 'youtube';
@@ -471,11 +471,11 @@ async function loadData() {
     STATE.facebookHistory = data.facebookHistory || [];
     STATE.globalConfig = data.globalConfig || STATE.globalConfig;
     STATE.configLoaded = true;
-    
+
     if (STATE.accounts.length > 0 && !STATE.activeAccountId) {
       STATE.activeAccountId = STATE.accounts[0].accountId;
     }
-    
+
     updateHeaderUI();
     updateSchedulerStatus(data.scheduler);
     populateAccountSelector();
@@ -739,14 +739,14 @@ function updateHeaderUI() {
   const accountName = document.getElementById('active-account-name');
   const previewName = document.getElementById('preview-username');
   const previewAvatar = document.getElementById('preview-user-avatar');
-  
+
   const activeAcc = STATE.accounts.find(a => a.accountId === STATE.activeAccountId);
-  
+
   if (activeAcc) {
     authStatus.style.background = 'var(--success)';
     authStatus.style.boxShadow = '0 0 10px var(--success)';
     accountName.innerText = `@${activeAcc.username}`;
-    
+
     if (previewName) previewName.innerText = `@${activeAcc.username}`;
     if (previewAvatar) {
       const pic = activeAcc.profilePictureUrl || (!activeAcc.username.startsWith('instagram_') ? `https://unavatar.io/instagram/${activeAcc.username}` : '');
@@ -806,7 +806,7 @@ function getTimeRemaining(dateStr) {
   if (diff < 0) return 'Postando...';
   const hours = Math.floor(diff / 1000 / 60 / 60);
   const mins = Math.floor((diff / 1000 / 60) % 60);
-  
+
   if (hours > 48) return `Daqui a ${Math.floor(hours / 24)} dias`;
   if (hours > 24) return 'Amanhã';
   if (hours > 0) return `Faltam ${hours}h ${mins}m`;
@@ -973,7 +973,7 @@ function renderSuccessSpark(el) {
 function renderDashboard() {
   const successCount = STATE.history.filter(h => h.status === 'success').length;
   const scheduledCount = STATE.scheduledPosts.length;
-  
+
   const now = new Date();
   const lastWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const weeklyCount = STATE.history.filter(h => h.status === 'success' && new Date(h.publishedAt) >= lastWeek).length;
@@ -992,7 +992,7 @@ function renderDashboard() {
 
   renderDashboardFollowers();
   renderDashboardCharts();
-  
+
   const ptEl = document.getElementById('progress-total');
   if (ptEl) ptEl.style.width = `${Math.min(successCount * 5, 100)}%`;
   const psEl = document.getElementById('progress-scheduled');
@@ -1008,7 +1008,7 @@ function renderDashboard() {
   } else {
     document.getElementById('stat-next-label').innerText = 'Sem agendamentos';
   }
-    
+
   // Activity list
   const list = document.getElementById('recent-activity-list');
   if (!list) return;
@@ -1016,7 +1016,7 @@ function renderDashboard() {
     list.innerHTML = '<p style="text-align:center; padding:2.5rem; color:var(--text-dim); font-size:0.9rem;">Aguardando primeira atividade...</p>';
     return;
   }
-  
+
   const allPosts = [...STATE.scheduledPosts, ...STATE.history].slice(0, 6);
   list.innerHTML = allPosts.map(h => {
     const acc = STATE.accounts.find(a => a.accountId === h.accountId);
@@ -1051,7 +1051,7 @@ function getFilteredPosts() {
 function renderAccountFilterTabs() {
   const container = document.getElementById('account-filter-tabs');
   if (!container) return;
-  
+
   const allActive = !STATE.filterAccountId || STATE.filterAccountId === 'all';
   let html = `<button class="btn btn-sm ${allActive ? 'btn-primary' : 'btn-ghost'}" aria-pressed="${allActive}" onclick="setAccountFilter('all')" style="border-radius:100px; font-size:0.75rem; padding:0.5rem 1rem;">Todas</button>`;
   STATE.accounts.forEach(a => {
@@ -1073,7 +1073,7 @@ function renderScheduleGrid() {
   renderAccountFilterTabs();
   renderCalendar();
   renderScheduleCards();
-  
+
   const prevBtn = document.getElementById('cal-prev');
   const nextBtn = document.getElementById('cal-next');
   if (prevBtn) prevBtn.onclick = () => { calendarDate.setMonth(calendarDate.getMonth() - 1); renderCalendar(); };
@@ -1146,14 +1146,14 @@ function renderCalendar() {
 function renderScheduleCards() {
   const container = document.getElementById('scheduled-posts-container');
   if (!container) return;
-  
+
   const posts = getFilteredPosts();
-  
+
   if (posts.length === 0) {
     container.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:3rem; color:var(--text-dim);"><i class="fa-solid fa-calendar-xmark" style="font-size:2.5rem; margin-bottom:1rem; opacity:0.3; display:block;"></i>Nenhum agendamento para esta conta.</div>';
     return;
   }
-  
+
   const selBar = document.getElementById('selection-bar');
   if (STATE.selectionMode) {
     selBar.classList.add('active');
@@ -1175,7 +1175,7 @@ function renderScheduleCards() {
     const remainingStr = getTimeRemaining(p.scheduledAt);
     const thumbUrl = getThumbnailUrl(p.imageUrl);
     const isSelected = STATE.selectedPostIds.includes(p.id);
-    
+
     return `
     <div class="sched-card ${isSelected ? 'selected' : ''}" style="--card-i:${i % 12}" onclick="${STATE.selectionMode ? `togglePostSelection('${p.id}')` : ''}">
       ${STATE.selectionMode ? `
@@ -1361,15 +1361,15 @@ function calculateNextSlot(lastDate) {
 function setupForms() {
   const fileInput = document.getElementById('file-input');
   const dropzone = document.getElementById('dropzone');
-  
+
   fileInput.setAttribute('multiple', 'true');
   fileInput.setAttribute('accept', 'image/*,video/*');
-  
+
   dropzone.onclick = () => fileInput.click();
   autoFillNextSlot();
-  
+
   STATE.queuedFiles = [];
-  
+
   fileInput.onchange = (e) => {
     const files = Array.from(e.target.files);
     if (!files.length) return;
@@ -1395,11 +1395,11 @@ function setupForms() {
     }
 
     STATE.queuedFiles = files;
-    
+
     const first = files[0];
     const isVideo = first.type.startsWith('video/');
     const type = isVideo ? 'REELS' : 'IMAGE';
-    
+
     document.querySelectorAll('.btn-media').forEach(b => { b.classList.remove('active'); b.classList.add('btn-ghost'); });
     const activeBtn = document.querySelector(`.btn-media[data-type="${type}"]`);
     if (activeBtn) { activeBtn.classList.add('active'); activeBtn.classList.remove('btn-ghost'); }
@@ -1408,14 +1408,14 @@ function setupForms() {
     STATE.igPreviewNote = files.length > 1 ? `Mostrando o 1º de ${files.length} arquivos — cada um vira um post.` : '';
     setInstagramPreviewMedia(localUrl, isVideo);
     refreshNewPostPlan();
-    
+
     const submitBtn = document.querySelector('#post-form button[type="submit"]');
     if (files.length > 1) {
       submitBtn.innerHTML = `<i class="fa-solid fa-bolt"></i> AGENDAR ${files.length} PUBLICAÇÕES`;
     } else {
       submitBtn.innerHTML = `<i class="fa-solid fa-calendar-check"></i> AGENDAR PUBLICAÇÃO`;
     }
-    
+
     showToast(`${files.length} arquivo(s) selecionado(s)`, 'success');
   };
 
@@ -1430,20 +1430,20 @@ function setupForms() {
 
   document.getElementById('post-form').onsubmit = async (e) => {
     e.preventDefault();
-    
+
     const files = STATE.queuedFiles || [];
     if (!files.length) return showToast('Selecione pelo menos um arquivo!', 'warning');
-    
+
     const accountId = document.getElementById('post-account-select').value || STATE.activeAccountId;
     if (!accountId) return showToast('Selecione uma conta!', 'warning');
-    
+
     const caption = document.getElementById('post-caption').value;
     // Variações separadas por uma linha "---": cada post recebe uma versão
     // diferente, evitando a legenda idêntica que o Instagram penaliza.
     const captionVariations = parseCaptionVariations(caption);
 
     showLoading(true, `PROCESSANDO 0/${files.length}...`);
-    
+
     let successCount = 0;
     let lastScheduledDate = null;
     let manualDateTime = null;
@@ -1467,7 +1467,7 @@ function setupForms() {
         startDate.setHours(0, 0, 0, 0);
         lastScheduledDate = startDate;
       }
-      
+
       // Horários inteligentes para todos os arquivos de uma vez (o servidor já considera a fila da conta).
       smartTimes = await newPostPlanTimes();
 
@@ -1481,22 +1481,20 @@ function setupForms() {
         }
       }
     }
-    
+
+    const uploads = await uploadAll(files, {
+      upload: (file, onProgress) => file.type.startsWith('video/') ? uploadToCloudinary(file, onProgress) : uploadToImgbb(file, onProgress)
+    });
+    showLoading(true, 'AGENDANDO...');
+
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const isVideo = file.type.startsWith('video/');
       const type = isVideo ? 'REELS' : 'IMAGE';
-      
-      const loadingText = document.querySelector('#loading-overlay span');
-      if (loadingText) loadingText.innerText = `ENVIANDO ${i + 1}/${files.length}...`;
-      
+
       try {
-        let url;
-        if (type === 'IMAGE') {
-          url = await uploadToImgbb(file);
-        } else {
-          url = await uploadToCloudinary(file);
-        }
+        if (uploads[i].error) throw uploads[i].error;
+        const url = uploads[i].url;
         
         let scheduledAt;
         if (STATE.scheduleMode === 'manual') {
@@ -1510,7 +1508,7 @@ function setupForms() {
           lastScheduledDate = nextSlot;
           scheduledAt = nextSlot;
         }
-        
+
         const post = {
           id: `post_${Date.now()}_${i}`,
           accountId,
@@ -1519,23 +1517,23 @@ function setupForms() {
           caption: pickVariation(captionVariations, i) || captionFromFilename(file.name),
           scheduledAt: scheduledAt.toISOString()
         };
-        
+
         const res = await fetch(`${API_BASE}/save-post`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(post)
         });
-        
+
         if (res.ok) successCount++;
       } catch (err) {
         showToast(`Erro: ${file.name} - ${err.message}`, 'error');
       }
     }
-    
+
     showLoading(false);
     STATE.queuedFiles = [];
     fileInput.value = '';
-    
+
     if (successCount > 0) {
       showToast(`${successCount} publicação(ões) agendada(s)!`, 'success');
       switchSection('schedule');
@@ -1572,7 +1570,7 @@ window.selectAllPosts = () => {
 window.deleteSelectedPosts = async () => {
   if (STATE.selectedPostIds.length === 0) return showToast('Nenhum post selecionado.', 'warning');
   if (!confirm(`Deseja excluir permanentemente os ${STATE.selectedPostIds.length} posts selecionados?`)) return;
-  
+
   try {
     showLoading(true, 'EXCLUINDO SELECIONADOS...');
     const res = await fetch(`${API_BASE}/posts/bulk-delete`, {
@@ -1596,10 +1594,10 @@ window.deleteSelectedPosts = async () => {
 window.clearAllPending = async () => {
   const accId = STATE.filterAccountId;
   if (accId === 'all') return showToast('Selecione uma conta específica para limpar tudo.', 'warning');
-  
+
   const acc = STATE.accounts.find(a => a.accountId === accId);
   if (!confirm(`⚠️ EXCLUIR TUDO: Deseja apagar TODOS os posts pendentes da conta @${acc.username}?`)) return;
-  
+
   try {
     showLoading(true, 'LIMPANDO CONTA...');
     const res = await fetch(`${API_BASE}/posts/clear-pending/${accId}`, { method: 'DELETE' });
@@ -1750,7 +1748,7 @@ window.moveSelectedToAccount = async () => {
 
 window.deleteAccount = async (id) => {
   if (!confirm('⚠️ ATENÇÃO: Isso excluirá permanentemente esta conta e TODOS os posts agendados associados a ela. Confirmar?')) return;
-  
+
   try {
     showLoading(true, 'EXCLUINDO CONTA...');
     const res = await fetch(`${API_BASE}/accounts/${id}`, { method: 'DELETE' });
@@ -1771,7 +1769,7 @@ window.deleteAccount = async (id) => {
 window.publishNow = async (postId) => {
   const post = STATE.scheduledPosts.find(p => p.id === postId);
   if (!post) return;
-  
+
   showLoading(true, 'PUBLICANDO AGORA...');
   try {
     const res = await fetch(`${API_BASE}/publish-now`, {
@@ -1819,7 +1817,23 @@ function pickVariation(variations, i) {
   return variations[(i + _variationOffset) % variations.length];
 }
 
-async function uploadToImgbb(file) {
+/** POST de formulário que informa quantos bytes já subiram (o fetch não informa). */
+function postWithProgress(url, formData, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+    if (onProgress) xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded); };
+    xhr.onload = () => {
+      let data = {};
+      try { data = JSON.parse(xhr.responseText); } catch { data = {}; }
+      resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, data });
+    };
+    xhr.onerror = () => reject(new Error('network'));
+    xhr.send(formData);
+  });
+}
+
+async function uploadToImgbb(file, onProgress) {
   const key = (STATE.globalConfig.imgbbKey || '').trim();
   if (!key) {
     throw new Error('Chave do ImgBB não configurada. Vá em Configurações → ImgBB API Key.');
@@ -1830,12 +1844,12 @@ async function uploadToImgbb(file) {
 
   let r;
   try {
-    r = await fetch(`https://api.imgbb.com/1/upload?key=${key}`, { method: 'POST', body: fd });
+    r = await postWithProgress(`https://api.imgbb.com/1/upload?key=${key}`, fd, onProgress);
   } catch {
     throw new Error('Sem conexão com o ImgBB. Verifique a internet.');
   }
 
-  const data = await r.json().catch(() => ({}));
+  const data = r.data || {};
   if (!r.ok || data.error) {
     const msg = data.error?.message || `ImgBB retornou ${r.status}`;
     throw new Error(/invalid.*key/i.test(msg) ? 'Chave do ImgBB inválida.' : msg);
@@ -1843,7 +1857,7 @@ async function uploadToImgbb(file) {
   return data.data.url;
 }
 
-async function uploadToCloudinary(file) {
+async function uploadToCloudinary(file, onProgress) {
   const nome = (STATE.globalConfig.cloudinaryName || '').trim();
   const preset = (STATE.globalConfig.cloudinaryPreset || '').trim();
   if (!nome || !preset) {
@@ -1856,12 +1870,15 @@ async function uploadToCloudinary(file) {
 
   let r;
   try {
-    r = await fetch(`https://api.cloudinary.com/v1_1/${nome}/auto/upload`, { method: 'POST', body: fd });
+    r = await postWithProgress(`https://api.cloudinary.com/v1_1/${nome}/auto/upload`, fd, onProgress);
   } catch {
     throw new Error('Sem conexão com o Cloudinary. Verifique a internet.');
   }
 
-  const data = await r.json().catch(() => ({}));
+  const data = r.data || {};
+  if (r.status === 413 || /too large|file size/i.test(data.error?.message || '')) {
+    throw new Error(`${file.name} é grande demais para o Cloudinary (${(file.size / 1048576).toFixed(0)} MB). No plano grátis o limite é 100 MB por vídeo.`);
+  }
   if (!r.ok || data.error) {
     throw new Error(data.error?.message || `Cloudinary retornou ${r.status}`);
   }
@@ -2022,7 +2039,7 @@ function setupUIEvents() {
       }
     };
   }
-  
+
   // 3. Vincular Preview de Legenda
   const captionInput = document.getElementById('post-caption');
   if (captionInput) {
@@ -2201,12 +2218,12 @@ async function subscribeToPush() {
 
     const reg = await navigator.serviceWorker.ready;
     let sub = await reg.pushManager.getSubscription();
-    
+
     if (!sub) {
       const res = await fetch(`${API_BASE}/push/public-key`);
       const data = await res.json();
       const applicationServerKey = urlB64ToUint8Array(data.publicKey);
-      
+
       sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey
@@ -2265,14 +2282,14 @@ function showToast(msg, type = 'info') {
   const container = document.getElementById('toast-container');
   const toast = document.createElement('div');
   toast.className = 'toast';
-  
+
   const icon = {
     'success': 'fa-circle-check',
     'error': 'fa-circle-xmark',
     'warning': 'fa-triangle-exclamation',
     'info': 'fa-circle-info'
   }[type];
-  
+
   const color = {
     'success': '#10b981',
     'error': '#ef4444',
@@ -2284,7 +2301,7 @@ function showToast(msg, type = 'info') {
     <i class="fa-solid ${icon}" style="color: ${color}; font-size: 1.25rem;"></i>
     <span style="font-weight: 700; color: white;">${msg}</span>
   `;
-  
+
   container.appendChild(toast);
   setTimeout(() => {
     toast.style.opacity = '0';
@@ -2566,33 +2583,20 @@ async function submitBulkQueue() {
   }
 
   const scheduledPayload = [];
+  const uploads = await uploadAll(STATE.bulkQueue.map(item => item.file), {
+    upload: uploadToCloudinary,
+    onProgress: uploadBarProgress(progressBar, progressPct, progressStatus)
+  });
 
   for (let i = 0; i < STATE.bulkQueue.length; i++) {
     const item = STATE.bulkQueue[i];
-    const pct = Math.round(((i) / STATE.bulkQueue.length) * 100);
-    if (progressBar) progressBar.style.width = `${pct}%`;
-    if (progressPct) progressPct.innerText = `${pct}%`;
-    if (progressStatus) progressStatus.innerText = `Enviando vídeo ${i + 1} de ${STATE.bulkQueue.length} (${item.file.name})...`;
-
     try {
-      // Direct Cloudinary Upload
-      const formData = new FormData();
-      formData.append('file', item.file);
-      formData.append('upload_preset', cloudPreset);
-      formData.append('resource_type', 'video');
-
-      const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/video/upload`, {
-        method: 'POST',
-        body: formData
-      });
-
-      const uploadData = await uploadRes.json();
-      if (!uploadData.secure_url) throw new Error(uploadData.error?.message || 'Falha no upload do Cloudinary.');
+      if (uploads[i].error) throw uploads[i].error;
 
       scheduledPayload.push({
         accountId: item.accountId,
         mediaType: 'REELS',
-        imageUrl: uploadData.secure_url,
+        imageUrl: uploads[i].url,
         caption: item.caption,
         scheduledAt: item.scheduledAt,
         varianceMinutes: item.varianceMinutes,
@@ -2690,10 +2694,10 @@ function renderCarouselSlides() {
 
   if (STATE.carouselSlides.length > 0 && previewBox) {
     const first = STATE.carouselSlides[0];
-    previewBox.innerHTML = first.isVideo 
+    previewBox.innerHTML = first.isVideo
       ? `<video src="${first.previewUrl}" controls style="width:100%;height:100%;object-fit:cover;"></video>`
       : `<img src="${first.previewUrl}" style="width:100%;height:100%;object-fit:cover;">`;
-    
+
     if (previewDots) {
       previewDots.innerHTML = STATE.carouselSlides.map((_, idx) => `
         <div style="width:6px; height:6px; border-radius:50%; background:${idx === 0 ? 'var(--primary)' : 'var(--border-color)'};"></div>
@@ -2951,10 +2955,72 @@ function openDriveSelectForStories() {
 }
 
 /** Imagens vão para o Cloudinary (ou imgbb, se for o único configurado); vídeos sempre para o Cloudinary. */
-async function uploadStoryMedia(file) {
+async function uploadStoryMedia(file, onProgress) {
   const cloudinaryReady = STATE.globalConfig.cloudinaryName && STATE.globalConfig.cloudinaryPreset;
-  if (file.type.startsWith('video/') || cloudinaryReady) return uploadToCloudinary(file);
-  return uploadToImgbb(file);
+  if (file.type.startsWith('video/') || cloudinaryReady) return uploadToCloudinary(file, onProgress);
+  return uploadToImgbb(file, onProgress);
+}
+
+const UPLOAD_CONCURRENCY = 3;
+
+/**
+ * Envia vários arquivos ao mesmo tempo (3 por vez) e mostra o progresso real: % do total em bytes,
+ * velocidade e tempo restante. Antes era um por vez e a tela ficava parada em "1/27" sem dizer nada.
+ * Devolve, na ordem dos arquivos, { file, url } ou { file, error }.
+ * onProgress(info) troca a tela de carregamento por outro lugar (ex.: barra de progresso do lote).
+ */
+async function uploadAll(files, { upload = uploadStoryMedia, onProgress } = {}) {
+  const totalBytes = files.reduce((sum, file) => sum + (file.size || 0), 0) || 1;
+  const sent = files.map(() => 0);
+  const results = new Array(files.length);
+  const started = Date.now();
+  let done = 0;
+  let next = 0;
+  let lastPaint = 0;
+
+  const paint = (force) => {
+    const now = Date.now();
+    if (!force && now - lastPaint < 250) return;
+    lastPaint = now;
+    const bytes = sent.reduce((a, b) => a + b, 0);
+    const percent = Math.min(100, Math.floor((bytes / totalBytes) * 100));
+    const seconds = (now - started) / 1000;
+    const speed = seconds > 2 ? bytes / seconds : 0;
+    const eta = speed > 0 ? (totalBytes - bytes) / speed : null;
+    const parts = [`${done}/${files.length} prontos`, `${percent}%`];
+    if (speed) parts.push(`${(speed / 1048576).toFixed(1).replace('.', ',')} MB/s`);
+    if (eta !== null && done < files.length) parts.push(eta < 60 ? 'falta menos de 1 min' : `faltam ~${Math.ceil(eta / 60)} min`);
+    const detail = `Enviando ${Math.min(UPLOAD_CONCURRENCY, files.length - done)} de cada vez · ${parts.join(' · ')}`;
+    const info = { done, total: files.length, percent, detail, text: `ENVIANDO · ${parts.join(' · ').toUpperCase()}` };
+    if (onProgress) onProgress(info); else showLoading(true, info.text);
+  };
+
+  const worker = async () => {
+    while (next < files.length) {
+      const i = next++;
+      try {
+        results[i] = { file: files[i], url: await upload(files[i], (bytes) => { sent[i] = bytes; paint(false); }) };
+      } catch (error) {
+        results[i] = { file: files[i], error };
+      }
+      sent[i] = files[i].size || 0;
+      done++;
+      paint(true);
+    }
+  };
+
+  paint(true);
+  await Promise.all(Array.from({ length: Math.min(UPLOAD_CONCURRENCY, files.length) }, worker));
+  return results;
+}
+
+/** Progresso do uploadAll numa barra de lote (barra, % e texto). */
+function uploadBarProgress(bar, pctEl, statusEl) {
+  return (info) => {
+    if (bar) bar.style.width = `${info.percent}%`;
+    if (pctEl) pctEl.innerText = `${info.percent}%`;
+    if (statusEl) statusEl.innerText = info.detail;
+  };
 }
 
 function setupStoryDropzones() {
@@ -3048,13 +3114,9 @@ async function submitStoryPublish() {
     }
 
     const uploaded = [];
-    for (let i = 0; i < files.length; i++) {
-      showLoading(true, `ENVIANDO ${i + 1}/${files.length}...`);
-      try {
-        uploaded.push({ file: files[i].file, url: await uploadStoryMedia(files[i].file) });
-      } catch (err) {
-        results.failed.push(`${files[i].file.name}: ${err.message}`);
-      }
+    for (const r of await uploadAll(files.map(f => f.file))) {
+      if (r.error) results.failed.push(`${r.file.name}: ${r.error.message}`);
+      else uploaded.push(r);
     }
 
     for (let i = 0; i < uploaded.length; i++) {
@@ -3118,10 +3180,9 @@ async function handleStoryPoolUpload(files) {
   const valid = files.filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'));
   if (valid.length === 0) return;
   try {
-    for (let i = 0; i < valid.length; i++) {
-      showLoading(true, `ENVIANDO ${i + 1}/${valid.length}...`);
-      const url = await uploadStoryMedia(valid[i]);
-      if (!STATE.storyMediaPool.includes(url)) STATE.storyMediaPool.push(url);
+    for (const r of await uploadAll(valid)) {
+      if (r.error) { showToast(`Erro no envio de ${r.file.name}: ${r.error.message}`, 'error'); continue; }
+      if (!STATE.storyMediaPool.includes(r.url)) STATE.storyMediaPool.push(r.url);
     }
     renderStoryMediaPool();
   } catch (err) {
@@ -3402,8 +3463,8 @@ async function loadDriveItems() {
 
     grid.innerHTML = STATE.driveFiles.map(file => `
       <div class="drive-card">
-        ${file.url.toLowerCase().includes('.mp4') 
-          ? `<video class="drive-thumb" src="${file.url}" controls></video>` 
+        ${file.url.toLowerCase().includes('.mp4')
+          ? `<video class="drive-thumb" src="${file.url}" controls></video>`
           : `<img class="drive-thumb" src="${file.url}">`}
         <div class="drive-card-title" title="${file.filename}">${file.filename}</div>
         <div class="drive-card-meta">
@@ -3776,8 +3837,8 @@ async function runHealthCheck() {
           </div>
         </div>
         <div>
-          ${acc.valid 
-            ? `<span style="background:rgba(52,211,153,0.15); color:var(--success); font-size:0.7rem; font-weight:700; padding:3px 8px; border-radius:6px;">60 DIAS (Long-Lived)</span>` 
+          ${acc.valid
+            ? `<span style="background:rgba(52,211,153,0.15); color:var(--success); font-size:0.7rem; font-weight:700; padding:3px 8px; border-radius:6px;">60 DIAS (Long-Lived)</span>`
             : `<a href="/auth/instagram" class="btn btn-sm btn-ghost" style="color:var(--error); border-color:rgba(239,68,68,0.3); font-size:0.72rem;"><i class="fa-solid fa-arrows-rotate"></i> Reconectar</a>`}
         </div>
       </div>
@@ -3826,7 +3887,7 @@ async function loadBestTimesHeatmap() {
   if (!container) return;
 
   const targetAcc = (STATE.filterAccountId && STATE.filterAccountId !== 'all') ? STATE.filterAccountId : '';
-  
+
   try {
     const res = await fetch(`${API_BASE}/accounts/best-times?accountId=${encodeURIComponent(targetAcc)}`);
     const data = await res.json();
@@ -3862,10 +3923,10 @@ async function loadBestTimesHeatmap() {
               bg = 'rgba(16, 184, 245, 0.12)';
             }
             return `
-              <div class="heatmap-cell" 
+              <div class="heatmap-cell"
                    title="${dayNames[dayIdx]} às ${String(hour).padStart(2, '0')}:00 — Engajamento Estimado: ${score}%"
                    style="height: 22px; border-radius: 4px; background: ${bg}; border: 1px solid ${borderColor}; cursor: pointer; transition: transform 0.15s ease;"
-                   onmouseover="this.style.transform='scale(1.2)';" 
+                   onmouseover="this.style.transform='scale(1.2)';"
                    onmouseout="this.style.transform='scale(1)';"
                    onclick="showToast('${dayNames[dayIdx]} às ${String(hour).padStart(2, '0')}:00 — Probabilidade Viral: ${score}%', 'info')">
               </div>
@@ -4590,7 +4651,9 @@ async function submitYoutubePost() {
   showLoading(true, 'ENVIANDO VÍDEO PARA A NUVEM...');
 
   try {
-    const videoUrl = await uploadToCloudinary(file);
+    const [uploadedVideo] = await uploadAll([file], { upload: uploadToCloudinary });
+    if (uploadedVideo.error) throw uploadedVideo.error;
+    const videoUrl = uploadedVideo.url;
     showLoading(true, 'AGENDANDO PUBLICAÇÃO...');
     const res = await fetch(`${API_BASE}/save-post`, {
       method: 'POST',
@@ -4786,27 +4849,20 @@ async function submitYoutubeBulk() {
   if (progressBox) progressBox.style.display = 'block';
 
   const videos = [];
+  const uploads = await uploadAll(files.map(f => f.file), {
+    upload: uploadToCloudinary,
+    onProgress: uploadBarProgress(progressBar, progressPct, progressStatus)
+  });
   for (let i = 0; i < files.length; i++) {
     const { file, title, hashtags } = files[i];
-    const pct = Math.round((i / files.length) * 100);
-    if (progressBar) progressBar.style.width = `${pct}%`;
-    if (progressPct) progressPct.innerText = `${pct}%`;
-    if (progressStatus) progressStatus.innerText = `Enviando vídeo ${i + 1} de ${files.length} (${file.name})...`;
-
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('upload_preset', cloudPreset);
-      formData.append('resource_type', 'video');
-      const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/video/upload`, { method: 'POST', body: formData });
-      const uploadData = await uploadRes.json();
-      if (!uploadData.secure_url) throw new Error(uploadData.error?.message || 'Falha no upload do Cloudinary.');
+      if (uploads[i].error) throw uploads[i].error;
 
       videos.push({
         title: title || guessTitleFromFilename(file.name),
         description: hashtags || '',
         isShort: mediaType === 'YOUTUBE_SHORT',
-        videoUrl: uploadData.secure_url,
+        videoUrl: uploads[i].url,
         fileName: file.name
       });
     } catch (err) {
@@ -5083,14 +5139,17 @@ async function submitFacebookPost() {
       if (!smartTimes) throw new Error('Não consegui calcular os horários agora. Tente "Agora" ou escolha uma data.');
     }
 
+    const uploads = type === 'FB_TEXT' ? [] : await uploadAll(items, { upload: type === 'FB_VIDEO' ? uploadToCloudinary : uploadStoryMedia });
+    if (when !== 'now') showLoading(true, 'AGENDANDO...');
+
     for (let i = 0; i < items.length; i++) {
       const file = items[i];
       const label = file ? file.name : 'texto';
       try {
         let url = '';
         if (file) {
-          showLoading(true, `ENVIANDO ${i + 1}/${items.length}...`);
-          url = type === 'FB_VIDEO' ? await uploadToCloudinary(file) : await uploadStoryMedia(file);
+          if (uploads[i].error) throw uploads[i].error;
+          url = uploads[i].url;
         }
 
         const publishNow = when === 'now';
@@ -5685,14 +5744,12 @@ async function submitCrosspost() {
 
   try {
     // 1) Cada arquivo sobe uma vez só e a mesma URL serve para todas as redes.
-    const uploaded = [];
-    for (let i = 0; i < files.length; i++) {
-      if (files[i].url) { uploaded.push({ file: files[i].file, url: files[i].url }); continue; }
-      showLoading(true, `ENVIANDO ${i + 1}/${files.length}...`);
-      try {
-        uploaded.push({ file: files[i].file, url: await uploadStoryMedia(files[i].file) });
-      } catch (err) {
-        failures.push(`${files[i].file.name}: ${err.message}`);
+    const uploaded = files.filter(item => item.url).map(item => ({ file: item.file, url: item.url }));
+    const toSend = files.filter(item => !item.url).map(item => item.file);
+    if (toSend.length) {
+      for (const r of await uploadAll(toSend)) {
+        if (r.error) failures.push(`${r.file.name}: ${r.error.message}`);
+        else uploaded.push(r);
       }
     }
 
@@ -6169,15 +6226,17 @@ async function submitFacebookBulk() {
 
   let ok = 0;
   const failed = [];
+  const uploads = await uploadAll(files.map(f => f.file), {
+    upload: (file, onProgress) => file.type.startsWith('video/') ? uploadToCloudinary(file, onProgress) : uploadStoryMedia(file, onProgress),
+    onProgress: uploadBarProgress(bar, pct, status)
+  });
+  if (status) status.innerText = 'Salvando os agendamentos...';
   for (let i = 0; i < files.length; i++) {
     const { file, caption } = files[i];
-    const percent = Math.round((i / files.length) * 100);
-    if (bar) bar.style.width = `${percent}%`;
-    if (pct) pct.innerText = `${percent}%`;
-    if (status) status.innerText = `Enviando ${i + 1} de ${files.length} (${file.name})...`;
     try {
       const isVideo = file.type.startsWith('video/');
-      const url = isVideo ? await uploadToCloudinary(file) : await uploadStoryMedia(file);
+      if (uploads[i].error) throw uploads[i].error;
+      const url = uploads[i].url;
       const post = {
         id: `fb_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 6)}`,
         accountId,
