@@ -119,6 +119,6 @@
 .cl-c-quando { font-size: 0.72rem; color: var(--text-dim); margin: 3px 0; }
 .cl-c-quando i { font-size: 0.65rem; margin-right: 2px; }
 .cl-c-status { display: inline-block; font-size: 0.68rem; font-weight: 700; padding: 1px 8px; border-radius: 6px; margin-bottom: 4px; }
-.cl-st-rascunhos { background: rgba(251,191,36,0.15); color: #fbbf24; }
-.cl-st-prontos { background: rgba(74,222,128,0.15); color: #4ade80; }
-.cl-st-agendados { background: rgba(96,165,250,0.15); color: #60a5fa; }
+.cl-st-rascunho { background: rgba(251,191,36,0.15); color: #fbbf24; }
+.cl-st-pronto { background: rgba(74,222,128,0.15); color: #4ade80; }
+.cl-st-agendado { background: rgba(96,165,250,0.15); color: #60a5fa; }

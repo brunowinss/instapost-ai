@@ -125,6 +125,7 @@ async function clAtualizar() {
   const n = est.contagens || {};
   document.getElementById('cl-n-prontos').textContent = n.prontos ?? 0;
   document.getElementById('cl-n-rascunhos').textContent = n.rascunhos ?? 0;
+  document.getElementById('cl-n-clipados').textContent = n.clipados ?? 0;
   document.getElementById('cl-n-agendados').textContent = n.agendados ?? 0;
 
   // Log
@@ -248,7 +249,8 @@ async function clCarregarCortes() {
   const grade = document.getElementById('cl-cortes');
   const dicas = {
     prontos: 'Já editados (com legenda e card) e ainda não agendados. Clique em Agendar.',
-    rascunhos: 'Cortados, mas ainda SEM legenda e card. Peça ao Claude: "edita os cortes do <streamer>".',
+    rascunhos: 'Tudo que ainda NÃO foi editado: o que o app cortou e os vídeos que você baixou e moveu para a pasta rascunhos. Peça ao Claude: "edita os cortes do <streamer>".',
+    clipados: 'Tudo que o app clipou sozinho das lives, com o status de cada um (sem legenda, pronto ou agendado).',
     agendados: 'Já enviados e agendados nas suas contas.'
   };
   document.getElementById('cl-dica').textContent = dicas[CL.aba];
@@ -337,11 +339,11 @@ function clCartao(c) {
       <div class="cl-info">
         <div class="cl-c-topo"><span class="cl-c-streamer">${clEsc(c.canal)}</span><span class="cl-c-origem">${clEsc(c.origem || '')}</span></div>
         <div class="cl-c-quando"><i class="fa-solid fa-scissors"></i> cortado ${clHora(c.cortado) ? 'às ' + clHora(c.cortado) : ''}${c.editado ? ` · <i class="fa-solid fa-pen"></i> editado às ${clHora(c.editado)}` : ''}</div>
-        <div class="cl-c-status cl-st-${CL.aba}">${CL.aba === 'rascunhos' ? 'Sem legenda e card' : CL.aba === 'prontos' ? 'Pronto para agendar' : 'Agendado'}</div>
+        <div class="cl-c-status cl-st-${clEsc(c.estado || 'rascunho')}">${c.estado === 'agendado' ? 'Agendado' : c.estado === 'pronto' ? 'Editado · pronto para agendar' : c.origem === 'baixado' ? 'Baixado · esperando edição' : 'Clipado · esperando edição'}</div>
         ${c.faixa ? `<div class="cl-faixa">${clEsc(c.faixa)}</div>` : ''}
         ${c.titulo ? `<div class="cl-titulo">${clEsc(c.titulo)}</div>` : `<div class="cl-dim">${clEsc(c.fala || 'sem fala transcrita')}</div>`}
         ${c.agendado ? `<div class="cl-agendado">✔ ${c.agendado.map(a => clEsc(`${a.plataforma} @${a.conta} ${a.quando}`)).join(' · ')}</div>` : ''}
-        ${CL.aba === 'prontos' ? `<button type="button" class="btn btn-primary btn-sm" onclick="clAgendar('${clEsc(c.id)}', this)"><i class="fa-solid fa-calendar-plus"></i> Agendar</button>` : ''}
+        ${CL.aba === 'prontos' || (CL.aba === 'clipados' && c.estado === 'pronto') ? `<button type="button" class="btn btn-primary btn-sm" onclick="clAgendar('${clEsc(c.id)}', this)"><i class="fa-solid fa-calendar-plus"></i> Agendar</button>` : ''}
       </div>
     </div>`;
 }
