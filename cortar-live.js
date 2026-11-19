@@ -104,6 +104,12 @@ async function clAtualizar() {
   document.getElementById('cl-barra').dataset.estado = estado;
   document.getElementById('cl-status-titulo').textContent = titulo;
   document.getElementById('cl-status-sub').textContent = sub;
+  const ed = est.editor || {};
+  const agora = document.getElementById('cl-status-agora');
+  if (!ligado) agora.textContent = '';
+  else if (ed.fazendo) agora.innerHTML = `⚙️ <b>Agora:</b> ${clEsc(ed.fazendo)} <span class="cl-dim">(há ${clTempo(ed.ha_seg)}${ed.fila ? ` · mais ${ed.fila} na fila` : ''})</span>`;
+  else if (gravando.length) agora.innerHTML = '⚙️ <b>Agora:</b> gravando e lendo o chat — esperando o próximo momento ou o próximo bloco da IA';
+  else agora.textContent = '';
 
   // Lives (cada uma com o botão Monitorar)
   document.getElementById('cl-canais').innerHTML = (est.canais || []).map(c => `
@@ -111,7 +117,8 @@ async function clAtualizar() {
       <span class="cl-bola ${c.status === 'gravando' ? 'on' : ''}"></span>
       <div style="min-width:0; flex:1;">
         <b>${clEsc(c.nome_bonito)}</b> <span class="cl-plat">${clEsc(c.plataforma)}</span>
-        <small>${c.status === 'gravando' ? '🔴 gravando e cortando — ' + clEsc(c.titulo || '') : clEsc(c.status)}</small>
+        <small>${c.status === 'gravando' ? '🔴 ' + clEsc(c.titulo || 'gravando') : clEsc(c.status)}</small>
+        ${clDetalheCanal(c)}
       </div>
       <label class="cl-switch" title="${c.ativo ? 'Monitorando — clique para desligar' : 'Desligado — clique para monitorar'}">
         <input type="checkbox" ${c.ativo ? 'checked' : ''} onchange="clMonitorar('${clEsc(c.chave)}', this.checked)">
@@ -471,4 +478,39 @@ async function clSalvarIA() {
       : c.teste === 'ok' ? '✅ IA funcionando! Os próximos blocos das lives já saem prontos.'
       : '⚠️ Salvo, mas o teste falhou: ' + c.teste;
   } catch (e) { msg.textContent = 'Erro: ' + e.message; }
+}
+
+
+/* ---------------- Status detalhado de cada live ---------------- */
+function clTempo(seg) {
+  seg = Math.max(0, Math.round(seg || 0));
+  const h = Math.floor(seg / 3600), m = Math.floor(seg % 3600 / 60), s = seg % 60;
+  return h ? `${h}h${String(m).padStart(2, '0')}` : m ? `${m} min${s && m < 5 ? ` ${s}s` : ''}` : `${s}s`;
+}
+
+function clHoraDaqui(seg) {
+  const d = new Date(Date.now() + seg * 1000);
+  return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+
+function clDetalheCanal(c) {
+  const linhas = [];
+  if (c.status === 'gravando') {
+    linhas.push(`⏺ Gravando há <b>${clTempo(c.gravado_seg)}</b> · chat: <b>${c.chat_min ?? 0}</b> msgs/min`
+      + (c.momentos_esperando ? ` · ${c.momentos_esperando} pico(s) esperando o fim do momento para cortar` : ''));
+    if (c.ia_ligada) {
+      if (c.ia_etapa) linhas.push(`🤖 <b>IA:</b> ${clEsc(c.ia_etapa)}`);
+      else if (c.ia_proximo_em != null) linhas.push(`🤖 <b>IA:</b> analisa os próximos ${c.ia_bloco_min || 10} min em <b>${clTempo(c.ia_proximo_em)}</b> (às ${clHoraDaqui(c.ia_proximo_em + 15)})`);
+    } else {
+      linhas.push('🤖 IA desligada — cortando só pelos picos de chat e voz (saem como rascunho)');
+    }
+  } else if (c.ia_etapa) {
+    linhas.push(`🤖 <b>IA:</b> ${clEsc(c.ia_etapa)}`);
+  }
+  if (c.ia_ultimo) linhas.push(`🧠 Última análise: ${clEsc(c.ia_ultimo)}`);
+  const u = c.ultimo_corte;
+  if (u) linhas.push(`✂️ Último corte às <b>${clEsc(u.hora)}</b> (${u.tipo === 'pronto' ? 'pronto' : 'rascunho'}): ${clEsc(u.titulo)}`);
+  if (c.n_pronto || c.n_rascunho) linhas.push(`📦 Desde que o app abriu: <b>${c.n_pronto || 0}</b> pronto(s), ${c.n_rascunho || 0} rascunho(s)`);
+  else if (c.status === 'gravando') linhas.push('✂️ Nenhum corte ainda desde que o app abriu');
+  return linhas.length ? `<div class="cl-detalhe">${linhas.map(l => `<div>${l}</div>`).join('')}</div>` : '';
 }

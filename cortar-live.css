@@ -86,3 +86,8 @@
 .cl-log span { color: var(--text-dim); }
 
 .cl-ia-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0 12px; }
+
+.cl-agora { margin-top: 6px; font-size: 0.85rem; }
+.cl-detalhe { margin-top: 4px; font-size: 0.78rem; line-height: 1.5; color: var(--text-dim); }
+.cl-detalhe b { color: var(--text-main, inherit); }
+.cl-detalhe div { white-space: normal; overflow-wrap: anywhere; }
