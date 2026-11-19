@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="vendor/fontawesome/all.min.css">
   <link rel="stylesheet" href="style.css?v=61">
   <link rel="stylesheet" href="studio.css?v=1">
-  <link rel="stylesheet" href="cortar-live.css?v=6">
+  <link rel="stylesheet" href="cortar-live.css?v=7">
 </head>
 <body>
   <a class="skip-link" href="#main-content">Pular para o conteúdo</a>
@@ -1255,6 +1255,33 @@
         </div>
 
         <div class="card" style="margin-top:1.5rem;">
+          <div class="card-title"><i class="fa-solid fa-wand-magic-sparkles"></i> IA dos cortes <span class="cl-dim" id="cl-ia-status" style="margin-left:6px;"></span></div>
+          <p class="cl-dim" style="margin:0 0 0.8rem;">A cada bloco da live o app transcreve a fala na sua placa de vídeo, a IA lê a fala e o chat, escolhe os melhores momentos e já entrega o corte <b>pronto</b> (legenda + card + título). A chave fica só no seu PC.</p>
+          <div class="cl-ia-grade">
+            <div class="form-group"><label class="label">Provedor</label>
+              <select class="input" id="cl-ia-provedor" onchange="clIaProvedor()">
+                <option value="openrouter">OpenRouter</option><option value="deepseek">DeepSeek</option>
+                <option value="openai">OpenAI</option><option value="groq">Groq</option>
+              </select></div>
+            <div class="form-group"><label class="label">Chave da API</label>
+              <input type="password" class="input" id="cl-ia-chave" autocomplete="off" placeholder="cole a chave (sk-...)"></div>
+            <div class="form-group"><label class="label">Modelo</label>
+              <input type="text" class="input" id="cl-ia-modelo" placeholder="deepseek/deepseek-chat"></div>
+            <div class="form-group"><label class="label">Nota mínima (0-10)</label>
+              <input type="number" class="input" id="cl-ia-nota" min="0" max="10" value="6"></div>
+            <div class="form-group"><label class="label">Máx. cortes por bloco</label>
+              <input type="number" class="input" id="cl-ia-max" min="1" max="8" value="3"></div>
+            <div class="form-group"><label class="label">Bloco (minutos)</label>
+              <input type="number" class="input" id="cl-ia-bloco" min="3" max="30" value="10"></div>
+          </div>
+          <label class="cl-check"><input type="checkbox" id="cl-ia-ativa" checked> Usar a IA para escolher e editar os cortes</label>
+          <div style="display:flex; gap:8px; margin-top:0.8rem; flex-wrap:wrap;">
+            <button type="button" class="btn btn-primary btn-sm" onclick="clSalvarIA()"><i class="fa-solid fa-plug-circle-check"></i> Salvar e testar</button>
+          </div>
+          <p class="cl-dim" id="cl-msg-ia" style="margin-top:0.6rem;"></p>
+        </div>
+
+        <div class="card" style="margin-top:1.5rem;">
           <div class="cl-abas" role="tablist">
             <button type="button" class="cl-aba active" data-tipo="prontos" onclick="clTrocarAba('prontos')">Prontos para agendar <span id="cl-n-prontos">0</span></button>
             <button type="button" class="cl-aba" data-tipo="rascunhos" onclick="clTrocarAba('rascunhos')">Esperando edição <span id="cl-n-rascunhos">0</span></button>
@@ -2151,7 +2178,7 @@
   </div>
 
   <script src="app.js?v=62"></script>
-  <script src="cortar-live.js?v=6"></script>
+  <script src="cortar-live.js?v=7"></script>
   <link rel="stylesheet" href="ai-ui.css?v=1">
   <script src="ai-ui.js?v=2"></script>
   <script src="particles.js?v=1"></script>

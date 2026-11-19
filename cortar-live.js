@@ -50,6 +50,7 @@ async function clVerificarApp(manual) {
     await clVincular();
     CL.cfgCarregada = false;
   }
+  if (!CL.iaCarregada) clCarregarIA();
   document.getElementById('cl-versao').textContent = CL.versao ? `versão ${CL.versao}` : '';
   await clAtualizar();
   return ok;
@@ -411,3 +412,58 @@ document.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => clVerificarApp(false), 1500);
   setInterval(() => { if (STATE.activeSection !== 'cortar-live') clVerificarApp(false); }, 15000);
 });
+
+
+/* ---------------- IA dos cortes (chave direta, guardada só no app local) ---------------- */
+const CL_IA_MODELOS = { openrouter: 'deepseek/deepseek-chat', deepseek: 'deepseek-chat', openai: 'gpt-4o-mini', groq: 'llama-3.3-70b-versatile' };
+
+function clIaStatus(c, teste) {
+  const el = document.getElementById('cl-ia-status');
+  if (!el) return;
+  if (!c.configurada) el.textContent = '• sem chave (usando só chat e voz)';
+  else if (!c.ativa) el.textContent = '• desligada';
+  else el.textContent = teste && teste !== 'ok' ? '• erro: ' + teste : `• ligada (chave ${c.chave_final})`;
+}
+
+async function clCarregarIA() {
+  try {
+    const c = await clFetch('/api/ia');
+    CL.iaCarregada = true;
+    document.getElementById('cl-ia-provedor').value = c.provedor || 'openrouter';
+    document.getElementById('cl-ia-modelo').value = c.modelo || '';
+    document.getElementById('cl-ia-nota').value = c.nota_minima ?? 6;
+    document.getElementById('cl-ia-max').value = c.max_por_bloco ?? 3;
+    document.getElementById('cl-ia-bloco').value = c.bloco_min ?? 10;
+    document.getElementById('cl-ia-ativa').checked = c.ativa !== false;
+    document.getElementById('cl-ia-chave').placeholder = c.configurada ? `chave salva (${c.chave_final}) — deixe vazio para manter` : 'cole a chave (sk-...)';
+    clIaStatus(c);
+  } catch (e) { console.warn('Cortador: IA', e); }
+}
+
+function clIaProvedor() {
+  const p = document.getElementById('cl-ia-provedor').value;
+  document.getElementById('cl-ia-modelo').value = CL_IA_MODELOS[p] || '';
+}
+
+async function clSalvarIA() {
+  const msg = document.getElementById('cl-msg-ia');
+  const chave = document.getElementById('cl-ia-chave');
+  msg.textContent = 'Salvando e testando a chave…';
+  try {
+    const c = await clFetch('/api/ia', {
+      provedor: document.getElementById('cl-ia-provedor').value,
+      modelo: document.getElementById('cl-ia-modelo').value.trim(),
+      chave: chave.value.trim(),
+      nota_minima: Number(document.getElementById('cl-ia-nota').value),
+      max_por_bloco: Number(document.getElementById('cl-ia-max').value),
+      bloco_min: Number(document.getElementById('cl-ia-bloco').value),
+      ativa: document.getElementById('cl-ia-ativa').checked,
+    });
+    chave.value = '';
+    clCarregarIA();
+    clIaStatus(c, c.teste);
+    msg.textContent = !c.configurada ? 'Salvo. Cole uma chave para ligar a IA.'
+      : c.teste === 'ok' ? '✅ IA funcionando! Os próximos blocos das lives já saem prontos.'
+      : '⚠️ Salvo, mas o teste falhou: ' + c.teste;
+  } catch (e) { msg.textContent = 'Erro: ' + e.message; }
+}

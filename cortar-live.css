@@ -84,3 +84,5 @@
 
 .cl-log { font: 12px/1.5 Consolas, monospace; max-height: 240px; overflow: auto; background: rgba(0,0,0,0.25); border-radius: 8px; padding: 8px 10px; }
 .cl-log span { color: var(--text-dim); }
+
+.cl-ia-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0 12px; }
