@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="vendor/fontawesome/all.min.css">
   <link rel="stylesheet" href="style.css?v=61">
   <link rel="stylesheet" href="studio.css?v=1">
-  <link rel="stylesheet" href="cortar-live.css?v=2">
+  <link rel="stylesheet" href="cortar-live.css?v=5">
 </head>
 <body>
   <a class="skip-link" href="#main-content">Pular para o conteúdo</a>
@@ -1214,15 +1214,33 @@
 
       <!-- Com o aplicativo aberto -->
       <div id="cl-app" style="display:none;">
-        <div class="cl-barra">
-          <span class="cl-ok"><i class="fa-solid fa-circle-check"></i> Aplicativo Cortador conectado</span>
-          <span class="cl-dim" id="cl-versao"></span>
+        <div class="cl-barra" id="cl-barra">
+          <div class="cl-status">
+            <div class="cl-status-titulo" id="cl-status-titulo">Verificando…</div>
+            <div class="cl-dim" id="cl-status-sub"></div>
+          </div>
+          <button type="button" class="btn" id="cl-ligar" onclick="clLigarCortador()"></button>
         </div>
+        <p class="cl-dim" style="margin:-0.6rem 0 1.2rem;"><i class="fa-solid fa-plug-circle-check"></i> Aplicativo aberto no seu PC <span id="cl-versao"></span></p>
 
         <div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 1.5rem;">
           <div class="card">
             <div class="card-title"><i class="fa-solid fa-tower-broadcast"></i> Lives monitoradas</div>
+            <p class="cl-dim" style="margin:0 0 0.6rem;">Ligue ou desligue cada canal no botão ao lado do nome.</p>
             <div id="cl-canais" class="cl-canais"></div>
+            <details class="cl-add">
+              <summary><i class="fa-solid fa-plus"></i> Adicionar canal</summary>
+              <div class="cl-add-form">
+                <select class="input" id="cl-add-plat">
+                  <option value="twitch">Twitch</option>
+                  <option value="youtube">YouTube</option>
+                </select>
+                <input type="text" class="input" id="cl-add-usuario" placeholder="usuário (ex.: alanzoka ou @Gameplayrj)">
+                <input type="text" class="input" id="cl-add-nome" placeholder="nome pra legenda (ex.: Alanzoka)">
+                <button type="button" class="btn btn-primary btn-sm" onclick="clAdicionarCanal()"><i class="fa-solid fa-plus"></i> Adicionar</button>
+              </div>
+              <p class="cl-dim" id="cl-msg-canal"></p>
+            </details>
           </div>
           <div class="card">
             <div class="card-title"><i class="fa-solid fa-calendar-check"></i> Onde agendar os cortes</div>
@@ -2136,7 +2154,7 @@
   </div>
 
   <script src="app.js?v=62"></script>
-  <script src="cortar-live.js?v=2"></script>
+  <script src="cortar-live.js?v=5"></script>
   <link rel="stylesheet" href="ai-ui.css?v=1">
   <script src="ai-ui.js?v=2"></script>
   <script src="particles.js?v=1"></script>

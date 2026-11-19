@@ -34,6 +34,7 @@ async function clVerificarApp(manual) {
   CL.conectado = ok;
   const cadeado = document.getElementById('cl-nav-lock');
   if (cadeado) cadeado.style.display = ok ? 'none' : '';
+  clMostrarBotoesDePublicacao(ok);
   if (STATE.activeSection !== 'cortar-live') return ok;
 
   document.getElementById('cl-bloqueado').style.display = ok ? 'none' : '';
@@ -74,15 +75,50 @@ async function clAtualizar() {
   let est;
   try { est = await clFetch('/api/estado'); } catch { return; }
 
-  // Lives
+  // Botão geral Ligar / Parar cortador
+  const ligado = est.cortador_ligado !== false;
+  CL.ligado = ligado;
+  const btn = document.getElementById('cl-ligar');
+  btn.className = 'btn ' + (ligado ? 'cl-btn-parar' : 'btn-primary');
+  btn.innerHTML = ligado ? '<i class="fa-solid fa-stop"></i> Parar cortador' : '<i class="fa-solid fa-play"></i> Ligar cortador';
+
+  // Status grande: dá pra saber na hora se está cortando ou não
+  const canais = est.canais || [];
+  const gravando = canais.filter(c => c.status === 'gravando');
+  const ativos = canais.filter(c => c.ativo).length;
+  let estado, titulo, sub;
+  if (!ligado) {
+    estado = 'parado'; titulo = '⏸ Cortador parado';
+    sub = 'Nenhuma live está sendo gravada. Clique em Ligar cortador para começar.';
+  } else if (gravando.length) {
+    estado = 'cortando'; titulo = `🔴 CORTANDO AGORA — ${gravando.length} live${gravando.length > 1 ? 's' : ''}`;
+    sub = 'Gravando: ' + gravando.map(c => c.nome_bonito).join(', ');
+  } else if (!ativos) {
+    estado = 'parado'; titulo = '⏸ Nenhum canal ligado';
+    sub = 'Ligue pelo menos um canal em Lives monitoradas.';
+  } else {
+    estado = 'esperando'; titulo = '🟡 Ligado, esperando live';
+    sub = `${ativos} canal(is) ligado(s); nenhum está ao vivo no GTA 6 agora. Começa sozinho quando entrarem.`;
+  }
+  document.getElementById('cl-barra').dataset.estado = estado;
+  document.getElementById('cl-status-titulo').textContent = titulo;
+  document.getElementById('cl-status-sub').textContent = sub;
+
+  // Lives (cada uma com o botão Monitorar)
   document.getElementById('cl-canais').innerHTML = (est.canais || []).map(c => `
-    <div class="cl-canal">
+    <div class="cl-canal ${c.ativo ? '' : 'cl-off'}">
       <span class="cl-bola ${c.status === 'gravando' ? 'on' : ''}"></span>
-      <div style="min-width:0;">
-        <b>${clEsc(c.nome_bonito || c.nome)}</b> <span class="cl-plat">${clEsc(c.plataforma || '')}</span>
-        <small>${c.status === 'gravando' ? '🔴 gravando e cortando — ' + clEsc(c.titulo || '') : clEsc(c.status || 'aguardando')}</small>
+      <div style="min-width:0; flex:1;">
+        <b>${clEsc(c.nome_bonito)}</b> <span class="cl-plat">${clEsc(c.plataforma)}</span>
+        <small>${c.status === 'gravando' ? '🔴 gravando e cortando — ' + clEsc(c.titulo || '') : clEsc(c.status)}</small>
       </div>
-    </div>`).join('') || '<span class="cl-dim">Nenhum canal configurado no aplicativo.</span>';
+      <label class="cl-switch" title="${c.ativo ? 'Monitorando — clique para desligar' : 'Desligado — clique para monitorar'}">
+        <input type="checkbox" ${c.ativo ? 'checked' : ''} onchange="clMonitorar('${clEsc(c.chave)}', this.checked)">
+        <span></span>
+      </label>
+      <button type="button" class="cl-lixo" title="Abrir a pasta de cortes de ${clEsc(c.nome_bonito)} no PC" onclick="clFetch('/api/abrir', { canal: '${clEsc(c.nome_bonito)}' })"><i class="fa-solid fa-folder-open"></i></button>
+      <button type="button" class="cl-lixo" title="Remover da lista" onclick="clRemoverCanal('${clEsc(c.chave)}', '${clEsc(c.nome_bonito)}')"><i class="fa-solid fa-trash-can"></i></button>
+    </div>`).join('') || '<span class="cl-dim">Nenhum canal na lista. Adicione abaixo.</span>';
 
   // Contadores
   const n = est.contagens || {};
@@ -106,6 +142,42 @@ async function clAtualizar() {
     document.getElementById('cl-auto').checked = !!cfg.agendar_automatico;
     clCarregarCortes();
   }
+}
+
+async function clLigarCortador() {
+  const ligar = !CL.ligado;
+  if (!ligar && !confirm('Parar o cortador? Todas as lives param de ser gravadas até você ligar de novo.')) return;
+  try { await clFetch('/api/cortador', { ligado: ligar }); } catch (e) { alert(e.message); }
+  clAtualizar();
+}
+
+async function clMonitorar(chave, ativo) {
+  try { await clFetch('/api/canais', { acao: 'monitorar', chave, ativo }); } catch (e) { alert(e.message); }
+  clAtualizar();
+}
+
+async function clRemoverCanal(chave, nome) {
+  if (!confirm(`Remover ${nome} da lista? Os cortes já feitos continuam salvos.`)) return;
+  try { await clFetch('/api/canais', { acao: 'remover', chave }); } catch (e) { alert(e.message); }
+  clAtualizar();
+}
+
+async function clAdicionarCanal() {
+  const msg = document.getElementById('cl-msg-canal');
+  try {
+    await clFetch('/api/canais', {
+      acao: 'adicionar',
+      plataforma: document.getElementById('cl-add-plat').value,
+      usuario: document.getElementById('cl-add-usuario').value,
+      nome: document.getElementById('cl-add-nome').value
+    });
+    document.getElementById('cl-add-usuario').value = '';
+    document.getElementById('cl-add-nome').value = '';
+    msg.innerHTML = '<span style="color:var(--success)">Canal adicionado e já sendo monitorado.</span>';
+  } catch (e) {
+    msg.innerHTML = `<span style="color:var(--error)">${clEsc(e.message)}</span>`;
+  }
+  clAtualizar();
 }
 
 function clRenderContas(selecionadas) {
@@ -212,5 +284,102 @@ async function clAgendar(id, botao) {
   }
 }
 
-// O cadeado do menu já aparece certo desde o início.
-document.addEventListener('DOMContentLoaded', () => setTimeout(() => clVerificarApp(false), 1500));
+/* ─────────────────────────────────────────────────────────────────────────
+ * "Escolher dos cortes prontos" nas telas de publicação (Instagram, Facebook,
+ * YouTube, Várias redes, Acervo). Só aparece com o aplicativo aberto no PC.
+ * Os cortes escolhidos entram na tela como se você tivesse enviado o arquivo,
+ * e a tela agenda do jeito que ela já agenda.
+ * ───────────────────────────────────────────────────────────────────────── */
+const CL_TELAS = ['file-input', 'bulk-file-input', 'crosspost-file-input', 'youtube-file-input',
+  'youtube-bulk-file-input', 'facebook-file-input', 'facebook-bulk-file-input', 'drive-file-input'];
+
+function clInstalarBotoesDePublicacao() {
+  CL_TELAS.forEach(id => {
+    const input = document.getElementById(id);
+    if (!input || document.getElementById(`cl-pick-${id}`)) return;
+    const ancora = input.closest('.dropzone') || input.parentElement;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.id = `cl-pick-${id}`;
+    btn.className = 'btn btn-ghost btn-sm cl-pick-btn';
+    btn.style.display = 'none';
+    btn.innerHTML = '<i class="fa-solid fa-scissors"></i> Escolher dos cortes prontos';
+    btn.onclick = (e) => { e.preventDefault(); e.stopPropagation(); clAbrirSeletor(input); };
+    ancora.insertAdjacentElement('afterend', btn);
+  });
+}
+
+function clMostrarBotoesDePublicacao(ok) {
+  document.querySelectorAll('.cl-pick-btn').forEach(b => { b.style.display = ok ? '' : 'none'; });
+}
+
+async function clAbrirSeletor(input) {
+  const unico = !input.multiple;
+  let lista;
+  try { lista = (await clFetch('/api/cortes?tipo=prontos')).cortes || []; }
+  catch (e) { alert('Não consegui falar com o aplicativo: ' + e.message); return; }
+  lista.sort((a, b) => (a.usado ? 1 : 0) - (b.usado ? 1 : 0));
+
+  const fundo = document.createElement('div');
+  fundo.className = 'cl-modal-fundo';
+  fundo.innerHTML = `
+    <div class="cl-modal" role="dialog" aria-modal="true" aria-label="Escolher cortes prontos">
+      <div class="cl-modal-topo">
+        <b><i class="fa-solid fa-scissors"></i> Cortes prontos ${unico ? '(escolha 1)' : '(escolha quantos quiser)'}</b>
+        <button type="button" class="cl-lixo" data-fechar aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <p class="cl-dim" style="margin:0 0 10px;">O nome de cada arquivo já é a legenda com hashtags. Os já usados aparecem no fim.</p>
+      <div class="cl-modal-grade">${lista.map(c => `
+        <label class="cl-pick">
+          <input type="${unico ? 'radio' : 'checkbox'}" name="cl-pick" value="${clEsc(c.id)}">
+          <img src="${CL_APP}${clEsc(c.thumb)}" loading="lazy" alt="">
+          ${c.usado ? '<span class="cl-usado">já usado</span>' : ''}
+          <span class="cl-pick-txt">${clEsc(c.faixa || c.titulo)}</span>
+        </label>`).join('') || '<span class="cl-dim">Nenhum corte pronto ainda.</span>'}
+      </div>
+      <div class="cl-modal-rodape">
+        <span class="cl-dim" id="cl-pick-status"></span>
+        <button type="button" class="btn btn-ghost btn-sm" data-fechar>Cancelar</button>
+        <button type="button" class="btn btn-primary btn-sm" id="cl-pick-ok"><i class="fa-solid fa-check"></i> Usar selecionados</button>
+      </div>
+    </div>`;
+  document.body.appendChild(fundo);
+  const fechar = () => fundo.remove();
+  fundo.querySelectorAll('[data-fechar]').forEach(b => b.onclick = fechar);
+  fundo.addEventListener('click', e => { if (e.target === fundo) fechar(); });
+
+  fundo.querySelector('#cl-pick-ok').onclick = async () => {
+    const ids = [...fundo.querySelectorAll('input[name="cl-pick"]:checked')].map(i => i.value);
+    if (!ids.length) return;
+    const ok = fundo.querySelector('#cl-pick-ok');
+    const status = fundo.querySelector('#cl-pick-status');
+    ok.disabled = true;
+    try {
+      const dt = new DataTransfer();
+      for (let i = 0; i < ids.length; i++) {
+        const c = lista.find(x => x.id === ids[i]);
+        status.textContent = `Pegando ${i + 1} de ${ids.length} do seu PC…`;
+        const r = await fetch(CL_APP + c.video);
+        if (!r.ok) throw new Error('o aplicativo não entregou o vídeo ' + (c.faixa || c.id));
+        const blob = await r.blob();
+        dt.items.add(new File([blob], c.arquivo || `${c.id}.mp4`, { type: 'video/mp4' }));
+      }
+      input.files = dt.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      clFetch('/api/marcar_usado', { ids }).catch(() => {});
+      fechar();
+      if (typeof showToast === 'function') showToast(`${ids.length} corte(s) adicionado(s). Agora é só agendar.`, 'success');
+    } catch (e) {
+      ok.disabled = false;
+      status.textContent = '';
+      alert(e.message);
+    }
+  };
+}
+
+// Instala os botões e mantém o cadeado/botões certos mesmo fora da tela Cortar live.
+document.addEventListener('DOMContentLoaded', () => {
+  clInstalarBotoesDePublicacao();
+  setTimeout(() => clVerificarApp(false), 1500);
+  setInterval(() => { if (STATE.activeSection !== 'cortar-live') clVerificarApp(false); }, 15000);
+});
