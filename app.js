@@ -416,7 +416,8 @@ function switchSection(name) {
     'facebook-metrics': { t: 'Resultados do Facebook', s: 'Seguidores, reações e desempenho dos posts.' },
     'facebook-new': { t: 'Nova publicação no Facebook', s: 'Publique texto, foto ou vídeo agora ou no melhor horário.' },
     'facebook-bulk': { t: 'Fotos e vídeos em massa', s: 'Suba vários arquivos e deixe os horários por conta do painel.' },
-    'crosspost': { t: 'Publicar em várias redes', s: 'Um conteúdo, cada rede no melhor horário.' }
+    'crosspost': { t: 'Publicar em várias redes', s: 'Um conteúdo, cada rede no melhor horário.' },
+    'cortar-live': { t: 'Cortar live', s: 'O aplicativo no seu PC corta as lives; aqui você vê os cortes e agenda.' }
   };
 
   if (titles[name]) {
@@ -623,6 +624,7 @@ function renderActiveSection() {
   if (n === 'youtube' || n.startsWith('youtube-')) renderYoutubeSection();
   if (n === 'facebook' || n.startsWith('facebook-')) renderFacebookSection();
   if (n === 'crosspost') renderCrosspostSection();
+  if (n === 'cortar-live' && typeof renderCortarLiveSection === 'function') renderCortarLiveSection();
   if (n === 'new-post') { initNewPostPerDay(); updateInstagramLivePreview(); refreshNewPostPlan(); }
 }
 

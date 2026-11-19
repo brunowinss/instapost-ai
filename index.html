@@ -19,6 +19,7 @@
   <link rel="stylesheet" href="vendor/fontawesome/all.min.css">
   <link rel="stylesheet" href="style.css?v=61">
   <link rel="stylesheet" href="studio.css?v=1">
+  <link rel="stylesheet" href="cortar-live.css?v=1">
 </head>
 <body>
   <a class="skip-link" href="#main-content">Pular para o conteúdo</a>
@@ -131,6 +132,7 @@
         <button type="button" class="nav-group-label" aria-expanded="true" aria-controls="nav-items-all"><i class="fa-solid fa-share-nodes nav-brand" aria-hidden="true"></i><span>Todas as redes</span><i class="fa-solid fa-chevron-down nav-chevron" aria-hidden="true"></i></button>
         <div class="nav-group-items" id="nav-items-all">
         <a href="#crosspost" class="nav-item" data-section="crosspost" title="Publicar em várias redes"><i class="fa-solid fa-share-nodes" aria-hidden="true"></i><span>Publicar em várias redes</span></a>
+        <a href="#cortar-live" class="nav-item" data-section="cortar-live" title="Cortar live (precisa do aplicativo no PC)"><i class="fa-solid fa-scissors" aria-hidden="true"></i><span>Cortar live</span><i class="fa-solid fa-lock cl-nav-lock" id="cl-nav-lock" aria-label="precisa do aplicativo" style="margin-left:auto; font-size:0.75em; opacity:0.6;"></i></a>
         </div>
       </div>
       <div class="nav-group" data-group="tools">
@@ -1190,6 +1192,70 @@
       </div>
     </section>
 
+    <!-- ═══════════════ CORTAR LIVE (precisa do aplicativo Cortador no PC) ═══════════════ -->
+    <section id="section-cortar-live" class="section">
+      <!-- Sem o aplicativo: a tela fica bloqueada e oferece o download -->
+      <div id="cl-bloqueado" class="card cl-bloqueado" style="display:none;">
+        <div class="cl-cadeado"><i class="fa-solid fa-lock"></i></div>
+        <h2>O Cortar live funciona com o aplicativo no seu PC</h2>
+        <p>O aplicativo <b>Cortador</b> monitora as lives, grava e corta os melhores momentos usando a sua placa de vídeo.
+          Com ele aberto, esta tela mostra as lives, os cortes e agenda direto nas suas contas.</p>
+        <div class="cl-acoes">
+          <a class="btn btn-primary" id="cl-baixar" href="/downloads/cortador-gta6.zip" download><i class="fa-solid fa-download"></i> Baixar o aplicativo</a>
+          <button type="button" class="btn btn-ghost" onclick="clVerificarApp(true)"><i class="fa-solid fa-rotate"></i> Já abri o aplicativo</button>
+        </div>
+        <ol class="cl-passos">
+          <li>Baixe e extraia o arquivo.</li>
+          <li>Dois cliques em <b>INSTALAR.bat</b> (só na primeira vez).</li>
+          <li>Dois cliques em <b>INICIAR CORTADOR.bat</b> — esta tela libera sozinha.</li>
+        </ol>
+        <p class="cl-nota" id="cl-nota-navegador"></p>
+      </div>
+
+      <!-- Com o aplicativo aberto -->
+      <div id="cl-app" style="display:none;">
+        <div class="cl-barra">
+          <span class="cl-ok"><i class="fa-solid fa-circle-check"></i> Aplicativo Cortador conectado</span>
+          <span class="cl-dim" id="cl-versao"></span>
+        </div>
+
+        <div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 1.5rem;">
+          <div class="card">
+            <div class="card-title"><i class="fa-solid fa-tower-broadcast"></i> Lives monitoradas</div>
+            <div id="cl-canais" class="cl-canais"></div>
+          </div>
+          <div class="card">
+            <div class="card-title"><i class="fa-solid fa-calendar-check"></i> Onde agendar os cortes</div>
+            <div id="cl-contas" class="cl-contas"></div>
+            <div class="form-group" style="margin-top:0.8rem;">
+              <label class="label"><i class="fa-regular fa-clock"></i> Horários do dia</label>
+              <input type="text" class="input" id="cl-horarios" placeholder="12:00, 18:00, 21:00">
+            </div>
+            <label class="cl-check"><input type="checkbox" id="cl-auto"> Agendar sozinho cada corte que ficar pronto (com legenda e card)</label>
+            <div style="display:flex; gap:8px; margin-top:0.8rem; flex-wrap:wrap;">
+              <button type="button" class="btn btn-primary btn-sm" onclick="clSalvarAgendamento()"><i class="fa-solid fa-floppy-disk"></i> Salvar</button>
+            </div>
+            <p class="cl-dim" id="cl-msg-ag" style="margin-top:0.6rem;"></p>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:1.5rem;">
+          <div class="cl-abas" role="tablist">
+            <button type="button" class="cl-aba active" data-tipo="prontos" onclick="clTrocarAba('prontos')">Prontos para agendar <span id="cl-n-prontos">0</span></button>
+            <button type="button" class="cl-aba" data-tipo="rascunhos" onclick="clTrocarAba('rascunhos')">Esperando edição <span id="cl-n-rascunhos">0</span></button>
+            <button type="button" class="cl-aba" data-tipo="agendados" onclick="clTrocarAba('agendados')">Agendados <span id="cl-n-agendados">0</span></button>
+          </div>
+          <p class="cl-dim" id="cl-dica" style="margin:0.6rem 0 0;"></p>
+          <div id="cl-cortes" class="cl-grade"></div>
+        </div>
+
+        <div class="card" style="margin-top:1.5rem;">
+          <div class="card-title"><i class="fa-solid fa-list"></i> O que está acontecendo</div>
+          <div id="cl-log" class="cl-log"></div>
+        </div>
+      </div>
+    </section>
+
     <!-- ═══════════════ YOUTUBE ═══════════════ -->
     <section id="section-youtube-accounts" class="section">
       <div style="max-width:760px;">
@@ -2069,7 +2135,8 @@
     </div>
   </div>
 
-  <script src="app.js?v=61"></script>
+  <script src="app.js?v=62"></script>
+  <script src="cortar-live.js?v=1"></script>
   <link rel="stylesheet" href="ai-ui.css?v=1">
   <script src="ai-ui.js?v=2"></script>
   <script src="particles.js?v=1"></script>

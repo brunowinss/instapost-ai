@@ -148,7 +148,9 @@ app.use((req, res, next) => {
   try { assetPath = decodeURIComponent(req.path); } catch { return res.status(400).send('Invalid path'); }
   if (assetPath.split(/[\\/]/).includes('..')) return res.status(404).send('Not found');
   if (req.path.startsWith('/api/') || req.path.startsWith('/auth/') || req.path === '/connect-instagram') return next();
-  if (req.path === '/' || /^\/(?:index\.html|(?:app|ai-ui|particles|sw)\.js|(?:style|studio|ai-ui)\.css|manifest\.json|[^/]+\.(?:png|ico|svg|jpg|webp))$/i.test(req.path) || req.path.startsWith('/vendor/')) return next();
+  if (req.path === '/' || /^\/(?:index\.html|(?:app|ai-ui|particles|sw|cortar-live)\.js|(?:style|studio|ai-ui|cortar-live)\.css|manifest\.json|[^/]+\.(?:png|ico|svg|jpg|webp))$/i.test(req.path) || req.path.startsWith('/vendor/')) return next();
+  // Download do aplicativo Cortador (página Cortar live)
+  if (req.path === '/downloads/cortador-gta6.zip') return next();
   return res.status(404).send('Not found');
 });
 app.use(express.static(__dirname));

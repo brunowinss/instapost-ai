@@ -1,0 +1,43 @@
+/* Cortar live — tela que conversa com o aplicativo Cortador no PC */
+.cl-bloqueado { max-width: 640px; margin: 2rem auto; text-align: center; padding: 2.4rem 1.6rem; }
+.cl-bloqueado h2 { font-size: 1.3rem; margin: 1rem 0 0.6rem; color: var(--text-main); }
+.cl-bloqueado p { color: var(--text-dim); line-height: 1.6; }
+.cl-cadeado { width: 64px; height: 64px; margin: 0 auto; border-radius: 50%; display: grid; place-items: center;
+  background: var(--primary-bg); color: var(--primary); font-size: 1.6rem; box-shadow: 0 0 24px var(--primary-glow); }
+.cl-acoes { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 1.4rem 0; }
+.cl-passos { text-align: left; display: inline-block; color: var(--text-dim); line-height: 1.9; margin: 0 auto; padding-left: 1.2rem; }
+.cl-nota { font-size: 0.82rem; margin-top: 1rem; }
+
+.cl-barra { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 1.2rem; }
+.cl-ok { color: var(--success); font-weight: 600; }
+.cl-dim { color: var(--text-dim); font-size: 0.85rem; }
+
+.cl-canais { display: grid; gap: 2px; }
+.cl-canal { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border-color); }
+.cl-canal:last-child { border-bottom: 0; }
+.cl-canal small { display: block; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cl-bola { width: 9px; height: 9px; border-radius: 50%; background: #4b5563; flex: none; }
+.cl-bola.on { background: #ef4444; box-shadow: 0 0 8px #ef4444; }
+.cl-plat { font-size: 0.7rem; color: var(--text-dim); border: 1px solid var(--border-color); border-radius: 6px; padding: 0 6px; }
+
+.cl-contas { display: grid; gap: 4px; max-height: 220px; overflow: auto; }
+.cl-check { display: flex; align-items: center; gap: 8px; color: var(--text-main); cursor: pointer; padding: 3px 0; }
+.cl-check input { width: 16px; height: 16px; accent-color: var(--primary); }
+
+.cl-abas { display: flex; gap: 6px; flex-wrap: wrap; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; }
+.cl-aba { background: transparent; border: 1px solid var(--border-color); color: var(--text-dim); border-radius: 999px;
+  padding: 6px 14px; cursor: pointer; font: inherit; }
+.cl-aba span { background: var(--bg-card-hover); border-radius: 999px; padding: 0 7px; margin-left: 4px; font-size: 0.8em; }
+.cl-aba.active { background: var(--primary-bg); border-color: var(--primary); color: var(--text-main); }
+
+.cl-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr)); gap: 14px; margin-top: 1rem; }
+.cl-corte { background: var(--bg-card-hover); border: 1px solid var(--border-color); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
+.cl-corte video { width: 100%; aspect-ratio: 9 / 16; background: #000; object-fit: cover; display: block; }
+.cl-info { padding: 10px 12px 12px; display: grid; gap: 6px; font-size: 0.85rem; }
+.cl-canal-nome { color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.cl-faixa { background: #d6141c; color: #fff; font-weight: 800; padding: 4px 8px; border-radius: 4px; text-transform: uppercase; font-size: 0.78rem; }
+.cl-titulo { color: var(--text-main); word-break: break-word; }
+.cl-agendado { color: var(--success); font-size: 0.8rem; }
+
+.cl-log { font: 12px/1.5 Consolas, monospace; max-height: 240px; overflow: auto; background: rgba(0,0,0,0.25); border-radius: 8px; padding: 8px 10px; }
+.cl-log span { color: var(--text-dim); }
