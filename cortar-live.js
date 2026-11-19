@@ -247,19 +247,56 @@ function clTrocarAba(tipo) {
 async function clCarregarCortes() {
   const grade = document.getElementById('cl-cortes');
   const dicas = {
-    prontos: 'Cortes já com legenda e card. Clique em Agendar. "Agendar sozinho" vale só para os cortes editados de agora em diante.',
-    rascunhos: 'Cortes que o aplicativo fez e ainda não têm legenda e card. Peça a edição ao Claude.',
-    agendados: 'Cortes já enviados e agendados nas suas contas.'
+    prontos: 'Já editados (com legenda e card) e ainda não agendados. Clique em Agendar.',
+    rascunhos: 'Cortados, mas ainda SEM legenda e card. Peça ao Claude: "edita os cortes do <streamer>".',
+    agendados: 'Já enviados e agendados nas suas contas.'
   };
   document.getElementById('cl-dica').textContent = dicas[CL.aba];
   grade.innerHTML = '<span class="cl-dim">Carregando…</span>';
   let r;
   try { r = await clFetch('/api/cortes?tipo=' + CL.aba); } catch (e) { grade.innerHTML = `<span style="color:var(--error)">${clEsc(e.message)}</span>`; return; }
-  CL.lista = r.cortes || [];
+  CL.todos = r.cortes || [];
+  if (CL.filtro && !CL.todos.some(c => c.canal === CL.filtro)) CL.filtro = '';
+  clRenderFiltro();
+  clAplicarFiltro();
+}
+
+function clRenderFiltro() {
+  const el = document.getElementById('cl-filtro');
+  const cont = {};
+  CL.todos.forEach(c => { cont[c.canal] = (cont[c.canal] || 0) + 1; });
+  const nomes = Object.keys(cont).sort((a, b) => cont[b] - cont[a]);
+  el.innerHTML = nomes.length > 1 ? [['', `Todos (${CL.todos.length})`], ...nomes.map(n => [n, `${n} (${cont[n]})`])]
+    .map(([v, t]) => `<button type="button" class="cl-fchip ${(CL.filtro || '') === v ? 'on' : ''}" onclick="clFiltrar('${clEsc(v)}')">${clEsc(t)}</button>`).join('') : '';
+}
+
+function clFiltrar(nome) {
+  CL.filtro = nome;
+  clRenderFiltro();
+  clAplicarFiltro();
+}
+
+function clAplicarFiltro() {
+  const grade = document.getElementById('cl-cortes');
+  CL.lista = CL.filtro ? CL.todos.filter(c => c.canal === CL.filtro) : CL.todos;
   CL.mostrando = 0;
+  CL.ultimoDia = null;
   grade.innerHTML = '';
   if (!CL.lista.length) { grade.innerHTML = '<span class="cl-dim">Nenhum corte aqui ainda.</span>'; return; }
   clMostrarMais();
+}
+
+function clNomeDia(dia) {
+  if (!dia) return 'Sem data';
+  const hoje = new Date(); const d = new Date(dia + 'T12:00:00');
+  const dif = Math.round((new Date(hoje.toDateString()) - new Date(d.toDateString())) / 86400000);
+  const dm = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  return dif === 0 ? `Hoje · ${dm}` : dif === 1 ? `Ontem · ${dm}` : d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' });
+}
+
+function clHora(iso) {
+  const m = /T(\d\d:\d\d)/.exec(iso || '');
+  return m ? m[1] : '';
 }
 
 /** Mostra 24 cortes por vez: com muitos cortes, carregar todos de uma vez travava a página. */
@@ -268,7 +305,15 @@ function clMostrarMais() {
   document.getElementById('cl-mais')?.remove();
   const lote = CL.lista.slice(CL.mostrando, CL.mostrando + 24);
   CL.mostrando += lote.length;
-  grade.insertAdjacentHTML('beforeend', lote.map(clCartao).join(''));
+  grade.insertAdjacentHTML('beforeend', lote.map(c => {
+    let cab = '';
+    if (c.dia !== CL.ultimoDia) {
+      CL.ultimoDia = c.dia;
+      const n = CL.lista.filter(x => x.dia === c.dia).length;
+      cab = `<div class="cl-dia"><i class="fa-regular fa-calendar"></i> ${clEsc(clNomeDia(c.dia))} <span>${n} corte${n > 1 ? 's' : ''}</span></div>`;
+    }
+    return cab + clCartao(c);
+  }).join(''));
   if (CL.mostrando < CL.lista.length) {
     grade.insertAdjacentHTML('beforeend', `<button type="button" id="cl-mais" class="btn btn-ghost" style="grid-column:1/-1;" onclick="clMostrarMais()">
       Carregar mais (${CL.lista.length - CL.mostrando} restantes)</button>`);
@@ -290,7 +335,9 @@ function clCartao(c) {
         <span class="cl-play"><i class="fa-solid fa-play"></i></span>
       </div>
       <div class="cl-info">
-        <div class="cl-canal-nome">${clEsc(c.canal)}</div>
+        <div class="cl-c-topo"><span class="cl-c-streamer">${clEsc(c.canal)}</span><span class="cl-c-origem">${clEsc(c.origem || '')}</span></div>
+        <div class="cl-c-quando"><i class="fa-solid fa-scissors"></i> cortado ${clHora(c.cortado) ? 'às ' + clHora(c.cortado) : ''}${c.editado ? ` · <i class="fa-solid fa-pen"></i> editado às ${clHora(c.editado)}` : ''}</div>
+        <div class="cl-c-status cl-st-${CL.aba}">${CL.aba === 'rascunhos' ? 'Sem legenda e card' : CL.aba === 'prontos' ? 'Pronto para agendar' : 'Agendado'}</div>
         ${c.faixa ? `<div class="cl-faixa">${clEsc(c.faixa)}</div>` : ''}
         ${c.titulo ? `<div class="cl-titulo">${clEsc(c.titulo)}</div>` : `<div class="cl-dim">${clEsc(c.fala || 'sem fala transcrita')}</div>`}
         ${c.agendado ? `<div class="cl-agendado">✔ ${c.agendado.map(a => clEsc(`${a.plataforma} @${a.conta} ${a.quando}`)).join(' · ')}</div>` : ''}

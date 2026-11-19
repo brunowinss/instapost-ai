@@ -105,3 +105,20 @@
 .cl-et.feito { color: #4ade80; border-color: rgba(74,222,128,0.4); }
 .cl-et.on { color: #fff; background: var(--primary); border-color: var(--primary); font-weight: 700; }
 .cl-et-seta { color: var(--text-dim); font-size: 0.8rem; }
+
+/* Lista de cortes: filtro por streamer, dia e cartão claro */
+.cl-filtro { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 0; }
+.cl-filtro:empty { display: none; }
+.cl-fchip { font-size: 0.8rem; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--border-color); background: transparent; color: var(--text-dim); cursor: pointer; }
+.cl-fchip.on { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 700; }
+.cl-dia { grid-column: 1 / -1; margin: 14px 0 2px; font-weight: 700; color: var(--text-main); text-transform: capitalize; border-bottom: 1px solid var(--border-color); padding-bottom: 6px; }
+.cl-dia span { font-weight: 400; color: var(--text-dim); font-size: 0.8rem; margin-left: 6px; text-transform: none; }
+.cl-c-topo { display: flex; justify-content: space-between; gap: 6px; align-items: center; flex-wrap: wrap; }
+.cl-c-streamer { font-weight: 800; color: var(--text-main); font-size: 0.85rem; }
+.cl-c-origem { font-size: 0.68rem; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border-color); color: var(--text-dim); white-space: nowrap; }
+.cl-c-quando { font-size: 0.72rem; color: var(--text-dim); margin: 3px 0; }
+.cl-c-quando i { font-size: 0.65rem; margin-right: 2px; }
+.cl-c-status { display: inline-block; font-size: 0.68rem; font-weight: 700; padding: 1px 8px; border-radius: 6px; margin-bottom: 4px; }
+.cl-st-rascunhos { background: rgba(251,191,36,0.15); color: #fbbf24; }
+.cl-st-prontos { background: rgba(74,222,128,0.15); color: #4ade80; }
+.cl-st-agendados { background: rgba(96,165,250,0.15); color: #60a5fa; }
