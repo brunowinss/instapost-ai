@@ -250,7 +250,7 @@ async function clCarregarCortes() {
   const dicas = {
     prontos: 'Já editados (com legenda e card) e ainda não agendados. Clique em Agendar.',
     rascunhos: 'Tudo que ainda NÃO foi editado: o que o app cortou e os vídeos que você baixou e moveu para a pasta rascunhos. Peça ao Claude: "edita os cortes do <streamer>".',
-    clipados: 'Tudo que o app clipou sozinho das lives, com o status de cada um (sem legenda, pronto ou agendado).',
+    clipados: 'Só o que o app acabou de clipar das lives e ainda não foi editado. Depois de editado, sai daqui e vai para Prontos.',
     agendados: 'Já enviados e agendados nas suas contas.'
   };
   document.getElementById('cl-dica').textContent = dicas[CL.aba];
