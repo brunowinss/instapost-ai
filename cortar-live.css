@@ -87,57 +87,9 @@
 
 .cl-ia-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0 12px; }
 
-
-/* Painel "O que o app está fazendo agora" */
-.cl-agora-editor > div { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; font-size: 0.95rem; }
-.cl-agora-editor small { display: block; color: var(--text-dim); font-size: 0.8rem; margin-top: 2px; }
-.cl-ag-trabalhando { background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.45); }
-.cl-ag-calmo { background: rgba(34,197,94,0.10); border: 1px solid rgba(34,197,94,0.35); }
-.cl-ag-vazio { background: rgba(255,255,255,0.03); border: 1px dashed var(--border-color); color: var(--text-dim); }
-.cl-agora-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 14px; margin-top: 14px; }
-.cl-agora-grade:empty { display: none; }
-.cl-ag-card { border: 1px solid rgba(239,68,68,0.35); border-radius: 14px; padding: 14px 16px; background: linear-gradient(180deg, rgba(239,68,68,0.07), transparent 45%); min-width: 0; }
-.cl-ag-topo { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
-.cl-ag-nome { font-size: 1.1rem; color: var(--text-main); }
-.cl-ag-titulo { color: var(--text-dim); font-size: 0.78rem; margin-top: 2px; overflow-wrap: anywhere; }
-.cl-ag-vivo { color: #f87171; font-weight: 800; font-size: 0.75rem; white-space: nowrap; animation: cl-pisca 1.6s infinite; }
-@keyframes cl-pisca { 50% { opacity: 0.45; } }
-.cl-passos-linha { display: flex; align-items: stretch; gap: 4px; margin: 14px 0 12px; }
-.cl-passo { flex: 1; min-width: 0; text-align: center; padding: 8px 4px; border-radius: 10px; border: 1px solid var(--border-color); opacity: 0.4; }
-.cl-passo > i { display: block; font-size: 1.1rem; margin-bottom: 4px; color: var(--text-dim); }
-.cl-passo.atual > i { color: var(--primary); }
-.cl-passo.feito > i { color: #4ade80; }
-.cl-passo b { display: block; font-size: 0.75rem; color: var(--text-main); }
-.cl-passo small { display: block; font-size: 0.66rem; color: var(--text-dim); }
-.cl-passo.feito { opacity: 0.8; }
-.cl-passo.atual { opacity: 1; border-color: var(--primary); background: var(--primary-bg); box-shadow: 0 0 14px var(--primary-glow); }
-.cl-seta { align-self: center; width: 7px; height: 7px; border-top: 2px solid var(--border-color); border-right: 2px solid var(--border-color); transform: rotate(45deg); flex: none; }
-.cl-prox { margin: 0 0 12px; font-size: 0.85rem; }
-.cl-prox-txt { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; color: var(--text-dim); }
-.cl-prox-txt b { color: var(--text-main); }
-.cl-prox-barra { height: 8px; border-radius: 999px; background: rgba(255,255,255,0.08); overflow: hidden; }
-.cl-prox-barra div { height: 100%; background: linear-gradient(90deg, var(--primary), #a78bfa); border-radius: 999px; transition: width .6s; }
-.cl-prox-agora { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.45); color: var(--text-main); }
-.cl-giro { width: 16px; height: 16px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.2); border-top-color: #60a5fa; animation: cl-gira .8s linear infinite; flex: none; }
-@keyframes cl-gira { to { transform: rotate(360deg); } }
-.cl-ag-nums { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-.cl-ag-nums div { text-align: center; padding: 8px 4px; border-radius: 10px; background: rgba(255,255,255,0.04); min-width: 0; }
-.cl-ag-nums b { display: block; font-size: 1.15rem; color: var(--text-main); }
-.cl-ag-nums small { display: block; font-size: 0.66rem; color: var(--text-dim); }
-.cl-ag-rodape { margin-top: 12px; display: grid; gap: 4px; font-size: 0.82rem; color: var(--text-dim); overflow-wrap: anywhere; }
-.cl-ag-rodape b { color: var(--text-main); }
-.cl-log-linha { display: flex; gap: 8px; align-items: baseline; padding: 3px 0; font-family: inherit; }
-.cl-log-hora { color: var(--text-dim); font-size: 0.75rem; flex: none; }
-.cl-log-ic { flex: none; width: 1.2em; text-align: center; }
-.cl-log-linha b { color: var(--text-main); }
-@media (max-width: 520px) {
-  .cl-passo small { display: none; }
-  .cl-ag-nums { grid-template-columns: repeat(2, 1fr); }
-}
-
-.cl-agora-editor > div > i { font-size: 1.05rem; }
-.cl-ag-calmo > i { color: #4ade80; }
-.cl-ag-vivo i { font-size: 0.55rem; vertical-align: middle; margin-right: 3px; }
-.cl-ic-ok { color: #4ade80; } .cl-ic-corte { color: #f472b6; } .cl-ic-ia { color: #a78bfa; }
-.cl-ic-pico { color: #fbbf24; } .cl-ic-vivo { color: #f87171; } .cl-ic-erro { color: #fb923c; } .cl-ic-dim { color: var(--text-dim); }
-.cl-prox-txt i { margin-right: 4px; }
+.cl-etapas { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 5px; }
+.cl-et { font-size: 0.7rem; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border-color); color: var(--text-dim); }
+.cl-et.feito { color: #4ade80; border-color: rgba(74,222,128,0.4); }
+.cl-et.on { color: #fff; background: var(--primary); border-color: var(--primary); font-weight: 700; }
+.cl-et-seta { color: var(--text-dim); font-size: 0.75rem; }
+.cl-canal small.cl-et-info { margin-top: 3px; white-space: normal; }
