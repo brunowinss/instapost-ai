@@ -448,6 +448,11 @@ function clIaProvedor() {
 async function clSalvarIA() {
   const msg = document.getElementById('cl-msg-ia');
   const chave = document.getElementById('cl-ia-chave');
+  const k = chave.value.trim();
+  if (k && (k.length < 20 || /\s/.test(k))) {
+    msg.textContent = '⚠️ Isso não parece uma chave de API (muito curta). O navegador pode ter preenchido sozinho com uma senha salva — apague e cole a chave (geralmente começa com sk-).';
+    return;
+  }
   msg.textContent = 'Salvando e testando a chave…';
   try {
     const c = await clFetch('/api/ia', {
