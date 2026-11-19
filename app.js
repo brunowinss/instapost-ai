@@ -6058,7 +6058,7 @@ function paintCloudinaryUsage(box, u) {
         <div style="height:100%; width:${Math.min(100, pct || 0)}%; background:${color};"></div>
       </div>
       <div style="font-size:0.75rem; color:var(--text-dim); line-height:1.6;">
-        ${u.credits.used ?? '—'} de ${u.credits.limit ?? '—'} créditos do mês · Guardado: ${gb(u.storageBytes)} · Banda: ${gb(u.bandwidthBytes)}<br>
+        ${u.credits.used === null ? "—" : Number(u.credits.used).toLocaleString("pt-BR", { maximumFractionDigits: 2 })} de ${u.credits.limit ?? "—"} créditos do mês · Guardado: ${gb(u.storageBytes)} · Banda: ${gb(u.bandwidthBytes)}<br>
         ${u.autoDelete ? `Limpeza automática ligada · ${u.deletedFiles} arquivo(s) já apagados pelo app` : 'Limpeza automática desligada'}
       </div>
       <div style="display:flex; gap:8px; align-items:center; margin-top:10px; flex-wrap:wrap;">
