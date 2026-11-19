@@ -6,7 +6,7 @@
  * escolhidas. O app recebe o login do site ao abrir esta tela, então não precisa digitar senha.
  */
 const CL_APP = 'http://127.0.0.1:47653';
-const CL = { conectado: false, aba: 'prontos', timer: null, cfgCarregada: false, versao: '' };
+const CL = { conectado: false, aba: 'prontos', timer: null, cfgCarregada: false, versao: '', lista: [], mostrando: 0 };
 
 async function clFetch(caminho, corpo) {
   const init = corpo === undefined ? {} : {
@@ -152,9 +152,40 @@ async function clCarregarCortes() {
   grade.innerHTML = '<span class="cl-dim">Carregando…</span>';
   let r;
   try { r = await clFetch('/api/cortes?tipo=' + CL.aba); } catch (e) { grade.innerHTML = `<span style="color:var(--error)">${clEsc(e.message)}</span>`; return; }
-  grade.innerHTML = (r.cortes || []).map(c => `
+  CL.lista = r.cortes || [];
+  CL.mostrando = 0;
+  grade.innerHTML = '';
+  if (!CL.lista.length) { grade.innerHTML = '<span class="cl-dim">Nenhum corte aqui ainda.</span>'; return; }
+  clMostrarMais();
+}
+
+/** Mostra 24 cortes por vez: com muitos cortes, carregar todos de uma vez travava a página. */
+function clMostrarMais() {
+  const grade = document.getElementById('cl-cortes');
+  document.getElementById('cl-mais')?.remove();
+  const lote = CL.lista.slice(CL.mostrando, CL.mostrando + 24);
+  CL.mostrando += lote.length;
+  grade.insertAdjacentHTML('beforeend', lote.map(clCartao).join(''));
+  if (CL.mostrando < CL.lista.length) {
+    grade.insertAdjacentHTML('beforeend', `<button type="button" id="cl-mais" class="btn btn-ghost" style="grid-column:1/-1;" onclick="clMostrarMais()">
+      Carregar mais (${CL.lista.length - CL.mostrando} restantes)</button>`);
+  }
+}
+
+/** Troca a miniatura pelo vídeo só quando você clica (vídeo é pesado). */
+function clTocar(el, src) {
+  const v = document.createElement('video');
+  v.src = src; v.controls = true; v.autoplay = true; v.playsInline = true;
+  el.replaceWith(v);
+}
+
+function clCartao(c) {
+  return `
     <div class="cl-corte" id="cl-c-${clEsc(c.id)}">
-      <video src="${CL_APP}${clEsc(c.video)}#t=1" preload="metadata" controls playsinline></video>
+      <div class="cl-thumb" onclick="clTocar(this, '${CL_APP}${clEsc(c.video)}')" title="Assistir">
+        <img src="${CL_APP}${clEsc(c.thumb)}" loading="lazy" decoding="async" alt="">
+        <span class="cl-play"><i class="fa-solid fa-play"></i></span>
+      </div>
       <div class="cl-info">
         <div class="cl-canal-nome">${clEsc(c.canal)}</div>
         ${c.faixa ? `<div class="cl-faixa">${clEsc(c.faixa)}</div>` : ''}
@@ -162,7 +193,7 @@ async function clCarregarCortes() {
         ${c.agendado ? `<div class="cl-agendado">✔ ${c.agendado.map(a => clEsc(`${a.plataforma} @${a.conta} ${a.quando}`)).join(' · ')}</div>` : ''}
         ${CL.aba === 'prontos' ? `<button type="button" class="btn btn-primary btn-sm" onclick="clAgendar('${clEsc(c.id)}', this)"><i class="fa-solid fa-calendar-plus"></i> Agendar</button>` : ''}
       </div>
-    </div>`).join('') || '<span class="cl-dim">Nenhum corte aqui ainda.</span>';
+    </div>`;
 }
 
 async function clAgendar(id, botao) {

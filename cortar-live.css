@@ -32,7 +32,12 @@
 
 .cl-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr)); gap: 14px; margin-top: 1rem; }
 .cl-corte { background: var(--bg-card-hover); border: 1px solid var(--border-color); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
-.cl-corte video { width: 100%; aspect-ratio: 9 / 16; background: #000; object-fit: cover; display: block; }
+.cl-corte video, .cl-thumb { width: 100%; aspect-ratio: 9 / 16; background: #000; object-fit: cover; display: block; }
+.cl-thumb { position: relative; cursor: pointer; overflow: hidden; }
+.cl-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cl-play { position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-size: 2rem;
+  background: linear-gradient(transparent 55%, rgba(0,0,0,0.45)); opacity: 0.85; transition: opacity .15s; }
+.cl-thumb:hover .cl-play { opacity: 1; }
 .cl-info { padding: 10px 12px 12px; display: grid; gap: 6px; font-size: 0.85rem; }
 .cl-canal-nome { color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
 .cl-faixa { background: #d6141c; color: #fff; font-weight: 800; padding: 4px 8px; border-radius: 4px; text-transform: uppercase; font-size: 0.78rem; }
