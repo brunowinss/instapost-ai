@@ -13,6 +13,7 @@ const facebookService = require('./facebook');
 const { DEFAULT_TIMEZONE, isValidTimeZone, localParts } = require('./time-utils');
 const { purgeOldPosts } = require('./retention');
 const { dueReminders, normalizePrefs } = require('./reminders');
+const cloudinaryAdmin = require('./cloudinary-admin');
 const { generateSmartTimes, dayAfterLast, learnHourlyEngagement, makeWeightFn } = require('./smart-schedule');
 const { planStoryLoopPosts } = require('./story-loop');
 require('dotenv').config();
@@ -1165,6 +1166,8 @@ app.get('/api/data', requireAuth, async (req, res) => {
     }));
     delete globalConfig.vapidPrivateKey;
     delete globalConfig.loginPass;
+    globalConfig.cloudinaryApiSecretSet = !!globalConfig.cloudinaryApiSecret;
+    delete globalConfig.cloudinaryApiSecret;
     delete globalConfig.aisaApiKey;
     delete globalConfig.openrouterApiKey;
 
@@ -1264,7 +1267,7 @@ app.post('/api/save-config', requireAuth, async (req, res) => {
   
   try {
     // Accept any config keys that are sent
-    const allowedKeys = ['imgbbKey', 'cloudinaryName', 'cloudinaryPreset', 'telegramToken', 'telegramChatId', 'loginUser', 'loginPass', 'postsPerDay', 'notifyPrefs'];
+    const allowedKeys = ['imgbbKey', 'cloudinaryName', 'cloudinaryPreset', 'telegramToken', 'telegramChatId', 'loginUser', 'loginPass', 'postsPerDay', 'notifyPrefs', 'cloudinaryApiKey', 'cloudinaryApiSecret', 'autoDeleteMedia'];
     if (req.body.notifyPrefs !== undefined) req.body.notifyPrefs = normalizePrefs(req.body.notifyPrefs);
     const configs = [];
     for (const key of allowedKeys) {
@@ -2783,6 +2786,138 @@ async function runReminders({ force = false } = {}) {
   return items.filter(i => !i.skip);
 }
 
+// ============================================================
+// ☁️ CLOUDINARY: uso do plano e limpeza do que já foi publicado
+// ============================================================
+
+async function readConfigValue(db, key) {
+  const row = await db.get('SELECT value FROM global_config WHERE key = ?', [key]);
+  if (!row) return undefined;
+  try { return JSON.parse(row.value); } catch { return row.value; }
+}
+
+/** Credenciais da Admin API. null quando falta algo (aí nada é apagado nem consultado). */
+async function cloudinaryConfig(db) {
+  const cloud = String((await readConfigValue(db, 'cloudinaryName')) || '').trim();
+  const apiKey = String((await readConfigValue(db, 'cloudinaryApiKey')) || '').trim();
+  const apiSecret = String((await readConfigValue(db, 'cloudinaryApiSecret')) || '').trim();
+  if (!cloud || !apiKey || !apiSecret) return null;
+  return { cloud, apiKey, apiSecret, autoDelete: (await readConfigValue(db, 'autoDeleteMedia')) !== false };
+}
+
+/** Links em uso fora da fila: mídias do loop de Stories e do Acervo. */
+async function protectedMediaTexts(db) {
+  const loops = await db.all('SELECT "activeMedia" FROM story_loops');
+  const drive = await db.all('SELECT "url", "thumbnail" FROM shared_drive');
+  return [...loops.map(l => l.activeMedia), ...drive.flatMap(d => [d.url, d.thumbnail])];
+}
+
+async function markMediaDeleted(db, keys) {
+  for (const key of keys) {
+    await db.run('INSERT INTO deleted_media ("publicId", "deletedAt") VALUES (?, ?) ON CONFLICT ("publicId") DO NOTHING', [key, new Date().toISOString()]);
+  }
+}
+
+/** Apaga do Cloudinary o que já saiu em todas as redes (até 100 arquivos por rodada). */
+async function runMediaCleanup() {
+  const db = await getDB();
+  const cfg = await cloudinaryConfig(db);
+  if (!cfg) return 0;
+
+  await checkCloudinaryUsageAlert(db, cfg).catch(e => console.error('[CLOUDINARY-USO]', e.message));
+  if (!cfg.autoDelete) return 0;
+
+  const posts = await db.all('SELECT "imageUrl", "mediaItems", "status", "publishedAt" FROM posts');
+  const deleted = new Set((await db.all('SELECT "publicId" FROM deleted_media')).map(r => r.publicId));
+  const plan = cloudinaryAdmin.planAutoDelete({ posts, protectedTexts: await protectedMediaTexts(db), deleted, cloud: cfg.cloud }).slice(0, 100);
+  if (plan.length === 0) return 0;
+
+  let total = 0;
+  for (const type of ['video', 'image', 'raw']) {
+    const items = plan.filter(p => p.resourceType === type);
+    if (items.length === 0) continue;
+    const gone = await cloudinaryAdmin.deleteResources(cfg, type, items.map(p => p.publicId));
+    await markMediaDeleted(db, gone.map(id => `${type}:${id}`));
+    total += gone.length;
+  }
+  if (total) console.log(`🧹 [CLOUDINARY] ${total} arquivo(s) já publicados apagados.`);
+  return total;
+}
+
+/** Uma vez por dia: avisa no celular/Telegram quando o plano passa de 80%. */
+async function checkCloudinaryUsageAlert(db, cfg) {
+  const today = new Date().toISOString().slice(0, 10);
+  if ((await readConfigValue(db, 'cloudinaryUsageCheckedOn')) === today) return;
+  await db.run('INSERT INTO global_config ("key", "value") VALUES (?, ?) ON CONFLICT ("key") DO UPDATE SET "value"=EXCLUDED."value"', ['cloudinaryUsageCheckedOn', JSON.stringify(today)]);
+  const usage = await cloudinaryAdmin.getUsage(cfg);
+  const percent = usage.credits.percent;
+  if (percent === null || percent < 80) return;
+  const title = `☁️ Cloudinary em ${Math.round(percent)}%`;
+  const body = `Você usou ${usage.credits.used} de ${usage.credits.limit} créditos do mês. Perto de 100% os envios param e os posts agendados falham. Em Configurações dá para limpar os arquivos antigos.`;
+  await sendTelegramText(`${title}\n\n${body}\n\nInsta Post`).catch(() => {});
+  await sendWebPushNotification(title, body, { url: '/#settings', tag: 'cloudinary' });
+}
+
+const cloudinaryUsageCache = { data: null, ts: 0 };
+app.get('/api/cloudinary/usage', requireAuth, async (req, res) => {
+  try {
+    const db = await getDB();
+    const cfg = await cloudinaryConfig(db);
+    if (!cfg) return res.json({ configured: false });
+    if (!req.query.refresh && cloudinaryUsageCache.data && Date.now() - cloudinaryUsageCache.ts < 10 * 60 * 1000) {
+      return res.json(cloudinaryUsageCache.data);
+    }
+    const usage = await cloudinaryAdmin.getUsage(cfg);
+    const deletedCount = await db.get('SELECT COUNT(*) as count FROM deleted_media');
+    cloudinaryUsageCache.data = { configured: true, autoDelete: cfg.autoDelete, deletedFiles: Number(deletedCount?.count || 0), ...usage };
+    cloudinaryUsageCache.ts = Date.now();
+    res.json(cloudinaryUsageCache.data);
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
+/**
+ * Limpeza dos arquivos antigos que já estavam no Cloudinary antes da limpeza automática.
+ * Sem confirm: só conta (quantos e quantos GB). Com confirm: apaga. Nunca toca no que está
+ * num post agendado, no loop de Stories ou no Acervo.
+ */
+app.post('/api/cloudinary/cleanup-old', requireAuth, async (req, res) => {
+  try {
+    const db = await getDB();
+    const cfg = await cloudinaryConfig(db);
+    if (!cfg) return res.status(400).json({ error: 'Preencha a API Key e o API Secret do Cloudinary primeiro.' });
+    const days = Math.max(1, Math.min(365, parseInt(req.body.days, 10) || 7));
+    const before = Date.now() - days * 24 * 3600 * 1000;
+
+    const pending = await db.all('SELECT "imageUrl", "mediaItems" FROM posts WHERE "status" IN (\'pending\', \'processing\')');
+    const busy = cloudinaryAdmin.idsInText([...pending.flatMap(p => [p.imageUrl, p.mediaItems]), ...await protectedMediaTexts(db)]);
+
+    const candidates = [];
+    for (const type of ['video', 'image']) {
+      for (const r of await cloudinaryAdmin.listResourcesBefore(cfg, type, before)) {
+        if (!busy.has(`${type}:${r.publicId}`)) candidates.push(r);
+      }
+    }
+    const bytes = candidates.reduce((sum, r) => sum + r.bytes, 0);
+    if (!req.body.confirm) return res.json({ count: candidates.length, bytes, days });
+
+    let deletedCount = 0;
+    for (const type of ['video', 'image']) {
+      const ids = candidates.filter(r => r.resourceType === type).map(r => r.publicId);
+      if (ids.length === 0) continue;
+      const gone = await cloudinaryAdmin.deleteResources(cfg, type, ids);
+      await markMediaDeleted(db, gone.map(id => `${type}:${id}`));
+      deletedCount += gone.length;
+    }
+    cloudinaryUsageCache.ts = 0;
+    console.log(`🧹 [CLOUDINARY] Limpeza manual: ${deletedCount} arquivo(s) com mais de ${days} dia(s).`);
+    res.json({ deleted: deletedCount, bytes, days });
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
 // "Enviar agora" das configurações: manda os lembretes ligados na hora, para ver como chegam.
 app.post('/api/push/reminders-now', requireAuth, async (req, res) => {
   try {
@@ -2925,6 +3060,8 @@ initDB()
         await runStoryLoops();
         await cron();
         await runReminders().catch(e => console.error('[LEMBRETES]', e.message));
+        // De hora em hora: tira do Cloudinary o que já foi publicado.
+        if (tick % 12 === 0) await runMediaCleanup().catch(e => console.error('[CLOUDINARY]', e.message));
         if (tick % 2 === 0) await runAutoImporter();
         scheduler.lastError = null;
       } catch (e) {

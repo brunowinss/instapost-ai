@@ -127,6 +127,10 @@ async function initDB() {
       "activeMedia" TEXT,
       "createdAt" TEXT
     );
+    CREATE TABLE IF NOT EXISTS deleted_media (
+      "publicId" TEXT PRIMARY KEY,
+      "deletedAt" TEXT
+    );
     CREATE TABLE IF NOT EXISTS shared_drive (
       "id" TEXT PRIMARY KEY,
       "filename" TEXT,

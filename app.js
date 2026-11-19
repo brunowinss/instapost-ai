@@ -620,7 +620,7 @@ function renderActiveSection() {
     renderSettings();
     renderSettingsAccounts();
   }
-  if (n === 'settings') renderNotifyPrefs();
+  if (n === 'settings') { renderNotifyPrefs(); renderCloudinaryUsage(); }
   if (n === 'youtube' || n.startsWith('youtube-')) renderYoutubeSection();
   if (n === 'facebook' || n.startsWith('facebook-')) renderFacebookSection();
   if (n === 'crosspost') renderCrosspostSection();
@@ -1898,17 +1898,26 @@ function setupUIEvents() {
       const imgbbKey = document.getElementById('imgbb-key-input').value.trim();
       const cloudinaryName = document.getElementById('cloudinary-name-input').value.trim();
       const cloudinaryPreset = document.getElementById('cloudinary-preset-input').value.trim();
+      const cloudinaryApiKey = (document.getElementById('cloudinary-apikey-input')?.value || '').trim();
+      const cloudinaryApiSecret = (document.getElementById('cloudinary-secret-input')?.value || '').trim();
+      const autoDeleteMedia = document.getElementById('cloudinary-autodelete-input')?.checked !== false;
+      const payload = { imgbbKey, cloudinaryName, cloudinaryPreset, cloudinaryApiKey, autoDeleteMedia };
+      // O secret não volta do servidor: só manda quando a pessoa digitou um novo.
+      if (cloudinaryApiSecret) payload.cloudinaryApiSecret = cloudinaryApiSecret;
 
       showLoading(true, 'SALVANDO CONFIGURAÇÕES...');
       try {
         const res = await fetch(`${API_BASE}/save-config`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imgbbKey, cloudinaryName, cloudinaryPreset })
+          body: JSON.stringify(payload)
         });
         if (!res.ok) throw new Error('Falha ao salvar configurações.');
         showToast('CONFIGURAÇÕES SALVAS!', 'success');
+        const secretInput = document.getElementById('cloudinary-secret-input');
+        if (secretInput) secretInput.value = '';
         await loadData();
+        renderCloudinaryUsage(true);
       } catch (err) {
         showToast(err.message, 'error');
       } finally {
@@ -2316,6 +2325,13 @@ function renderSettings() {
   document.getElementById('imgbb-key-input').value = STATE.globalConfig.imgbbKey || '';
   document.getElementById('cloudinary-name-input').value = STATE.globalConfig.cloudinaryName || '';
   document.getElementById('cloudinary-preset-input').value = STATE.globalConfig.cloudinaryPreset || '';
+  // A cada 30 s o loadData redesenha: não sobrescreve o campo que a pessoa está editando.
+  const apiKeyInput = document.getElementById('cloudinary-apikey-input');
+  if (apiKeyInput && document.activeElement !== apiKeyInput) apiKeyInput.value = STATE.globalConfig.cloudinaryApiKey || '';
+  const secretInput = document.getElementById('cloudinary-secret-input');
+  if (secretInput) secretInput.placeholder = STATE.globalConfig.cloudinaryApiSecretSet ? 'Salvo ✓ (digite só para trocar)' : 'Fica guardado só no servidor';
+  const autoDeleteInput = document.getElementById('cloudinary-autodelete-input');
+  if (autoDeleteInput && document.activeElement !== autoDeleteInput) autoDeleteInput.checked = STATE.globalConfig.autoDeleteMedia !== false;
   // Telegram
   const tToken = document.getElementById('telegram-token-input');
   const tChat = document.getElementById('telegram-chatid-input');
@@ -5997,6 +6013,86 @@ function resultCoverHtml(url, href, icon, isVideo) {
     : '';
   const play = isVideo ? '<span style="position:absolute; bottom:4px; left:4px; background:rgba(0,0,0,0.65); color:#fff; font-size:0.55rem; padding:2px 5px; border-radius:4px;"><i class="fa-solid fa-play"></i></span>' : '';
   return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener" title="Abrir o post" style="position:relative; display:flex; align-items:center; justify-content:center; width:52px; height:68px; border-radius:8px; overflow:hidden; background:var(--primary-bg); color:var(--primary); border:1px solid var(--border-color);"><i class="fa-solid ${icon}"></i>${img}${play}</a>`;
+}
+
+// ============================================================
+// ☁️ CLOUDINARY: quanto do plano já foi usado
+// ============================================================
+
+const gb = (bytes) => bytes === null || bytes === undefined ? '—' : `${(bytes / 1073741824).toFixed(2).replace('.', ',')} GB`;
+
+async function renderCloudinaryUsage(force = false) {
+  const box = document.getElementById('cloudinary-usage');
+  if (!box) return;
+  const cached = STATE.cloudinaryUsage;
+  if (!force && cached && Date.now() - cached.ts < 10 * 60 * 1000) return paintCloudinaryUsage(box, cached.data);
+  if (!force && box.dataset.loading === '1') return;
+  box.dataset.loading = '1';
+  try {
+    const res = await fetch(`${API_BASE}/cloudinary/usage${force ? '?refresh=1' : ''}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    STATE.cloudinaryUsage = { ts: Date.now(), data };
+    paintCloudinaryUsage(box, data);
+  } catch (err) {
+    box.innerHTML = `<p style="font-size:0.8rem; color:var(--error);"><i class="fa-solid fa-triangle-exclamation"></i> ${escapeHtml(err.message)}</p>`;
+  } finally {
+    box.dataset.loading = '';
+  }
+}
+
+function paintCloudinaryUsage(box, u) {
+  if (!u.configured) {
+    box.innerHTML = '<p style="font-size:0.78rem; color:var(--text-dim);">Preencha a API Key e o API Secret para ver o uso do plano e apagar sozinho o que já foi publicado.</p>';
+    return;
+  }
+  const pct = u.credits.percent;
+  const color = pct >= 90 ? 'var(--error)' : pct >= 70 ? 'var(--warning)' : 'var(--success)';
+  box.innerHTML = `
+    <div style="padding:12px; border-radius:10px; background:rgba(255,255,255,0.04); border:1px solid var(--border-color);">
+      <div style="display:flex; align-items:baseline; justify-content:space-between; gap:8px;">
+        <span style="font-weight:700; font-size:0.85rem;"><i class="fa-solid fa-cloud"></i> Uso do Cloudinary</span>
+        <span style="font-weight:800; color:${color};">${pct === null ? '—' : `${Math.round(pct)}%`}</span>
+      </div>
+      <div style="height:8px; border-radius:100px; background:rgba(255,255,255,0.08); margin:8px 0; overflow:hidden;">
+        <div style="height:100%; width:${Math.min(100, pct || 0)}%; background:${color};"></div>
+      </div>
+      <div style="font-size:0.75rem; color:var(--text-dim); line-height:1.6;">
+        ${u.credits.used ?? '—'} de ${u.credits.limit ?? '—'} créditos do mês · Guardado: ${gb(u.storageBytes)} · Banda: ${gb(u.bandwidthBytes)}<br>
+        ${u.autoDelete ? `Limpeza automática ligada · ${u.deletedFiles} arquivo(s) já apagados pelo app` : 'Limpeza automática desligada'}
+      </div>
+      <div style="display:flex; gap:8px; align-items:center; margin-top:10px; flex-wrap:wrap;">
+        <label style="font-size:0.75rem; color:var(--text-dim); display:flex; align-items:center; gap:6px;">Arquivos com mais de
+          <input type="number" id="cloudinary-cleanup-days" class="input" min="1" max="365" value="7" style="width:64px; padding:5px 8px;"> dias</label>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="cleanupOldCloudinary()"><i class="fa-solid fa-broom"></i> Limpar antigos</button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="renderCloudinaryUsage(true)" title="Atualizar"><i class="fa-solid fa-rotate"></i></button>
+      </div>
+    </div>`;
+}
+
+/** Conta primeiro, mostra quantos arquivos/GB e só apaga depois do "OK". */
+async function cleanupOldCloudinary() {
+  const days = Math.max(1, parseInt(document.getElementById('cloudinary-cleanup-days')?.value, 10) || 7);
+  try {
+    showLoading(true, 'CONTANDO ARQUIVOS...');
+    const res = await fetch(`${API_BASE}/cloudinary/cleanup-old`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ days }) });
+    const data = await res.json().catch(() => ({}));
+    showLoading(false);
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    if (!data.count) return showToast(`Nenhum arquivo com mais de ${days} dia(s) para apagar.`, 'info');
+    const ok = confirm(`Apagar ${data.count} arquivo(s) (${gb(data.bytes)}) enviados há mais de ${days} dia(s)?\n\nFicam de fora os que estão em posts agendados, no loop de Stories e no Acervo.\nSe você usa este Cloudinary para outra coisa, cancele.\n\nNão dá para desfazer.`);
+    if (!ok) return;
+    showLoading(true, 'APAGANDO...');
+    const done = await fetch(`${API_BASE}/cloudinary/cleanup-old`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ days, confirm: true }) });
+    const result = await done.json().catch(() => ({}));
+    if (!done.ok) throw new Error(result.error || `HTTP ${done.status}`);
+    showToast(`${result.deleted} arquivo(s) apagados do Cloudinary.`, 'success');
+    renderCloudinaryUsage(true);
+  } catch (err) {
+    showToast(err.message, 'error');
+  } finally {
+    showLoading(false);
+  }
 }
 
 function setNetworkStatus(net, status) {

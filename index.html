@@ -460,8 +460,21 @@
               <label class="label">Cloudinary Upload Preset</label>
               <input type="text" class="input" id="cloudinary-preset-input" placeholder="Preset de upload não-assinado">
             </div>
+            <div class="form-group">
+              <label class="label">Cloudinary API Key</label>
+              <input type="text" class="input" id="cloudinary-apikey-input" placeholder="Settings → API Keys no Cloudinary" autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label class="label">Cloudinary API Secret</label>
+              <input type="password" class="input" id="cloudinary-secret-input" placeholder="Fica guardado só no servidor" autocomplete="new-password">
+            </div>
+            <label style="display:flex; align-items:center; gap:10px; font-size:0.85rem; margin:-4px 0 14px; cursor:pointer;">
+              <input type="checkbox" id="cloudinary-autodelete-input" checked style="width:18px; height:18px; accent-color:var(--primary); flex-shrink:0;">
+              <span>Apagar do Cloudinary depois de publicar em todas as redes</span>
+            </label>
             <button type="submit" class="btn btn-primary" style="width:100%;"><i class="fa-solid fa-floppy-disk"></i> Salvar Configurações</button>
           </form>
+          <div id="cloudinary-usage" style="margin-top:1.2rem;"></div>
         </div>
         <!-- Scheduling Card -->
         <div class="card">

@@ -45,6 +45,7 @@ function serverHarness(fetch, accounts = [], postgres = false, config = {}, publ
     './story-loop': require('../story-loop'),
     './retention': require('../retention'),
     './reminders': require('../reminders'),
+    './cloudinary-admin': require('../cloudinary-admin'),
     './facebook': {
       isConfigured: () => true,
       getAuthUrl: state => `https://www.facebook.com/dialog/oauth?state=${state}`,
