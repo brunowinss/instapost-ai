@@ -87,9 +87,21 @@
 
 .cl-ia-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0 12px; }
 
-.cl-etapas { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 5px; }
-.cl-et { font-size: 0.7rem; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border-color); color: var(--text-dim); }
+.cl-log-linha { display: flex; gap: 8px; align-items: baseline; padding: 3px 0; font-family: inherit; }
+.cl-log-hora { color: var(--text-dim); font-size: 0.75rem; flex: none; }
+.cl-log-ic { flex: none; width: 1.2em; text-align: center; }
+.cl-log-linha b { color: var(--text-main); }
+.cl-ic-ok { color: #4ade80; } .cl-ic-corte { color: #f472b6; } .cl-ic-ia { color: #a78bfa; }
+.cl-ic-pico { color: #fbbf24; } .cl-ic-vivo { color: #f87171; } .cl-ic-erro { color: #fb923c; } .cl-ic-dim { color: var(--text-dim); }
+
+.cl-etapas-vivo { display: grid; gap: 10px; margin-bottom: 12px; }
+.cl-etapas-vivo:empty { display: none; }
+.cl-et-linha { padding: 10px 12px; border-radius: 10px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); }
+.cl-et-linha > b { color: var(--text-main); font-size: 0.9rem; }
+.cl-et-linha > small { display: block; color: var(--text-dim); font-size: 0.78rem; margin-top: 5px; }
+.cl-etapas { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+.cl-et { font-size: 0.75rem; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--border-color); color: var(--text-dim); }
+.cl-et i { font-size: 0.7rem; margin-right: 2px; }
 .cl-et.feito { color: #4ade80; border-color: rgba(74,222,128,0.4); }
 .cl-et.on { color: #fff; background: var(--primary); border-color: var(--primary); font-weight: 700; }
-.cl-et-seta { color: var(--text-dim); font-size: 0.75rem; }
-.cl-canal small.cl-et-info { margin-top: 3px; white-space: normal; }
+.cl-et-seta { color: var(--text-dim); font-size: 0.8rem; }
