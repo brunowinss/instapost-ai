@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="vendor/fontawesome/all.min.css">
   <link rel="stylesheet" href="style.css?v=61">
   <link rel="stylesheet" href="studio.css?v=1">
-  <link rel="stylesheet" href="cortar-live.css?v=5">
+  <link rel="stylesheet" href="cortar-live.css?v=6">
 </head>
 <body>
   <a class="skip-link" href="#main-content">Pular para o conteúdo</a>
@@ -1231,12 +1231,9 @@
             <details class="cl-add">
               <summary><i class="fa-solid fa-plus"></i> Adicionar canal</summary>
               <div class="cl-add-form">
-                <select class="input" id="cl-add-plat">
-                  <option value="twitch">Twitch</option>
-                  <option value="youtube">YouTube</option>
-                </select>
-                <input type="text" class="input" id="cl-add-usuario" placeholder="usuário (ex.: alanzoka ou @Gameplayrj)">
-                <input type="text" class="input" id="cl-add-nome" placeholder="nome pra legenda (ex.: Alanzoka)">
+                <input type="text" class="input" id="cl-add-usuario" placeholder="Cole o link do canal (Twitch ou YouTube)" oninput="clDetectarCanal()" onpaste="setTimeout(clDetectarCanal, 0)">
+                <div class="cl-dim" id="cl-add-detectado"></div>
+                <input type="text" class="input" id="cl-add-nome" placeholder="nome pra legenda (preenche sozinho)" oninput="this.dataset.editado = this.value ? '1' : ''">
                 <button type="button" class="btn btn-primary btn-sm" onclick="clAdicionarCanal()"><i class="fa-solid fa-plus"></i> Adicionar</button>
               </div>
               <p class="cl-dim" id="cl-msg-canal"></p>
@@ -2154,7 +2151,7 @@
   </div>
 
   <script src="app.js?v=62"></script>
-  <script src="cortar-live.js?v=5"></script>
+  <script src="cortar-live.js?v=6"></script>
   <link rel="stylesheet" href="ai-ui.css?v=1">
   <script src="ai-ui.js?v=2"></script>
   <script src="particles.js?v=1"></script>

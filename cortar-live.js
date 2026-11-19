@@ -162,17 +162,45 @@ async function clRemoverCanal(chave, nome) {
   clAtualizar();
 }
 
+/** Ao colar o link: o app descobre a plataforma, o usuário e o nome do canal. */
+let clDetectarTimer = null;
+function clDetectarCanal() {
+  clearTimeout(clDetectarTimer);
+  const info = document.getElementById('cl-add-detectado');
+  const entrada = document.getElementById('cl-add-usuario').value.trim();
+  CL.canalDetectado = null;
+  if (!entrada) { info.textContent = ''; return; }
+  info.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Procurando o canal…';
+  clDetectarTimer = setTimeout(async () => {
+    try {
+      const r = await clFetch('/api/canal_info?entrada=' + encodeURIComponent(entrada));
+      if (document.getElementById('cl-add-usuario').value.trim() !== entrada) return;
+      CL.canalDetectado = r;
+      const icone = r.plataforma === 'youtube' ? 'fa-brands fa-youtube' : 'fa-brands fa-twitch';
+      info.innerHTML = `<i class="${icone}"></i> ${r.plataforma === 'youtube' ? 'YouTube' : 'Twitch'} · ${clEsc(r.usuario)} — <b>${clEsc(r.nome)}</b>`;
+      const nome = document.getElementById('cl-add-nome');
+      if (!nome.dataset.editado) nome.value = r.nome;
+    } catch (e) {
+      info.innerHTML = `<span style="color:var(--error)">${clEsc(e.message)}</span>`;
+    }
+  }, 500);
+}
+
 async function clAdicionarCanal() {
   const msg = document.getElementById('cl-msg-canal');
   try {
+    const d = CL.canalDetectado || await clFetch('/api/canal_info?entrada=' + encodeURIComponent(document.getElementById('cl-add-usuario').value.trim()));
     await clFetch('/api/canais', {
       acao: 'adicionar',
-      plataforma: document.getElementById('cl-add-plat').value,
-      usuario: document.getElementById('cl-add-usuario').value,
-      nome: document.getElementById('cl-add-nome').value
+      plataforma: d.plataforma,
+      usuario: d.usuario,
+      nome: document.getElementById('cl-add-nome').value.trim() || d.nome
     });
+    CL.canalDetectado = null;
     document.getElementById('cl-add-usuario').value = '';
     document.getElementById('cl-add-nome').value = '';
+    delete document.getElementById('cl-add-nome').dataset.editado;
+    document.getElementById('cl-add-detectado').textContent = '';
     msg.innerHTML = '<span style="color:var(--success)">Canal adicionado e já sendo monitorado.</span>';
   } catch (e) {
     msg.innerHTML = `<span style="color:var(--error)">${clEsc(e.message)}</span>`;
