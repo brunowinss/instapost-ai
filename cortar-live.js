@@ -104,12 +104,7 @@ async function clAtualizar() {
   document.getElementById('cl-barra').dataset.estado = estado;
   document.getElementById('cl-status-titulo').textContent = titulo;
   document.getElementById('cl-status-sub').textContent = sub;
-  const ed = est.editor || {};
-  const agora = document.getElementById('cl-status-agora');
-  if (!ligado) agora.textContent = '';
-  else if (ed.fazendo) agora.innerHTML = `⚙️ <b>Agora:</b> ${clEsc(ed.fazendo)} <span class="cl-dim">(há ${clTempo(ed.ha_seg)}${ed.fila ? ` · mais ${ed.fila} na fila` : ''})</span>`;
-  else if (gravando.length) agora.innerHTML = '⚙️ <b>Agora:</b> gravando e lendo o chat — esperando o próximo momento ou o próximo bloco da IA';
-  else agora.textContent = '';
+  clRenderAgora(est, ligado);
 
   // Lives (cada uma com o botão Monitorar)
   document.getElementById('cl-canais').innerHTML = (est.canais || []).map(c => `
@@ -117,8 +112,7 @@ async function clAtualizar() {
       <span class="cl-bola ${c.status === 'gravando' ? 'on' : ''}"></span>
       <div style="min-width:0; flex:1;">
         <b>${clEsc(c.nome_bonito)}</b> <span class="cl-plat">${clEsc(c.plataforma)}</span>
-        <small>${c.status === 'gravando' ? '🔴 ' + clEsc(c.titulo || 'gravando') : clEsc(c.status)}</small>
-        ${clDetalheCanal(c)}
+        <small>${c.status === 'gravando' ? '🔴 gravando agora — detalhes no painel lá em cima' : clEsc(c.status)}</small>
       </div>
       <label class="cl-switch" title="${c.ativo ? 'Monitorando — clique para desligar' : 'Desligado — clique para monitorar'}">
         <input type="checkbox" ${c.ativo ? 'checked' : ''} onchange="clMonitorar('${clEsc(c.chave)}', this.checked)">
@@ -137,7 +131,7 @@ async function clAtualizar() {
   // Log
   const log = document.getElementById('cl-log');
   const noFim = log.scrollTop + log.clientHeight >= log.scrollHeight - 20;
-  log.innerHTML = (est.log || []).map(l => `<div><span>${clEsc(l.t)} [${clEsc(l.canal)}]</span> ${clEsc(l.msg)}</div>`).join('');
+  log.innerHTML = clLogBonito(est);
   if (noFim) log.scrollTop = log.scrollHeight;
   if (est.erro_agendador) document.getElementById('cl-msg-ag').innerHTML = `<span style="color:var(--error)">⚠ ${clEsc(est.erro_agendador)}</span>`;
 
@@ -481,36 +475,110 @@ async function clSalvarIA() {
 }
 
 
-/* ---------------- Status detalhado de cada live ---------------- */
+/* ---------------- Painel "O que o app está fazendo agora" ---------------- */
 function clTempo(seg) {
   seg = Math.max(0, Math.round(seg || 0));
   const h = Math.floor(seg / 3600), m = Math.floor(seg % 3600 / 60), s = seg % 60;
-  return h ? `${h}h${String(m).padStart(2, '0')}` : m ? `${m} min${s && m < 5 ? ` ${s}s` : ''}` : `${s}s`;
+  if (h) return `${h}h${String(m).padStart(2, '0')}`;
+  if (m) return `${m} min`;
+  return `${s}s`;
 }
 
 function clHoraDaqui(seg) {
-  const d = new Date(Date.now() + seg * 1000);
-  return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  return new Date(Date.now() + seg * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
 
-function clDetalheCanal(c) {
-  const linhas = [];
-  if (c.status === 'gravando') {
-    linhas.push(`⏺ Gravando há <b>${clTempo(c.gravado_seg)}</b> · chat: <b>${c.chat_min ?? 0}</b> msgs/min`
-      + (c.momentos_esperando ? ` · ${c.momentos_esperando} pico(s) esperando o fim do momento para cortar` : ''));
-    if (c.ia_ligada) {
-      if (c.ia_etapa) linhas.push(`🤖 <b>IA:</b> ${clEsc(c.ia_etapa)}`);
-      else if (c.ia_proximo_em != null) linhas.push(`🤖 <b>IA:</b> analisa os próximos ${c.ia_bloco_min || 10} min em <b>${clTempo(c.ia_proximo_em)}</b> (às ${clHoraDaqui(c.ia_proximo_em + 15)})`);
-    } else {
-      linhas.push('🤖 IA desligada — cortando só pelos picos de chat e voz (saem como rascunho)');
-    }
-  } else if (c.ia_etapa) {
-    linhas.push(`🤖 <b>IA:</b> ${clEsc(c.ia_etapa)}`);
+function clRenderAgora(est, ligado) {
+  const painel = document.getElementById('cl-agora-painel');
+  const ed = est.editor || {};
+  const ativos = (est.canais || []).filter(c => c.status === 'gravando' || c.ia_etapa);
+  const edEl = document.getElementById('cl-agora-editor');
+  if (!ligado) {
+    edEl.innerHTML = '<div class="cl-ag-vazio"><i class="fa-solid fa-pause"></i> Cortador parado. Clique em <b>Ligar cortador</b> para começar.</div>';
+  } else if (ed.fazendo) {
+    edEl.innerHTML = `<div class="cl-ag-trabalhando"><span class="cl-giro"></span><div><b>Trabalhando agora:</b> ${clEsc(ed.fazendo)}`
+      + `<small>há ${clTempo(ed.ha_seg)}${ed.fila ? ` · mais ${ed.fila} esperando na fila` : ''}</small></div></div>`;
+  } else if (ativos.length) {
+    edEl.innerHTML = '<div class="cl-ag-calmo"><i class="fa-solid fa-circle-check"></i> Gravando as lives abaixo. A placa de vídeo está livre, esperando a próxima análise da IA ou um pico no chat.</div>';
+  } else {
+    edEl.innerHTML = '<div class="cl-ag-vazio"><i class="fa-regular fa-hourglass-half"></i> Nenhuma live de GTA 6 no ar agora. Assim que um canal ligado entrar ao vivo, ele aparece aqui.</div>';
   }
-  if (c.ia_ultimo) linhas.push(`🧠 Última análise: ${clEsc(c.ia_ultimo)}`);
+  document.getElementById('cl-agora-grade').innerHTML = ligado ? ativos.map(c => clCardAgora(c, ed)).join('') : '';
+}
+
+function clCardAgora(c, ed) {
+  const etapa = c.ia_etapa || '';
+  const cortandoPico = (ed.fazendo || '').includes('cortando um momento de ' + c.nome_bonito);
+  const passo = /editando/.test(etapa) || cortandoPico ? 3 : etapa ? 2 : 1;
+  const passos = [
+    ['fa-solid fa-circle-dot', 'Gravando', `${clTempo(c.gravado_seg)} gravados`],
+    ['fa-solid fa-wand-magic-sparkles', 'IA analisando', c.ia_ligada ? `a cada ${c.ia_bloco_min || 10} min` : 'IA desligada'],
+    ['fa-solid fa-scissors', 'Editando', 'legenda + card'],
+    ['fa-solid fa-circle-check', 'Pronto', `${c.n_pronto || 0} feitos`],
+  ].map(([ic, nome, sub], k) => {
+    const n = k + 1;
+    const cls = n === passo ? 'atual' : (n === 4 && c.n_pronto) ? 'feito' : '';
+    return `<div class="cl-passo ${cls}"><i class="${ic}"></i><b>${nome}</b><small>${clEsc(sub)}</small></div>`;
+  }).join('<i class="cl-seta"></i>');
+
+  let barra = '';
+  if (etapa) {
+    barra = `<div class="cl-prox cl-prox-agora"><span class="cl-giro"></span> ${clEsc(etapa)}</div>`;
+  } else if (c.ia_ligada && c.ia_proximo_em != null && c.status === 'gravando') {
+    const total = (c.ia_bloco_min || 10) * 60;
+    const pct = Math.min(100, Math.max(0, (1 - c.ia_proximo_em / total) * 100));
+    barra = `<div class="cl-prox"><div class="cl-prox-txt"><span><i class="fa-regular fa-clock"></i> Próxima análise da IA</span><b>em ${clTempo(c.ia_proximo_em)} · às ${clHoraDaqui(c.ia_proximo_em + 15)}</b></div>`
+      + `<div class="cl-prox-barra"><div style="width:${pct.toFixed(0)}%"></div></div></div>`;
+  } else if (!c.ia_ligada) {
+    barra = '<div class="cl-prox cl-dim">IA desligada: cortando só pelos picos de chat e voz (saem como rascunho).</div>';
+  }
+
   const u = c.ultimo_corte;
-  if (u) linhas.push(`✂️ Último corte às <b>${clEsc(u.hora)}</b> (${u.tipo === 'pronto' ? 'pronto' : 'rascunho'}): ${clEsc(u.titulo)}`);
-  if (c.n_pronto || c.n_rascunho) linhas.push(`📦 Desde que o app abriu: <b>${c.n_pronto || 0}</b> pronto(s), ${c.n_rascunho || 0} rascunho(s)`);
-  else if (c.status === 'gravando') linhas.push('✂️ Nenhum corte ainda desde que o app abriu');
-  return linhas.length ? `<div class="cl-detalhe">${linhas.map(l => `<div>${l}</div>`).join('')}</div>` : '';
+  return `<div class="cl-ag-card">
+    <div class="cl-ag-topo">
+      <div style="min-width:0;"><b class="cl-ag-nome">${clEsc(c.nome_bonito)}</b> <span class="cl-plat">${clEsc(c.plataforma)}</span>
+        <div class="cl-ag-titulo">${clEsc(c.titulo || '')}</div></div>
+      <span class="cl-ag-vivo"><i class="fa-solid fa-circle"></i> AO VIVO</span>
+    </div>
+    <div class="cl-passos-linha">${passos}</div>
+    ${barra}
+    <div class="cl-ag-nums">
+      <div><b>${clTempo(c.gravado_seg)}</b><small>gravando</small></div>
+      <div><b>${c.chat_min ?? 0}</b><small>msgs/min no chat</small></div>
+      <div><b>${c.n_pronto || 0}</b><small>cortes prontos</small></div>
+      <div><b>${c.n_rascunho || 0}</b><small>rascunhos</small></div>
+    </div>
+    <div class="cl-ag-rodape">
+      <div><i class="fa-solid fa-wand-magic-sparkles cl-ic-ia"></i> <b>Última análise da IA:</b> ${c.ia_ultimo ? clEsc(c.ia_ultimo) : 'ainda não teve — a primeira sai com ' + (c.ia_bloco_min || 10) + ' min gravados'}</div>
+      <div><i class="fa-solid fa-scissors cl-ic-corte"></i> <b>Último corte:</b> ${u ? `${clEsc(u.hora)} — ${clEsc(u.titulo)} <span class="cl-dim">(${u.tipo === 'pronto' ? 'pronto' : 'rascunho'})</span>` : 'nenhum ainda'}</div>
+    </div>
+  </div>`;
+}
+
+/* Histórico em linguagem simples: nome do streamer, sem linhas técnicas */
+function clLogBonito(est) {
+  const nomes = {};
+  (est.canais || []).forEach(c => { nomes[c.chave] = c.nome_bonito; });
+  const ocultar = /^(encoder de vídeo|monitorando \d+ canais|câmera:)/i;
+  const icone = (m) => {
+    const [ic, cor] = /PRONTO ->/.test(m) ? ['fa-circle-check', 'ok'] : /CORTE PRONTO|juntou/.test(m) ? ['fa-scissors', 'corte']
+      : /^IA/.test(m) ? ['fa-wand-magic-sparkles', 'ia'] : /PICO/.test(m) ? ['fa-arrow-trend-up', 'pico']
+      : /AO VIVO/.test(m) ? ['fa-circle-dot', 'vivo'] : /erro|falhou|caiu/i.test(m) ? ['fa-triangle-exclamation', 'erro']
+      : /parou|desligado|offline/i.test(m) ? ['fa-circle-stop', 'dim'] : ['fa-circle-info', 'dim'];
+    return `<i class="fa-solid ${ic} cl-ic-${cor}"></i>`;
+  };
+  const simples = (m) => m
+    .replace(/^AO VIVO \((.*?)\) - gravando e lendo o chat$/, 'entrou ao vivo — começou a gravar e ler o chat ($1)')
+    .replace(/^CORTE PRONTO -> .*$/, 'cortou um momento (rascunho, sem legenda/card)')
+    .replace(/^PRONTO -> .*[\\/](.*?)\.mp4$/, 'corte pronto: $1')
+    .replace(/^PICO no chat - (.*?) \(x([\d.]+)\).*$/, 'chat explodiu ($1, $2x o normal) — vai cortar esse momento')
+    .replace(/^PICO de VOZ \(x([\d.]+)\).*$/, 'streamer gritou/reagiu alto ($1x) — vai cortar esse momento')
+    .replace(/^IA dos cortes: /, 'IA: ');
+  const linhas = (est.log || []).filter(l => !ocultar.test(l.msg)).slice(-60);
+  if (!linhas.length) return '<div class="cl-dim">Nada ainda.</div>';
+  return linhas.map(l => {
+    const quem = l.canal === 'sistema' ? 'App' : l.canal === 'ia' ? 'IA' : (nomes[l.canal] || l.canal.replace(/^yt_/, ''));
+    return `<div class="cl-log-linha"><span class="cl-log-hora">${clEsc(l.t.slice(0, 5))}</span><span class="cl-log-ic">${icone(l.msg)}</span>`
+      + `<span><b>${clEsc(quem)}</b> ${clEsc(simples(l.msg))}</span></div>`;
+  }).join('');
 }

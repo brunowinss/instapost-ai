@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="vendor/fontawesome/all.min.css">
   <link rel="stylesheet" href="style.css?v=61">
   <link rel="stylesheet" href="studio.css?v=1">
-  <link rel="stylesheet" href="cortar-live.css?v=9">
+  <link rel="stylesheet" href="cortar-live.css?v=11">
 </head>
 <body>
   <a class="skip-link" href="#main-content">Pular para o conteúdo</a>
@@ -1218,11 +1218,16 @@
           <div class="cl-status">
             <div class="cl-status-titulo" id="cl-status-titulo">Verificando…</div>
             <div class="cl-dim" id="cl-status-sub"></div>
-            <div class="cl-agora" id="cl-status-agora"></div>
           </div>
           <button type="button" class="btn" id="cl-ligar" onclick="clLigarCortador()"></button>
         </div>
         <p class="cl-dim" style="margin:-0.6rem 0 1.2rem;"><i class="fa-solid fa-plug-circle-check"></i> Aplicativo aberto no seu PC <span id="cl-versao"></span></p>
+
+        <div class="card cl-agora-painel" id="cl-agora-painel" style="margin-bottom:1.5rem;">
+          <div class="card-title"><i class="fa-solid fa-bolt"></i> O que o app está fazendo agora</div>
+          <div class="cl-agora-editor" id="cl-agora-editor"></div>
+          <div class="cl-agora-grade" id="cl-agora-grade"></div>
+        </div>
 
         <div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 1.5rem;">
           <div class="card">
@@ -2179,7 +2184,7 @@
   </div>
 
   <script src="app.js?v=62"></script>
-  <script src="cortar-live.js?v=9"></script>
+  <script src="cortar-live.js?v=11"></script>
   <link rel="stylesheet" href="ai-ui.css?v=1">
   <script src="ai-ui.js?v=2"></script>
   <script src="particles.js?v=1"></script>
