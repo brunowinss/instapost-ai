@@ -102,14 +102,14 @@ async function getFacebookStats(account, posts = []) {
     try {
       if (post.mediaType === 'FB_VIDEO' || post.mediaType === 'FB_REEL') {
         const v = await graph(`/${encodeURIComponent(post.mediaId)}`, {
-          params: { fields: 'views,likes.summary(true).limit(0),comments.summary(true).limit(0)', access_token: token }
+          params: { fields: 'views,likes.summary(true).limit(0),comments.summary(true).limit(0),picture', access_token: token }
         });
-        return { id: post.mediaId, views: v.views ?? null, reactions: total(v.likes), comments: total(v.comments), shares: null };
+        return { id: post.mediaId, views: v.views ?? null, reactions: total(v.likes), comments: total(v.comments), shares: null, ...(v.picture ? { picture: v.picture } : {}) };
       }
       const p = await graph(`/${encodeURIComponent(post.mediaId)}`, {
-        params: { fields: 'reactions.summary(true).limit(0),comments.summary(true).limit(0),shares', access_token: token }
+        params: { fields: 'reactions.summary(true).limit(0),comments.summary(true).limit(0),shares,full_picture', access_token: token }
       });
-      return { id: post.mediaId, views: null, reactions: total(p.reactions), comments: total(p.comments), shares: p.shares ? p.shares.count : 0 };
+      return { id: post.mediaId, views: null, reactions: total(p.reactions), comments: total(p.comments), shares: p.shares ? p.shares.count : 0, ...(p.full_picture ? { picture: p.full_picture } : {}) };
     } catch {
       return { id: post.mediaId, unavailable: true };
     }

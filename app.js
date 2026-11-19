@@ -4468,7 +4468,9 @@ async function renderYoutubeMetricsView(force = false) {
     const cells = v.unavailable
       ? '<td colspan="3" style="text-align:right; color:var(--text-dim); font-size:0.78rem;">indisponível no YouTube (apagado ou privado)</td>'
       : `<td style="text-align:right;">${fmt(v.views)}</td><td style="text-align:right;">${fmt(v.likes)}</td><td style="text-align:right;">${fmt(v.comments)}</td>`;
+    const cover = resultCoverHtml(`https://i.ytimg.com/vi/${encodeURIComponent(v.id)}/mqdefault.jpg`, `https://www.youtube.com/watch?v=${encodeURIComponent(v.id)}`, 'fa-video', true);
     return `<tr style="border-top:1px solid var(--border-color);">
+      <td style="padding:8px 12px 8px 0; width:60px;">${cover}</td>
       <td style="padding:10px 8px 10px 0; max-width:320px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600;">${link}${badge}</td>
       <td style="color:var(--text-dim); white-space:nowrap; padding-right:12px;">${date}</td>
       ${cells}
@@ -4498,7 +4500,7 @@ async function renderYoutubeMetricsView(force = false) {
         : `<div style="overflow-x:auto; margin-top:1rem;">
             <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
               <thead><tr style="text-align:left; color:var(--text-dim); font-size:0.7rem; text-transform:uppercase;">
-                <th style="padding-bottom:8px;">Vídeo</th><th>Publicado</th>
+                <th style="padding-bottom:8px;"></th><th style="padding-bottom:8px;">Vídeo</th><th>Publicado</th>
                 <th style="text-align:right;">Views</th><th style="text-align:right;">Curtidas</th><th style="text-align:right;">Comentários</th>
               </tr></thead>
               <tbody>${rows}</tbody>
@@ -5378,7 +5380,9 @@ async function renderFacebookMetricsView(force = false) {
     const cells = p.unavailable
       ? '<td colspan="4" style="text-align:right; color:var(--text-dim); font-size:0.78rem;">indisponível no Facebook (apagado ou sem acesso)</td>'
       : `<td style="text-align:right;">${fmt(p.reactions)}</td><td style="text-align:right;">${fmt(p.comments)}</td><td style="text-align:right;">${fmt(p.shares)}</td><td style="text-align:right;">${fmt(p.views)}</td>`;
+    const cover = resultCoverHtml(p.picture || getThumbnailUrl(p.mediaUrl), `https://www.facebook.com/${encodeURIComponent(p.id)}`, p.type === 'FB_TEXT' ? 'fa-align-left' : (p.type === 'FB_VIDEO' || p.type === 'FB_REEL') ? 'fa-video' : 'fa-image', p.type === 'FB_VIDEO' || p.type === 'FB_REEL');
     return `<tr style="border-top:1px solid var(--border-color);">
+      <td style="padding:8px 12px 8px 0; width:60px;">${cover}</td>
       <td style="padding:10px 8px 10px 0; max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600;">${link} <span style="font-size:0.65rem; color:var(--text-dim);">· ${typeLabel[p.type] || 'Post'}</span></td>
       <td style="color:var(--text-dim); white-space:nowrap; padding-right:12px;">${date}</td>
       ${cells}
@@ -5408,7 +5412,7 @@ async function renderFacebookMetricsView(force = false) {
         : `<div style="overflow-x:auto; margin-top:1rem;">
             <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
               <thead><tr style="text-align:left; color:var(--text-dim); font-size:0.7rem; text-transform:uppercase;">
-                <th style="padding-bottom:8px;">Post</th><th>Publicado</th>
+                <th style="padding-bottom:8px;"></th><th style="padding-bottom:8px;">Post</th><th>Publicado</th>
                 <th style="text-align:right;">Reações</th><th style="text-align:right;">Comentários</th><th style="text-align:right;">Compart.</th><th style="text-align:right;">Views</th>
               </tr></thead>
               <tbody>${rows}</tbody>
@@ -5984,6 +5988,15 @@ function setNetworkFilter(net, accountId) {
   renderNetworkFilterTabs(net);
   renderNetworkCalendar(net);
   NETWORK_UI[net].render();
+}
+
+/** Capa do post na tabela de resultados: clica e abre o post na rede. Sem imagem, mostra um ícone. */
+function resultCoverHtml(url, href, icon, isVideo) {
+  const img = url && /^https:///.test(url)
+    ? `<img src="${escapeHtml(url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;">`
+    : '';
+  const play = isVideo ? '<span style="position:absolute; bottom:4px; left:4px; background:rgba(0,0,0,0.65); color:#fff; font-size:0.55rem; padding:2px 5px; border-radius:4px;"><i class="fa-solid fa-play"></i></span>' : '';
+  return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener" title="Abrir o post" style="position:relative; display:flex; align-items:center; justify-content:center; width:52px; height:68px; border-radius:8px; overflow:hidden; background:var(--primary-bg); color:var(--primary); border:1px solid var(--border-color);"><i class="fa-solid ${icon}"></i>${img}${play}</a>`;
 }
 
 function setNetworkStatus(net, status) {

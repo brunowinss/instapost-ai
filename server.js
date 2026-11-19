@@ -349,7 +349,7 @@ app.get('/api/facebook/stats', requireAuth, async (req, res) => {
     }
 
     const published = (await db.all(
-      'SELECT "mediaId", "caption", "publishedAt", "mediaType" FROM posts WHERE "accountId" = ? AND "platform" = \'facebook\' AND "status" = \'success\' AND "mediaId" != \'\' ORDER BY "publishedAt" DESC LIMIT 25',
+      'SELECT "mediaId", "caption", "publishedAt", "mediaType", "imageUrl" FROM posts WHERE "accountId" = ? AND "platform" = \'facebook\' AND "status" = \'success\' AND "mediaId" != \'\' ORDER BY "publishedAt" DESC LIMIT 25',
       [accountId]
     )).filter(p => p.mediaId);
 
@@ -363,6 +363,7 @@ app.get('/api/facebook/stats', requireAuth, async (req, res) => {
         id: p.mediaId,
         title: (p.caption || '').split('\n')[0] || '(sem texto)',
         type: p.mediaType,
+        mediaUrl: p.imageUrl || '',
         publishedAt: p.publishedAt || null,
         ...(stats.posts[p.mediaId] || { unavailable: true })
       }))

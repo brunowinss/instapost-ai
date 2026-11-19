@@ -287,3 +287,15 @@ test('Reels: se a Meta não consegue baixar o vídeo, o erro diz isso', async ()
   });
   await assert.rejects(() => facebook.publishToFacebook({ accountId: 'PG1', mediaType: 'FB_REEL', imageUrl: 'https://cdn/v.mp4' }), /não conseguiu baixar o vídeo/);
 });
+
+test('resultados trazem a capa: picture do vídeo/Reels e full_picture do post', async () => {
+  mockGraph((url) => {
+    if (url.pathname.endsWith('/PG1')) return reply({ fan_count: 1, followers_count: 2 });
+    if (url.pathname.endsWith('/V1')) return reply({ views: 10, picture: 'https://fb/capa-video.jpg' });
+    return reply({ shares: { count: 1 }, full_picture: 'https://fb/capa-post.jpg' });
+  });
+  const result = await facebook.getFacebookStats(pages[0], [{ mediaId: 'V1', mediaType: 'FB_REEL' }, { mediaId: 'PG1_2', mediaType: 'FB_PHOTO' }]);
+  assert.equal(result.posts.V1.picture, 'https://fb/capa-video.jpg');
+  assert.equal(result.posts.PG1_2.picture, 'https://fb/capa-post.jpg');
+  assert.match(calls.find(c => c.path.endsWith('/V1')).params.fields, /picture/);
+});
