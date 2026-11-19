@@ -509,11 +509,11 @@ function clEtapas(c, ed) {
   if (c.status !== 'gravando' && !c.ia_etapa) return '';
   const etapa = c.ia_etapa || '';
   const editandoPico = (ed.fazendo || '').includes('cortando um momento de ' + c.nome_bonito);
-  const atual = /editando/.test(etapa) || editandoPico ? 3 : etapa ? 2 : 1;
+  const atual = /cortando/.test(etapa) || editandoPico ? 3 : etapa ? 2 : 1;
   const min = Math.floor((c.gravado_seg || 0) / 60);
-  const nomes = [['fa-circle-dot', 'Gravando'], ['fa-wand-magic-sparkles', 'Analisando'], ['fa-scissors', 'Editando'],
-    ['fa-circle-check', `Pronto${c.n_pronto ? ` (${c.n_pronto})` : ''}`]];
-  const chips = nomes.map(([ic, n], i) => `<span class="cl-et ${i + 1 === atual ? 'on' : ''} ${i === 3 && c.n_pronto ? 'feito' : ''}"><i class="fa-solid ${ic}"></i> ${n}</span>`)
+  const nomes = [['fa-circle-dot', 'Gravando'], ['fa-wand-magic-sparkles', 'Analisando'], ['fa-scissors', 'Cortando'],
+    ['fa-file-video', `Rascunho${c.n_rascunho ? ` (${c.n_rascunho})` : ''}`]];
+  const chips = nomes.map(([ic, n], i) => `<span class="cl-et ${i + 1 === atual ? 'on' : ''} ${i === 3 && c.n_rascunho ? 'feito' : ''}"><i class="fa-solid ${ic}"></i> ${n}</span>`)
     .join('<span class="cl-et-seta">›</span>');
   let info;
   if (etapa) info = etapa;
