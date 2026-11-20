@@ -122,3 +122,15 @@
 .cl-st-rascunho { background: rgba(251,191,36,0.15); color: #fbbf24; }
 .cl-st-pronto { background: rgba(74,222,128,0.15); color: #4ade80; }
 .cl-st-agendado { background: rgba(96,165,250,0.15); color: #60a5fa; }
+
+/* Clipar live passada */
+.cl-vod-form { display: grid; gap: 8px; }
+.cl-vod-tempos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.cl-vod-lista { display: grid; gap: 10px; margin-top: 12px; }
+.cl-vod-lista:empty { display: none; }
+.cl-vod { padding: 10px 12px; border-radius: 10px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); }
+.cl-vod.erro { border-color: rgba(251,146,60,0.5); }
+.cl-vod-topo { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+.cl-vod-tit { margin-top: 2px; overflow-wrap: anywhere; }
+.cl-vod-status { margin-top: 8px; font-size: 0.82rem; color: var(--text-dim); }
+.cl-vod-erro { color: #fb923c; }

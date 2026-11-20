@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="vendor/fontawesome/all.min.css">
   <link rel="stylesheet" href="style.css?v=61">
   <link rel="stylesheet" href="studio.css?v=1">
-  <link rel="stylesheet" href="cortar-live.css?v=16">
+  <link rel="stylesheet" href="cortar-live.css?v=18">
 </head>
 <body>
   <a class="skip-link" href="#main-content">Pular para o conteúdo</a>
@@ -1307,6 +1307,21 @@
         </div>
 
         <div class="card" style="margin-top:1.5rem;">
+          <div class="card-title"><i class="fa-solid fa-clock-rotate-left"></i> Clipar live passada</div>
+          <p class="cl-dim" style="margin:0 0 0.8rem;">Cole o link de uma live já gravada (Twitch, Kick ou YouTube). O app baixa, a IA escolhe os melhores momentos e os cortes caem em <b>Clipados</b>.</p>
+          <div class="cl-vod-form">
+            <input type="text" class="input" id="cl-vod-url" placeholder="https://www.twitch.tv/videos/..." autocomplete="off" oninput="clVodDetectar()">
+            <div class="cl-vod-tempos">
+              <input type="text" class="input" id="cl-vod-ini" placeholder="início (opcional) 1:20:00">
+              <input type="text" class="input" id="cl-vod-fim" placeholder="fim (opcional) 2:10:00">
+            </div>
+            <button type="button" class="btn btn-primary btn-sm" id="cl-vod-btn" onclick="clVodIniciar()"><i class="fa-solid fa-scissors"></i> Clipar essa live</button>
+          </div>
+          <p class="cl-dim" id="cl-vod-info" style="margin:0.6rem 0 0;"></p>
+          <div id="cl-vod-lista" class="cl-vod-lista"></div>
+        </div>
+
+        <div class="card" style="margin-top:1.5rem;">
           <div class="card-title"><i class="fa-solid fa-list"></i> O que está acontecendo</div>
           <div id="cl-etapas-vivo" class="cl-etapas-vivo"></div>
           <div id="cl-log" class="cl-log"></div>
@@ -2194,7 +2209,7 @@
   </div>
 
   <script src="app.js?v=62"></script>
-  <script src="cortar-live.js?v=17"></script>
+  <script src="cortar-live.js?v=18"></script>
   <link rel="stylesheet" href="ai-ui.css?v=1">
   <script src="ai-ui.js?v=2"></script>
   <script src="particles.js?v=1"></script>

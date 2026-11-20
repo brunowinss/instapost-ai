@@ -131,6 +131,7 @@ async function clAtualizar() {
   // Log
   const log = document.getElementById('cl-log');
   const noFim = log.scrollTop + log.clientHeight >= log.scrollHeight - 20;
+  clRenderVods(est.vods || []);
   document.getElementById('cl-etapas-vivo').innerHTML = ligado
     ? (est.canais || []).map(c => clEtapas(c, est.editor || {})).join('') : '';
   log.innerHTML = clLogBonito(est);
@@ -570,4 +571,69 @@ function clEtapas(c, ed) {
   else if (c.ia_ligada && c.ia_proximo_em != null) info = `gravando há ${min} min · próxima análise da IA em ${Math.ceil(c.ia_proximo_em / 60)} min`;
   else info = `gravando há ${min} min`;
   return `<div class="cl-et-linha"><b>${clEsc(c.nome_bonito)}</b><div class="cl-etapas">${chips}</div><small>${clEsc(info)}</small></div>`;
+}
+
+
+/* ---------------- Clipar live passada (VOD) ---------------- */
+function clTempoVod(seg) {
+  seg = Math.max(0, Math.round(seg || 0));
+  const h = Math.floor(seg / 3600), m = Math.floor(seg % 3600 / 60);
+  return h ? `${h}h${String(m).padStart(2, '0')}` : `${m} min`;
+}
+
+let clVodTimer = null;
+function clVodDetectar() {
+  clearTimeout(clVodTimer);
+  const url = document.getElementById('cl-vod-url').value.trim();
+  const el = document.getElementById('cl-vod-info');
+  if (!/^https?:\/\//i.test(url)) { el.textContent = ''; return; }
+  el.textContent = 'Lendo o link…';
+  clVodTimer = setTimeout(async () => {
+    try {
+      const r = await clFetch('/api/vod_info', { url });
+      const i = r.info;
+      el.innerHTML = `<b>${clEsc(i.canal || 'Canal')}</b> · ${clEsc(i.titulo)} · <b>${clTempoVod(i.duracao)}</b> de live`
+        + (i.duracao > 7200 ? ' <span style="color:#fbbf24;">— é longa: pode demorar bastante; dá pra clipar só um trecho (início/fim)</span>' : '');
+    } catch (e) { el.innerHTML = `<span style="color:var(--error)">${clEsc(e.message)}</span>`; }
+  }, 600);
+}
+
+async function clVodIniciar() {
+  const url = document.getElementById('cl-vod-url').value.trim();
+  const el = document.getElementById('cl-vod-info');
+  if (!url) { el.textContent = 'Cole o link da live gravada.'; return; }
+  const btn = document.getElementById('cl-vod-btn');
+  btn.disabled = true;
+  try {
+    await clFetch('/api/vod', { url, ini: document.getElementById('cl-vod-ini').value.trim(), fim: document.getElementById('cl-vod-fim').value.trim() });
+    el.innerHTML = '<span class="cl-ok">Começou! Acompanhe o andamento aqui embaixo.</span>';
+    clAtualizar();
+  } catch (e) { el.innerHTML = `<span style="color:var(--error)">${clEsc(e.message)}</span>`; }
+  btn.disabled = false;
+}
+
+async function clVodCancelar(id) {
+  if (!confirm('Cancelar essa live passada?')) return;
+  try { await clFetch('/api/vod_cancelar', { id }); } catch (e) { alert(e.message); }
+  clAtualizar();
+}
+
+function clRenderVods(vods) {
+  const el = document.getElementById('cl-vod-lista');
+  if (!el) return;
+  el.innerHTML = vods.map(v => {
+    const ativo = !['pronto', 'erro', 'cancelado'].includes(v.etapa);
+    const pct = v.etapa === 'baixando' ? v.pct : v.etapa === 'ia' && v.blocos ? (v.blocos_feitos / v.blocos) * 100 : v.etapa === 'pronto' ? 100 : 0;
+    const passos = [['baixando', 'Baixando'], ['cortando', 'Preparando'], ['ia', 'IA analisando'], ['pronto', 'Pronto']];
+    const idx = Math.max(0, passos.findIndex(p => p[0] === v.etapa));
+    const chips = passos.map(([k, n], i) => `<span class="cl-et ${i === idx && v.etapa !== 'erro' ? 'on' : ''} ${i < idx || v.etapa === 'pronto' ? 'feito' : ''}">${n}</span>`).join('<span class="cl-et-seta">›</span>');
+    return `<div class="cl-vod ${v.etapa === 'erro' ? 'erro' : ''}">
+      <div class="cl-vod-topo"><div style="min-width:0;"><b>${clEsc(v.canal || 'Live passada')}</b> <span class="cl-plat">${clEsc(v.plataforma)}</span>
+        <div class="cl-dim cl-vod-tit">${clEsc(v.titulo || v.url)} · ${clEsc(v.trecho)}</div></div>
+        ${ativo ? `<button type="button" class="cl-lixo" title="Cancelar" onclick="clVodCancelar('${clEsc(v.id)}')"><i class="fa-solid fa-xmark"></i></button>` : ''}</div>
+      <div class="cl-etapas">${chips}</div>
+      ${ativo ? `<div class="cl-prox-barra" style="margin-top:8px;"><div style="width:${Math.min(100, pct).toFixed(0)}%"></div></div>` : ''}
+      <div class="cl-vod-status ${v.etapa === 'erro' ? 'cl-vod-erro' : ''}">${clEsc(v.status)}${v.etapa === 'ia' ? ` · ${v.clips} corte(s) até agora` : ''}</div>
+    </div>`;
+  }).join('');
 }
