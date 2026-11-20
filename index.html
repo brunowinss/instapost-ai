@@ -1244,7 +1244,7 @@
             <details class="cl-add">
               <summary><i class="fa-solid fa-plus"></i> Adicionar canal</summary>
               <div class="cl-add-form">
-                <input type="text" class="input" id="cl-add-usuario" placeholder="Cole o link do canal (Twitch ou YouTube)" oninput="clDetectarCanal()" onpaste="setTimeout(clDetectarCanal, 0)">
+                <input type="text" class="input" id="cl-add-usuario" placeholder="Cole o link do canal (Twitch ou YouTube) — live gravada vai no card de baixo" oninput="clDetectarCanal()" onpaste="setTimeout(clDetectarCanal, 0)">
                 <div class="cl-dim" id="cl-add-detectado"></div>
                 <input type="text" class="input" id="cl-add-nome" placeholder="nome pra legenda (preenche sozinho)" oninput="this.dataset.editado = this.value ? '1' : ''">
                 <button type="button" class="btn btn-primary btn-sm" onclick="clAdicionarCanal()"><i class="fa-solid fa-plus"></i> Adicionar</button>
@@ -2209,7 +2209,7 @@
   </div>
 
   <script src="app.js?v=62"></script>
-  <script src="cortar-live.js?v=18"></script>
+  <script src="cortar-live.js?v=19"></script>
   <link rel="stylesheet" href="ai-ui.css?v=1">
   <script src="ai-ui.js?v=2"></script>
   <script src="particles.js?v=1"></script>

@@ -175,6 +175,12 @@ function clDetectarCanal() {
   const entrada = document.getElementById('cl-add-usuario').value.trim();
   CL.canalDetectado = null;
   if (!entrada) { info.textContent = ''; return; }
+  // link de live GRAVADA (Twitch/Kick/YouTube): não é canal, vai para o card "Clipar live passada"
+  if (/(twitch\.tv\/videos\/|kick\.com\/[^/]+\/videos\/|kick\.com\/video\/|youtube\.com\/watch\?v=.*|youtu\.be\/)/i.test(entrada)
+      && /(videos\/|video\/)/i.test(entrada)) {
+    clMoverParaLivePassada(entrada);
+    return;
+  }
   info.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Procurando o canal…';
   clDetectarTimer = setTimeout(async () => {
     try {
@@ -191,8 +197,23 @@ function clDetectarCanal() {
   }, 500);
 }
 
+/** O link colado é de uma live gravada: leva para o card certo, já com o link. */
+function clMoverParaLivePassada(link) {
+  document.getElementById('cl-add-usuario').value = '';
+  document.getElementById('cl-add-detectado').innerHTML = '';
+  const campo = document.getElementById('cl-vod-url');
+  campo.value = link;
+  clVodDetectar();
+  campo.closest('.card').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  const aviso = document.getElementById('cl-vod-info');
+  setTimeout(() => aviso.insertAdjacentHTML('afterbegin', '<b class="cl-ok">Esse link é de uma live gravada — passei pra cá. </b>'), 900);
+  campo.focus();
+}
+
 async function clAdicionarCanal() {
   const msg = document.getElementById('cl-msg-canal');
+  const digitado = document.getElementById('cl-add-usuario').value.trim();
+  if (/\/videos?\//i.test(digitado)) { clMoverParaLivePassada(digitado); return; }
   try {
     const d = CL.canalDetectado || await clFetch('/api/canal_info?entrada=' + encodeURIComponent(document.getElementById('cl-add-usuario').value.trim()));
     await clFetch('/api/canais', {
